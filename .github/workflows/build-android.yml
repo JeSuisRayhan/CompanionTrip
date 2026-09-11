@@ -1,7 +1,5 @@
 name: Build Android APK (EAS)
 
-# Se déclenche à chaque envoi sur main, ou manuellement depuis l'onglet Actions.
-# Nécessite un secret de dépôt nommé EXPO_TOKEN (voir LISEZ-MOI.md).
 on:
   push:
     branches: [ main ]
@@ -10,6 +8,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Récupérer le code du dépôt
         uses: actions/checkout@v4
@@ -28,26 +27,33 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Lier le projet à votre compte Expo (si pas déjà fait)
-        run: eas init --non-interactive || true
+      - name: Vérifier l'authentification Expo
+        run: eas whoami
 
-      - name: Compiler l'APK sur les serveurs EAS et attendre le résultat
+      - name: Compiler l'APK sur les serveurs EAS
         run: eas build --platform android --profile preview --non-interactive --wait --json > build-result.json
 
-      - name: Afficher le résultat brut (utile en cas de souci)
+      - name: Afficher le résultat brut
         run: cat build-result.json
 
       - name: Télécharger l'APK compilé
         run: |
           node -e "
             const fs = require('fs');
+
             const raw = fs.readFileSync('build-result.json', 'utf8');
             const parsed = JSON.parse(raw);
             const build = Array.isArray(parsed) ? parsed[0] : parsed;
             const url = build.artifacts && build.artifacts.buildUrl;
-            if (!url) { console.error('Pas d\\'URL d\\'APK trouvée dans le résultat EAS.'); process.exit(1); }
+
+            if (!url) {
+              console.error('Pas d\\'URL d\\'APK trouvée dans le résultat EAS.');
+              process.exit(1);
+            }
+
             fs.writeFileSync('apk-url.txt', url);
           "
+
           curl -L "$(cat apk-url.txt)" -o compagnon-voyage.apk
 
       - name: Mettre l'APK à disposition en téléchargement
