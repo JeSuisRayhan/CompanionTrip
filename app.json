@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Compagnon de voyage",
-    "slug": "compagnon-de-voyage",
+    "slug": "companiontrip",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
