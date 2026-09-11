@@ -7,10 +7,18 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#170F1F",
+
+    "extra": {
+      "eas": {
+        "projectId": "a1318e3-8d73-4853-abee-f913dafc9fc1"
+      }
+    },
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.compagnondevoyage.app"
     },
+
     "android": {
       "package": "com.compagnondevoyage.app",
       "adaptiveIcon": {
@@ -19,11 +27,15 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["NOTIFICATIONS"]
+      "permissions": [
+        "NOTIFICATIONS"
+      ]
     },
+
     "web": {
       "favicon": "./assets/favicon.png"
     },
+
     "plugins": [
       [
         "expo-notifications",
