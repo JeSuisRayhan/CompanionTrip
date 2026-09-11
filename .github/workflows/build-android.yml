@@ -1,0 +1,59 @@
+name: Build Android APK (EAS)
+
+# Se déclenche à chaque envoi sur main, ou manuellement depuis l'onglet Actions.
+# Nécessite un secret de dépôt nommé EXPO_TOKEN (voir LISEZ-MOI.md).
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Installer les dépendances npm
+        run: npm install
+
+      - name: Installer et authentifier EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Lier le projet à votre compte Expo (si pas déjà fait)
+        run: eas init --non-interactive || true
+
+      - name: Compiler l'APK sur les serveurs EAS et attendre le résultat
+        run: eas build --platform android --profile preview --non-interactive --wait --json > build-result.json
+
+      - name: Afficher le résultat brut (utile en cas de souci)
+        run: cat build-result.json
+
+      - name: Télécharger l'APK compilé
+        run: |
+          node -e "
+            const fs = require('fs');
+            const raw = fs.readFileSync('build-result.json', 'utf8');
+            const parsed = JSON.parse(raw);
+            const build = Array.isArray(parsed) ? parsed[0] : parsed;
+            const url = build.artifacts && build.artifacts.buildUrl;
+            if (!url) { console.error('Pas d\\'URL d\\'APK trouvée dans le résultat EAS.'); process.exit(1); }
+            fs.writeFileSync('apk-url.txt', url);
+          "
+          curl -L "$(cat apk-url.txt)" -o compagnon-voyage.apk
+
+      - name: Mettre l'APK à disposition en téléchargement
+        uses: actions/upload-artifact@v4
+        with:
+          name: compagnon-voyage-rn-apk
+          path: compagnon-voyage.apk
+          retention-days: 30
