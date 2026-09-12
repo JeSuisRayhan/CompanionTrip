@@ -12,7 +12,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TYPES } from "../lib/constants";
-import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay } from "../lib/trips";
+import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, tripRange, tripStatus } from "../lib/dates";
 import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, formatMoney, convertAmount } from "../lib/budget";
 import { pickImage, addDocument, removeDocument } from "../lib/documents";
@@ -39,6 +39,8 @@ export default function TripScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("days");
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [gridView, setGridView] = useState(false);
 
   const refresh = useCallback(async () => {
     const t = await getTrip(tripId);
@@ -121,6 +123,14 @@ export default function TripScreen({ route, navigation }) {
             await duplicateDay(trip.id, dayId);
             refresh();
           }}
+          onMoveDay={async (dayId, direction) => {
+            await moveDay(trip.id, dayId, direction);
+            refresh();
+          }}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          gridView={gridView}
+          onToggleGrid={() => setGridView((v) => !v)}
         />
       )}
       {tab === "budget" && <BudgetTab trip={trip} />}
@@ -141,7 +151,7 @@ export default function TripScreen({ route, navigation }) {
   );
 }
 
-function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay }) {
+function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, searchQuery, gridView, onSearchChange, onToggleGrid }) {
   const isPark = trip.tripType === "park";
 
   const flatEntries = [];
@@ -172,6 +182,38 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay }) {
         </TouchableOpacity>
       </View>
 
+      {!isPark && trip.days.length >= 6 && (
+        <View style={styles.searchRow}>
+          <Ionicons name="search" size={15} color={THEME.inkFaint} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={onSearchChange}
+            placeholder="Rechercher un jour, une étape…"
+            placeholderTextColor={THEME.inkFaint}
+          />
+          {!!searchQuery && (
+            <TouchableOpacity onPress={() => onSearchChange("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={16} color={THEME.inkFaint} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {!isPark && (
+        <TouchableOpacity style={styles.viewToggle} onPress={onToggleGrid}>
+          <Ionicons name={gridView ? "list-outline" : "grid-outline"} size={14} color={THEME.inkMuted} />
+          <Text style={styles.shiftDatesButtonText}>{gridView ? "Vue liste" : "Vue grille"}</Text>
+        </TouchableOpacity>
+      )}
+
+      {!isPark && (
+        <TouchableOpacity style={styles.weatherReorgButton} onPress={() => navigation.navigate("WeatherReorg", { tripId: trip.id })}>
+          <Ionicons name="partly-sunny-outline" size={15} color={THEME.gold} />
+          <Text style={styles.weatherReorgButtonText}>Réorganiser selon la météo</Text>
+        </TouchableOpacity>
+      )}
+
       {isPark ? (
         flatEntries.map(({ day, activity }) => {
           const t = TYPES[activity.type] || TYPES.activite;
@@ -197,40 +239,81 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay }) {
           );
         })
       ) : (
-        trip.days.map((day, index) => {
-          const date = resolveDayDate(trip, day, index);
+        (() => {
+          const q = (searchQuery || "").trim().toLowerCase();
+          const filtered = trip.days
+            .map((day, index) => ({ day, index }))
+            .filter(({ day, index }) => {
+              if (!q) return true;
+              const date = resolveDayDate(trip, day, index);
+              const dateLabel = date ? formatDateLabel(date) : "";
+              const activityMatch = day.activities.some((a) => a.title.toLowerCase().includes(q));
+              return day.title.toLowerCase().includes(q) || dateLabel.toLowerCase().includes(q) || activityMatch;
+            });
+
+          if (filtered.length === 0) {
+            return <Text style={styles.helpText}>Aucun jour ne correspond à "{searchQuery}".</Text>;
+          }
+
           return (
-            <TouchableOpacity
-              key={day.id}
-              style={styles.dayCard}
-              onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })}
-              activeOpacity={0.85}
-            >
-              <View style={styles.dayCardHeader}>
-                <Text style={styles.dayIndexLabel}>J{index + 1}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            <View style={gridView ? styles.dayGrid : undefined}>
+              {filtered.map(({ day, index }) => {
+                const date = resolveDayDate(trip, day, index);
+                return (
                   <TouchableOpacity
-                    onPress={() => onDuplicateDay(day.id)}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    key={day.id}
+                    style={gridView ? styles.dayCardGrid : styles.dayCard}
+                    onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })}
+                    activeOpacity={0.85}
                   >
-                    <Ionicons name="copy-outline" size={16} color={THEME.inkFaint} />
+                    <View style={styles.dayCardHeader}>
+                      <Text style={styles.dayIndexLabel}>J{index + 1}</Text>
+                      {!q && !gridView && (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                          <TouchableOpacity
+                            onPress={() => onMoveDay(day.id, "up")}
+                            disabled={index === 0}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <Ionicons name="chevron-up" size={16} color={index === 0 ? THEME.border : THEME.inkFaint} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => onMoveDay(day.id, "down")}
+                            disabled={index === trip.days.length - 1}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                          >
+                            <Ionicons
+                              name="chevron-down"
+                              size={16}
+                              color={index === trip.days.length - 1 ? THEME.border : THEME.inkFaint}
+                            />
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => onDuplicateDay(day.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                            <Ionicons name="copy-outline" size={16} color={THEME.inkFaint} />
+                          </TouchableOpacity>
+                          <Ionicons name="chevron-forward" size={16} color={THEME.inkFaint} />
+                        </View>
+                      )}
+                      {(q || gridView) && <Ionicons name="chevron-forward" size={16} color={THEME.inkFaint} />}
+                    </View>
+                    <Text style={styles.dayTitle} numberOfLines={gridView ? 2 : undefined}>
+                      {day.title}
+                    </Text>
+                    {date && (
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <Text style={styles.dayDate}>{formatDateLabel(date)}</Text>
+                        {!gridView && <WeatherBadge day={day} dateISO={date} compact fallbackLocation={trip.defaultLocation} />}
+                      </View>
+                    )}
+                    <Text style={styles.dayCount}>
+                      {day.activities.length} étape{day.activities.length !== 1 ? "s" : ""}
+                    </Text>
                   </TouchableOpacity>
-                  <Ionicons name="chevron-forward" size={16} color={THEME.inkFaint} />
-                </View>
-              </View>
-              <Text style={styles.dayTitle}>{day.title}</Text>
-              {date && (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Text style={styles.dayDate}>{formatDateLabel(date)}</Text>
-                  <WeatherBadge day={day} dateISO={date} compact fallbackLocation={trip.defaultLocation} />
-                </View>
-              )}
-              <Text style={styles.dayCount}>
-                {day.activities.length} étape{day.activities.length !== 1 ? "s" : ""}
-              </Text>
-            </TouchableOpacity>
+                );
+              })}
+            </View>
           );
-        })
+        })()
       )}
     </ScrollView>
   );
@@ -791,4 +874,50 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   iconBadgeSmall: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: THEME.bgCardAlt,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
+  },
+  searchInput: { flex: 1, color: THEME.ink, fontSize: 13.5, fontFamily: FONTS.body },
+  viewToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 14,
+  },
+  dayGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+  dayCardGrid: {
+    width: "48%",
+    backgroundColor: THEME.bgCard,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 14,
+    padding: 13,
+    marginBottom: 12,
+    ...CARD_SHADOW,
+  },
+  weatherReorgButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderColor: THEME.gold,
+    borderRadius: 10,
+    paddingVertical: 11,
+    marginBottom: 16,
+  },
+  weatherReorgButtonText: { color: THEME.gold, fontSize: 13, fontFamily: FONTS.bodyMedium },
 });

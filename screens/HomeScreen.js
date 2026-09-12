@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, ImageBackground, Alert, Animated } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, ImageBackground, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,11 +10,12 @@ import { THEME } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TRIP_TYPES } from "../lib/constants";
 import { loadTrips } from "../lib/storage";
-import { deleteTrip } from "../lib/trips";
+import { deleteTrip, createTrip } from "../lib/trips";
 import { tripRange, tripStatus, formatDateLabel, daysUntilLabel, isoDate, resolveDayDate } from "../lib/dates";
 import { tripActivityTotal, formatMoney } from "../lib/budget";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import AnimatedPressable from "../components/AnimatedPressable";
+import UndoToast from "../components/UndoToast";
 
 function todayISO() {
   return isoDate(new Date());
@@ -37,6 +38,7 @@ export default function HomeScreen({ navigation }) {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: "", undoTrip: null });
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -62,6 +64,25 @@ export default function HomeScreen({ navigation }) {
     setRefreshing(true);
     await refresh();
     setRefreshing(false);
+  }
+
+  async function handleDeleteWithUndo(trip) {
+    await deleteTrip(trip.id);
+    await refresh();
+    setToast({ visible: true, message: `"${trip.name}" supprimé`, undoTrip: trip });
+  }
+
+  async function handleUndoDelete() {
+    const trip = toast.undoTrip;
+    setToast({ visible: false, message: "", undoTrip: null });
+    if (trip) {
+      await createTrip(trip);
+      await refresh();
+    }
+  }
+
+  function handleToastDismiss() {
+    setToast({ visible: false, message: "", undoTrip: null });
   }
 
   const today = todayISO();
@@ -124,7 +145,7 @@ export default function HomeScreen({ navigation }) {
         )}
 
         {current.map((trip) => (
-          <SwipeToDelete key={trip.id} trip={trip} onDeleted={refresh}>
+          <SwipeToDelete key={trip.id} trip={trip} onDeleteWithUndo={handleDeleteWithUndo}>
             <CurrentTripCard
               trip={trip}
               today={today}
@@ -139,7 +160,7 @@ export default function HomeScreen({ navigation }) {
         ))}
 
         {current.length === 0 && upcoming.length > 0 && (
-          <SwipeToDelete trip={upcoming[0]} onDeleted={refresh}>
+          <SwipeToDelete trip={upcoming[0]} onDeleteWithUndo={handleDeleteWithUndo}>
             <CountdownCard trip={upcoming[0]} today={today} onPress={() => navigation.navigate("Trip", { tripId: upcoming[0].id })} />
           </SwipeToDelete>
         )}
@@ -148,7 +169,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{current.length === 0 ? "Aussi à venir" : "À venir"}</Text>
             {(current.length === 0 ? upcoming.slice(1) : upcoming).map((trip) => (
-              <SwipeToDelete key={trip.id} trip={trip} onDeleted={refresh}>
+              <SwipeToDelete key={trip.id} trip={trip} onDeleteWithUndo={handleDeleteWithUndo}>
                 <UpcomingRow trip={trip} today={today} onPress={() => navigation.navigate("Trip", { tripId: trip.id })} />
               </SwipeToDelete>
             ))}
@@ -159,7 +180,7 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Voyages passés</Text>
             {past.map((trip) => (
-              <SwipeToDelete key={trip.id} trip={trip} onDeleted={refresh}>
+              <SwipeToDelete key={trip.id} trip={trip} onDeleteWithUndo={handleDeleteWithUndo}>
                 <PastRow trip={trip} onPress={() => navigation.navigate("Trip", { tripId: trip.id })} />
               </SwipeToDelete>
             ))}
@@ -167,32 +188,21 @@ export default function HomeScreen({ navigation }) {
         )}
       </Animated.View>
       </ScrollView>
+      <UndoToast
+        visible={toast.visible}
+        message={toast.message}
+        onUndo={handleUndoDelete}
+        onDismiss={handleToastDismiss}
+      />
     </SafeAreaView>
   );
 }
 
-function SwipeToDelete({ trip, onDeleted, children }) {
-  let swipeableRef;
-
-  function confirmDelete() {
-    Alert.alert("Supprimer ce voyage ?", `"${trip.name}" sera définitivement supprimé.`, [
-      { text: "Annuler", style: "cancel", onPress: () => swipeableRef?.close() },
-      {
-        text: "Supprimer",
-        style: "destructive",
-        onPress: async () => {
-          await deleteTrip(trip.id);
-          onDeleted();
-        },
-      },
-    ]);
-  }
-
+function SwipeToDelete({ trip, onDeleteWithUndo, children }) {
   return (
     <Swipeable
-      ref={(r) => (swipeableRef = r)}
       renderRightActions={() => (
-        <TouchableOpacity style={styles.deleteAction} onPress={confirmDelete}>
+        <TouchableOpacity style={styles.deleteAction} onPress={() => onDeleteWithUndo(trip)}>
           <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
         </TouchableOpacity>
       )}

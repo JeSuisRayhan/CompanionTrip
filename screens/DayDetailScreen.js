@@ -2,15 +2,17 @@ import React, { useState, useCallback, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TYPES } from "../lib/constants";
-import { getTrip, toggleActivityDone, setDayLocation } from "../lib/trips";
+import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity } from "../lib/trips";
 import { resolveDayDate, formatDateLabel } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { fetchDayWeather, weatherInfo, guessDayLocation } from "../lib/weather";
+import UndoToast from "../components/UndoToast";
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
   const [weather, setWeather] = useState(undefined); // undefined = loading, null = no data
@@ -60,6 +62,7 @@ export default function DayDetailScreen({ route, navigation }) {
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: "", undoActivity: null });
 
   const refresh = useCallback(async () => {
     const t = await getTrip(tripId);
@@ -107,6 +110,26 @@ export default function DayDetailScreen({ route, navigation }) {
   async function onToggleDone(activityId) {
     await toggleActivityDone(tripId, dayId, activityId);
     refresh();
+  }
+
+  async function onDeleteWithUndo(activity) {
+    await deleteActivity(tripId, dayId, activity.id);
+    await refresh();
+    setToast({ visible: true, message: `"${activity.title}" supprimée`, undoActivity: activity });
+  }
+
+  async function onUndoDelete() {
+    const activity = toast.undoActivity;
+    setToast({ visible: false, message: "", undoActivity: null });
+    if (activity) {
+      const { id, ...rest } = activity;
+      await addActivity(tripId, dayId, rest);
+      refresh();
+    }
+  }
+
+  function onToastDismiss() {
+    setToast({ visible: false, message: "", undoActivity: null });
   }
 
   return (
@@ -167,6 +190,7 @@ export default function DayDetailScreen({ route, navigation }) {
             isCurrent={i === firstUndoneIndex}
             onToggleDone={() => onToggleDone(a.id)}
             onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
+            onDeleteWithUndo={() => onDeleteWithUndo(a)}
           />
         ))}
         <TouchableOpacity
@@ -178,11 +202,12 @@ export default function DayDetailScreen({ route, navigation }) {
           <Text style={styles.bigAddButtonText}>Ajouter une étape</Text>
         </TouchableOpacity>
       </ScrollView>
+      <UndoToast visible={toast.visible} message={toast.message} onUndo={onUndoDelete} onDismiss={onToastDismiss} />
     </SafeAreaView>
   );
 }
 
-function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress }) {
+function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress, onDeleteWithUndo }) {
   const t = TYPES[activity.type] || TYPES.activite;
   const done = !!activity.done;
   const dotSize = isCurrent ? 16 : 11;
@@ -200,6 +225,15 @@ function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress 
         </TouchableOpacity>
         {!isLast && <View style={[styles.line, { backgroundColor: done ? THEME.teal : THEME.border }]} />}
       </View>
+      <Swipeable
+        containerStyle={{ flex: 1 }}
+        renderRightActions={() => (
+          <TouchableOpacity style={styles.rowDeleteAction} onPress={onDeleteWithUndo}>
+            <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+          </TouchableOpacity>
+        )}
+        overshootRight={false}
+      >
       <TouchableOpacity style={[styles.rowCard, { opacity: done ? 0.6 : 1 }]} onPress={onPress} activeOpacity={0.85}>
         <View style={styles.rowTop}>
           <View style={[styles.iconBadge, { backgroundColor: t.dim }]}>
@@ -225,6 +259,7 @@ function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress 
         ) : null}
         {activity.price != null && <Text style={styles.rowPrice}>{formatMoney(activity.price, trip.currency)}</Text>}
       </TouchableOpacity>
+      </Swipeable>
     </View>
   );
 }
@@ -307,6 +342,14 @@ const styles = StyleSheet.create({
   rowMetaLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 5, marginLeft: 44 },
   rowMetaText: { fontSize: 11.5, color: THEME.inkFaint, fontFamily: FONTS.body },
   rowPrice: { fontSize: 13.5, color: THEME.gold, marginTop: 6, marginLeft: 44, fontFamily: FONTS.monoMedium },
+  rowDeleteAction: {
+    backgroundColor: THEME.stamp,
+    justifyContent: "center",
+    alignItems: "center",
+    width: 60,
+    borderRadius: 14,
+    marginLeft: 8,
+  },
   bigAddButton: {
     flexDirection: "row",
     alignItems: "center",

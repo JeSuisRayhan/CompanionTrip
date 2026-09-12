@@ -8,6 +8,7 @@ import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { CURRENCY_PRESETS, suggestRate, BUDGET_TYPES } from "../lib/constants";
 import { getTrip, updateTripSettings } from "../lib/trips";
+import { scheduleDailySummaries, scheduleDepartureReminder } from "../lib/notifications";
 
 const CATEGORY_LABELS = { transport: "Transport", hotel: "Hébergement", repas: "Repas" };
 
@@ -23,6 +24,8 @@ export default function TripSettingsScreen({ route, navigation }) {
   const [emergency, setEmergency] = useState({ bloodType: "", allergies: "", contactName: "", contactPhone: "", embassy: "", notes: "" });
   const [pickerFor, setPickerFor] = useState(null); // "local" | "home" | null
   const [saving, setSaving] = useState(false);
+  const [remindersBusy, setRemindersBusy] = useState(false);
+  const [remindersStatus, setRemindersStatus] = useState("");
 
   useFocusEffect(
     useCallback(() => {
@@ -59,6 +62,21 @@ export default function TripSettingsScreen({ route, navigation }) {
   function applySuggestedRate(local, home) {
     const suggested = suggestRate(local, home);
     if (suggested) setRate(String(Math.round(suggested * 10000) / 10000));
+  }
+
+  async function scheduleReminders() {
+    setRemindersBusy(true);
+    setRemindersStatus("");
+    try {
+      const summaryIds = await scheduleDailySummaries(trip);
+      const departureId = await scheduleDepartureReminder(trip);
+      const parts = [];
+      if (summaryIds.length) parts.push(`${summaryIds.length} résumé${summaryIds.length !== 1 ? "s" : ""} quotidien${summaryIds.length !== 1 ? "s" : ""}`);
+      if (departureId) parts.push("1 rappel avant-départ");
+      setRemindersStatus(parts.length ? `Programmés : ${parts.join(" + ")}.` : "Rien à programmer (voyage déjà commencé ou trop proche).");
+    } finally {
+      setRemindersBusy(false);
+    }
   }
 
   async function save() {
@@ -185,6 +203,16 @@ export default function TripSettingsScreen({ route, navigation }) {
         <TextInput style={styles.input} value={emergency.embassy} onChangeText={(v) => setEmergency((e) => ({ ...e, embassy: v }))} placeholder="Adresse ou numéro" placeholderTextColor={THEME.inkFaint} />
         <Text style={styles.label}>Notes</Text>
         <TextInput style={[styles.input, { minHeight: 70 }]} value={emergency.notes} onChangeText={(v) => setEmergency((e) => ({ ...e, notes: v }))} multiline textAlignVertical="top" placeholderTextColor={THEME.inkFaint} />
+
+        <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Rappels</Text>
+        <Text style={styles.helpText}>
+          Programme un résumé chaque matin du voyage (8h) et un rappel de la checklist avant-départ 3 jours avant.
+          À relancer si vous modifiez beaucoup le programme.
+        </Text>
+        <TouchableOpacity style={styles.button} onPress={scheduleReminders} disabled={remindersBusy}>
+          <Text style={styles.buttonText}>{remindersBusy ? "…" : "Programmer les rappels"}</Text>
+        </TouchableOpacity>
+        {remindersStatus ? <Text style={{ color: THEME.inkMuted, fontSize: 12, marginTop: 10, textAlign: "center", fontFamily: FONTS.body }}>{remindersStatus}</Text> : null}
       </ScrollView>
 
       <CurrencyPickerModal
@@ -276,6 +304,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   suggestButtonText: { color: THEME.teal, fontSize: 13, fontFamily: FONTS.bodyMedium },
+  button: { borderWidth: 1, borderColor: THEME.teal, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
+  buttonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
   modalOverlay: { flex: 1, backgroundColor: "#00000099", justifyContent: "flex-end" },
   modalCard: {
     backgroundColor: THEME.bgCard,
