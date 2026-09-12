@@ -1,24 +1,16 @@
 {
   "expo": {
     "name": "Compagnon de voyage",
-    "slug": "companiontrip",
+    "slug": "compagnon-de-voyage",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#170F1F",
-
-    "extra": {
-      "eas": {
-        "projectId": "fa1318e3-8d73-4853-abee-f913dafc9fc1"
-      }
-    },
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.compagnondevoyage.app"
     },
-
     "android": {
       "package": "com.compagnondevoyage.app",
       "adaptiveIcon": {
@@ -27,15 +19,11 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": [
-        "NOTIFICATIONS"
-      ]
+      "permissions": ["NOTIFICATIONS"]
     },
-
     "web": {
       "favicon": "./assets/favicon.png"
     },
-
     "plugins": [
       [
         "expo-notifications",
@@ -49,6 +37,13 @@
         {
           "microphonePermission": "Autoriser Compagnon de voyage à utiliser le microphone pour dicter votre programme.",
           "speechRecognitionPermission": "Autoriser Compagnon de voyage à utiliser la reconnaissance vocale."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Autoriser Compagnon de voyage à accéder à vos photos pour ajouter des documents.",
+          "cameraPermission": "Autoriser Compagnon de voyage à utiliser l'appareil photo pour ajouter des documents."
         }
       ]
     ]
