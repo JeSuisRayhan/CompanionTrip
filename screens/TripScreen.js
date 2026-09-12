@@ -12,7 +12,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TYPES } from "../lib/constants";
-import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy } from "../lib/trips";
+import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, tripRange, tripStatus } from "../lib/dates";
 import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, formatMoney, convertAmount } from "../lib/budget";
 import { pickImage, addDocument, removeDocument } from "../lib/documents";
@@ -112,7 +112,17 @@ export default function TripScreen({ route, navigation }) {
         ))}
       </ScrollView>
 
-      {tab === "days" && <DaysTab trip={trip} navigation={navigation} onShiftDates={() => setShiftModalOpen(true)} />}
+      {tab === "days" && (
+        <DaysTab
+          trip={trip}
+          navigation={navigation}
+          onShiftDates={() => setShiftModalOpen(true)}
+          onDuplicateDay={async (dayId) => {
+            await duplicateDay(trip.id, dayId);
+            refresh();
+          }}
+        />
+      )}
       {tab === "budget" && <BudgetTab trip={trip} />}
       {tab === "checklists" && <ChecklistsTab trip={trip} onChange={refresh} />}
       {tab === "documents" && <DocumentsTab trip={trip} onChange={refresh} />}
@@ -131,7 +141,7 @@ export default function TripScreen({ route, navigation }) {
   );
 }
 
-function DaysTab({ trip, navigation, onShiftDates }) {
+function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay }) {
   const isPark = trip.tripType === "park";
 
   const flatEntries = [];
@@ -198,7 +208,15 @@ function DaysTab({ trip, navigation, onShiftDates }) {
             >
               <View style={styles.dayCardHeader}>
                 <Text style={styles.dayIndexLabel}>J{index + 1}</Text>
-                <Ionicons name="chevron-forward" size={16} color={THEME.inkFaint} />
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                  <TouchableOpacity
+                    onPress={() => onDuplicateDay(day.id)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="copy-outline" size={16} color={THEME.inkFaint} />
+                  </TouchableOpacity>
+                  <Ionicons name="chevron-forward" size={16} color={THEME.inkFaint} />
+                </View>
               </View>
               <Text style={styles.dayTitle}>{day.title}</Text>
               {date && (

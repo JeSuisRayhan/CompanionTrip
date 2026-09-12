@@ -20,6 +20,7 @@ export default function TripSettingsScreen({ route, navigation }) {
   const [rate, setRate] = useState("1");
   const [targets, setTargets] = useState({ transport: "", hotel: "", repas: "" });
   const [defaultLocation, setDefaultLocation] = useState("");
+  const [emergency, setEmergency] = useState({ bloodType: "", allergies: "", contactName: "", contactPhone: "", embassy: "", notes: "" });
   const [pickerFor, setPickerFor] = useState(null); // "local" | "home" | null
   const [saving, setSaving] = useState(false);
 
@@ -34,6 +35,14 @@ export default function TripSettingsScreen({ route, navigation }) {
         setHomeCurrency(t.homeCurrency || "EUR");
         setRate(t.rate != null ? String(t.rate) : "1");
         setDefaultLocation(t.defaultLocation || "");
+        setEmergency({
+          bloodType: t.emergencyInfo?.bloodType || "",
+          allergies: t.emergencyInfo?.allergies || "",
+          contactName: t.emergencyInfo?.contactName || "",
+          contactPhone: t.emergencyInfo?.contactPhone || "",
+          embassy: t.emergencyInfo?.embassy || "",
+          notes: t.emergencyInfo?.notes || "",
+        });
         setTargets({
           transport: t.budgetTargets?.transport != null ? String(t.budgetTargets.transport) : "",
           hotel: t.budgetTargets?.hotel != null ? String(t.budgetTargets.hotel) : "",
@@ -67,6 +76,7 @@ export default function TripSettingsScreen({ route, navigation }) {
         rate: !isNaN(parsedRate) ? parsedRate : 1,
         budgetTargets,
         defaultLocation: defaultLocation.trim() || null,
+        emergencyInfo: emergency,
       });
       navigation.goBack();
     } finally {
@@ -160,6 +170,21 @@ export default function TripSettingsScreen({ route, navigation }) {
             />
           </View>
         ))}
+
+        <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Fiche d'urgence (optionnel)</Text>
+        <Text style={styles.helpText}>Gardée sur cet appareil, jamais partagée automatiquement.</Text>
+        <Text style={styles.label}>Groupe sanguin</Text>
+        <TextInput style={styles.input} value={emergency.bloodType} onChangeText={(v) => setEmergency((e) => ({ ...e, bloodType: v }))} placeholder="O+" placeholderTextColor={THEME.inkFaint} />
+        <Text style={styles.label}>Allergies</Text>
+        <TextInput style={styles.input} value={emergency.allergies} onChangeText={(v) => setEmergency((e) => ({ ...e, allergies: v }))} placeholder="Pénicilline, arachides..." placeholderTextColor={THEME.inkFaint} />
+        <Text style={styles.label}>Contact d'urgence — nom</Text>
+        <TextInput style={styles.input} value={emergency.contactName} onChangeText={(v) => setEmergency((e) => ({ ...e, contactName: v }))} placeholder="Nom du contact" placeholderTextColor={THEME.inkFaint} />
+        <Text style={styles.label}>Contact d'urgence — téléphone</Text>
+        <TextInput style={styles.input} value={emergency.contactPhone} onChangeText={(v) => setEmergency((e) => ({ ...e, contactPhone: v }))} placeholder="+33 6 ..." placeholderTextColor={THEME.inkFaint} keyboardType="phone-pad" />
+        <Text style={styles.label}>Ambassade / consulat</Text>
+        <TextInput style={styles.input} value={emergency.embassy} onChangeText={(v) => setEmergency((e) => ({ ...e, embassy: v }))} placeholder="Adresse ou numéro" placeholderTextColor={THEME.inkFaint} />
+        <Text style={styles.label}>Notes</Text>
+        <TextInput style={[styles.input, { minHeight: 70 }]} value={emergency.notes} onChangeText={(v) => setEmergency((e) => ({ ...e, notes: v }))} multiline textAlignVertical="top" placeholderTextColor={THEME.inkFaint} />
       </ScrollView>
 
       <CurrencyPickerModal

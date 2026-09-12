@@ -9,7 +9,7 @@ import { TYPES } from "../lib/constants";
 import { getTrip, addActivity, editActivity, deleteActivity } from "../lib/trips";
 import { resolveDayDate } from "../lib/dates";
 import { scheduleActivityReminder, cancelScheduledNotification } from "../lib/notifications";
-import { transportDeparturePlace } from "../lib/constants";
+import { transportDeparturePlace, TRANSPORT_MODES, CONFIRMATION_TYPES } from "../lib/constants";
 
 export default function ActivityEditorScreen({ route, navigation }) {
   const { tripId, dayId, activity } = route.params; // activity is null/undefined when creating
@@ -19,6 +19,10 @@ export default function ActivityEditorScreen({ route, navigation }) {
   const [type, setType] = useState(activity?.type || "activite");
   const [price, setPrice] = useState(activity?.price != null ? String(activity.price) : "");
   const [note, setNote] = useState(activity?.note || "");
+  const [address, setAddress] = useState(activity?.address || "");
+  const [confirmationCode, setConfirmationCode] = useState(activity?.confirmationCode || "");
+  const [transportMode, setTransportMode] = useState(activity?.transportMode || null);
+  const [outdoor, setOutdoor] = useState(!!activity?.outdoor);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -76,6 +80,10 @@ export default function ActivityEditorScreen({ route, navigation }) {
         type,
         price: !isNaN(parsedPrice) ? parsedPrice : null,
         note: note.trim(),
+        address: address.trim() || null,
+        confirmationCode: confirmationCode.trim() || null,
+        transportMode: type === "transport" ? transportMode : null,
+        outdoor: type === "activite" || type === "repas" ? outdoor : false,
         notificationId,
       };
       if (isEditing) {
@@ -165,6 +173,53 @@ export default function ActivityEditorScreen({ route, navigation }) {
             </>
           )}
 
+          {type === "transport" && (
+            <>
+              <Text style={styles.label}>Mode de transport (optionnel)</Text>
+              <View style={styles.typeRow}>
+                {TRANSPORT_MODES.map((m) => (
+                  <TouchableOpacity
+                    key={m.key}
+                    style={[styles.typeChip, transportMode === m.key && { borderColor: THEME.blue, backgroundColor: THEME.blueDim }]}
+                    onPress={() => setTransportMode(transportMode === m.key ? null : m.key)}
+                  >
+                    <Text style={[styles.typeChipText, transportMode === m.key && { color: THEME.blue }]}>{m.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </>
+          )}
+
+          {CONFIRMATION_TYPES.includes(type) && (
+            <>
+              <Text style={styles.label}>Code de confirmation (optionnel)</Text>
+              <TextInput
+                style={styles.input}
+                value={confirmationCode}
+                onChangeText={setConfirmationCode}
+                placeholder="ABC123"
+                placeholderTextColor={THEME.inkFaint}
+                autoCapitalize="characters"
+              />
+            </>
+          )}
+
+          <Text style={styles.label}>Adresse (optionnel)</Text>
+          <TextInput
+            style={styles.input}
+            value={address}
+            onChangeText={setAddress}
+            placeholder="12 rue de la Paix, Paris"
+            placeholderTextColor={THEME.inkFaint}
+          />
+
+          {(type === "activite" || type === "repas") && (
+            <TouchableOpacity style={styles.outdoorRow} onPress={() => setOutdoor((v) => !v)}>
+              <Ionicons name={outdoor ? "checkbox" : "square-outline"} size={20} color={outdoor ? THEME.teal : THEME.inkMuted} />
+              <Text style={styles.outdoorText}>En extérieur (utile pour la météo)</Text>
+            </TouchableOpacity>
+          )}
+
           <Text style={styles.label}>Note (optionnel)</Text>
           <TextInput
             style={[styles.input, styles.noteInput]}
@@ -231,6 +286,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   typeChipText: { color: THEME.inkMuted, fontSize: 13, fontFamily: FONTS.bodyMedium },
+  outdoorRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 16 },
+  outdoorText: { color: THEME.inkMuted, fontSize: 13.5, fontFamily: FONTS.body },
   errorText: { color: THEME.stamp, fontSize: 12.5, marginTop: 14, fontFamily: FONTS.body },
   deleteButton: {
     flexDirection: "row",

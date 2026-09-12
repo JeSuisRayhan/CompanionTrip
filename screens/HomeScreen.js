@@ -20,6 +20,15 @@ function todayISO() {
   return isoDate(new Date());
 }
 
+function todayDayId(trip, today) {
+  const index = trip.days.findIndex((d, i) => resolveDayDate(trip, d, i) === today);
+  return index >= 0 ? trip.days[index].id : null;
+}
+
+function todayHasDay(trip, today) {
+  return !!todayDayId(trip, today);
+}
+
 function tripTypeMeta(trip) {
   return TRIP_TYPES.find((t) => t.key === (trip.tripType || "long")) || TRIP_TYPES[0];
 }
@@ -116,7 +125,16 @@ export default function HomeScreen({ navigation }) {
 
         {current.map((trip) => (
           <SwipeToDelete key={trip.id} trip={trip} onDeleted={refresh}>
-            <CurrentTripCard trip={trip} today={today} onPress={() => navigation.navigate("Trip", { tripId: trip.id })} />
+            <CurrentTripCard
+              trip={trip}
+              today={today}
+              onPress={() => navigation.navigate("Trip", { tripId: trip.id })}
+              onPressToday={
+                todayHasDay(trip, today)
+                  ? () => navigation.navigate("DayDetail", { tripId: trip.id, dayId: todayDayId(trip, today) })
+                  : null
+              }
+            />
           </SwipeToDelete>
         ))}
 
@@ -211,7 +229,7 @@ function HomeWeatherPreview({ day, dateISO, light, fallbackLocation }) {
   );
 }
 
-function CurrentTripCard({ trip, today, onPress }) {
+function CurrentTripCard({ trip, today, onPress, onPressToday }) {
   const { start, end } = tripRange(trip);
   const total = tripActivityTotal(trip);
   const cover = trip.coverImage;
@@ -221,8 +239,16 @@ function CurrentTripCard({ trip, today, onPress }) {
   const content = (
     <>
       <LinearGradient colors={["transparent", "rgba(23,15,31,0.55)", THEME.bg]} style={styles.heroGradient} />
-      <View style={styles.heroBadge}>
-        <Text style={styles.heroBadgeText}>EN COURS</Text>
+      <View style={styles.heroTopRow}>
+        <View style={styles.heroBadge}>
+          <Text style={styles.heroBadgeText}>EN COURS</Text>
+        </View>
+        {onPressToday && (
+          <TouchableOpacity style={styles.todayButton} onPress={onPressToday}>
+            <Text style={styles.todayButtonText}>Aujourd'hui</Text>
+            <Ionicons name="arrow-forward" size={12} color={THEME.bg} />
+          </TouchableOpacity>
+        )}
       </View>
       <Text style={styles.heroTitle}>{trip.name}</Text>
       {start && (
@@ -359,6 +385,7 @@ const styles = StyleSheet.create({
   heroCardImage: { minHeight: 168, justifyContent: "flex-end" },
   heroCardImageInner: { resizeMode: "cover" },
   heroGradient: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: 20, marginTop: 20 },
   heroBadge: {
     alignSelf: "flex-start",
     backgroundColor: "rgba(244,183,64,0.22)",
@@ -367,9 +394,17 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     paddingHorizontal: 9,
     paddingVertical: 4,
-    marginHorizontal: 20,
-    marginTop: 20,
   },
+  todayButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: THEME.gold,
+    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  todayButtonText: { color: THEME.bg, fontSize: 11.5, fontFamily: FONTS.bodySemiBold },
   heroBadgeText: { color: THEME.gold, fontSize: 10.5, letterSpacing: 0.6, fontFamily: FONTS.bodySemiBold },
   heroTitle: { fontSize: 23, color: "#FFFFFF", marginHorizontal: 20, marginTop: 10, fontFamily: FONTS.headingBold },
   heroDates: { fontSize: 13.5, color: "#E9DEF0", marginHorizontal: 20, marginTop: 5, textTransform: "capitalize", fontFamily: FONTS.body },

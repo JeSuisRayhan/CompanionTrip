@@ -211,6 +211,18 @@ function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress 
           </View>
         </View>
         {activity.note ? <Text style={styles.rowNote}>{activity.note}</Text> : null}
+        {activity.address ? (
+          <View style={styles.rowMetaLine}>
+            <Ionicons name="location-outline" size={12} color={THEME.inkFaint} />
+            <Text style={styles.rowMetaText}>{activity.address}</Text>
+          </View>
+        ) : null}
+        {activity.confirmationCode ? (
+          <View style={styles.rowMetaLine}>
+            <Ionicons name="key-outline" size={12} color={THEME.inkFaint} />
+            <Text style={styles.rowMetaText}>{activity.confirmationCode}</Text>
+          </View>
+        ) : null}
         {activity.price != null && <Text style={styles.rowPrice}>{formatMoney(activity.price, trip.currency)}</Text>}
       </TouchableOpacity>
     </View>
@@ -292,6 +304,8 @@ const styles = StyleSheet.create({
   rowTitleDone: { textDecorationLine: "line-through" },
   rowTime: { fontSize: 11, color: THEME.inkFaint, marginTop: 2, fontFamily: FONTS.mono },
   rowNote: { fontSize: 12, color: THEME.inkMuted, marginTop: 6, marginLeft: 44, fontFamily: FONTS.body },
+  rowMetaLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 5, marginLeft: 44 },
+  rowMetaText: { fontSize: 11.5, color: THEME.inkFaint, fontFamily: FONTS.body },
   rowPrice: { fontSize: 13.5, color: THEME.gold, marginTop: 6, marginLeft: 44, fontFamily: FONTS.monoMedium },
   bigAddButton: {
     flexDirection: "row",
