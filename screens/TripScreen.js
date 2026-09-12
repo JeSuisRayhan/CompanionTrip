@@ -88,7 +88,7 @@ export default function TripScreen({ route, navigation }) {
       )}
       <View style={styles.header}>
         {start && (
-          <Text style={styles.dates}>
+          <Text style={styles.dates} numberOfLines={1} ellipsizeMode="tail">
             {formatDateLabel(start)}
             {end && end !== start ? ` → ${formatDateLabel(end)}` : ""}
           </Text>
@@ -98,8 +98,8 @@ export default function TripScreen({ route, navigation }) {
             <Text style={styles.statusBadgeText}>EN COURS</Text>
           </View>
         )}
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => navigation.navigate("TripSettings", { tripId: trip.id })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <View style={{ flex: 1, minWidth: 8 }} />
+        <TouchableOpacity onPress={() => navigation.navigate("TripSettings", { tripId: trip.id })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ flexShrink: 0 }}>
           <Ionicons name="options-outline" size={20} color={THEME.inkMuted} />
         </TouchableOpacity>
       </View>
@@ -393,6 +393,7 @@ function DocumentsTab({ trip, onChange }) {
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [viewingDoc, setViewingDoc] = useState(null);
   const docs = trip.documents || [];
 
   function choosePhoto() {
@@ -443,14 +444,26 @@ function DocumentsTab({ trip, onChange }) {
       {docs.length === 0 && <Text style={styles.helpText}>Vos billets, réservations et QR codes, en photo.</Text>}
 
       {docs.map((doc) => (
-        <View key={doc.id} style={styles.docRow}>
+        <TouchableOpacity key={doc.id} style={styles.docRow} onPress={() => setViewingDoc(doc)} activeOpacity={0.8}>
           <Image source={{ uri: doc.uri }} style={styles.docThumb} />
           <Text style={styles.docTitle}>{doc.title}</Text>
           <TouchableOpacity onPress={() => onRemove(doc.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="trash-outline" size={16} color={THEME.inkFaint} />
           </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       ))}
+
+      <Modal visible={!!viewingDoc} transparent animationType="fade" onRequestClose={() => setViewingDoc(null)}>
+        <TouchableOpacity style={styles.viewerOverlay} activeOpacity={1} onPress={() => setViewingDoc(null)}>
+          {viewingDoc && <Image source={{ uri: viewingDoc.uri }} style={styles.viewerImage} resizeMode="contain" />}
+          <View style={styles.viewerTitleBar}>
+            <Text style={styles.viewerTitleText}>{viewingDoc?.title}</Text>
+            <TouchableOpacity onPress={() => setViewingDoc(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={22} color="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <Modal visible={!!pendingUri} transparent animationType="fade" onRequestClose={() => setPendingUri(null)}>
         <View style={styles.modalOverlay}>
@@ -584,7 +597,7 @@ const styles = StyleSheet.create({
   coverBanner: { height: 130, width: "100%" },
   coverBannerGradient: { flex: 1 },
   header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 4, flexDirection: "row", alignItems: "center", gap: 10 },
-  dates: { color: THEME.inkMuted, fontSize: 13, textTransform: "capitalize", fontFamily: FONTS.body },
+  dates: { color: THEME.inkMuted, fontSize: 13, textTransform: "capitalize", fontFamily: FONTS.body, flexShrink: 1 },
   statusBadge: { backgroundColor: THEME.goldDim, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   statusBadgeText: { color: THEME.gold, fontSize: 10, fontFamily: FONTS.bodySemiBold },
   tabBarScroll: { flexGrow: 0, marginTop: 12, marginBottom: 4 },
@@ -735,6 +748,19 @@ const styles = StyleSheet.create({
   docThumb: { width: 44, height: 44, borderRadius: 8, backgroundColor: THEME.bgCardAlt },
   docTitle: { flex: 1, fontSize: 14, color: THEME.ink, fontFamily: FONTS.body },
   previewImage: { width: "100%", height: 220, borderRadius: 10, backgroundColor: THEME.bgCardAlt },
+  viewerOverlay: { flex: 1, backgroundColor: "#000000EE", alignItems: "center", justifyContent: "center" },
+  viewerImage: { width: "100%", height: "80%" },
+  viewerTitleBar: {
+    position: "absolute",
+    top: 50,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+  },
+  viewerTitleText: { color: "#FFFFFF", fontSize: 15, fontFamily: FONTS.bodySemiBold, flex: 1 },
   attractionRow: {
     flexDirection: "row",
     alignItems: "center",
