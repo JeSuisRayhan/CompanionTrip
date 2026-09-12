@@ -1,14 +1,16 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, ImageBackground } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, ImageBackground, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TRIP_TYPES } from "../lib/constants";
 import { loadTrips } from "../lib/storage";
+import { deleteTrip } from "../lib/trips";
 import { tripRange, tripStatus, formatDateLabel, daysUntilLabel, isoDate } from "../lib/dates";
 import { tripActivityTotal, formatMoney } from "../lib/budget";
 
@@ -102,18 +104,24 @@ export default function HomeScreen({ navigation }) {
         )}
 
         {current.map((trip) => (
-          <CurrentTripCard key={trip.id} trip={trip} today={today} onPress={() => navigation.navigate("Trip", { tripId: trip.id })} />
+          <SwipeToDelete key={trip.id} trip={trip} onDeleted={refresh}>
+            <CurrentTripCard trip={trip} today={today} onPress={() => navigation.navigate("Trip", { tripId: trip.id })} />
+          </SwipeToDelete>
         ))}
 
         {current.length === 0 && upcoming.length > 0 && (
-          <CountdownCard trip={upcoming[0]} today={today} onPress={() => navigation.navigate("Trip", { tripId: upcoming[0].id })} />
+          <SwipeToDelete trip={upcoming[0]} onDeleted={refresh}>
+            <CountdownCard trip={upcoming[0]} today={today} onPress={() => navigation.navigate("Trip", { tripId: upcoming[0].id })} />
+          </SwipeToDelete>
         )}
 
         {upcoming.length > (current.length === 0 ? 1 : 0) && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>{current.length === 0 ? "Aussi à venir" : "À venir"}</Text>
             {(current.length === 0 ? upcoming.slice(1) : upcoming).map((trip) => (
-              <UpcomingRow key={trip.id} trip={trip} today={today} onPress={() => navigation.navigate("Trip", { tripId: trip.id })} />
+              <SwipeToDelete key={trip.id} trip={trip} onDeleted={refresh}>
+                <UpcomingRow trip={trip} today={today} onPress={() => navigation.navigate("Trip", { tripId: trip.id })} />
+              </SwipeToDelete>
             ))}
           </View>
         )}
@@ -122,12 +130,46 @@ export default function HomeScreen({ navigation }) {
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Voyages passés</Text>
             {past.map((trip) => (
-              <PastRow key={trip.id} trip={trip} onPress={() => navigation.navigate("Trip", { tripId: trip.id })} />
+              <SwipeToDelete key={trip.id} trip={trip} onDeleted={refresh}>
+                <PastRow trip={trip} onPress={() => navigation.navigate("Trip", { tripId: trip.id })} />
+              </SwipeToDelete>
             ))}
           </View>
         )}
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+function SwipeToDelete({ trip, onDeleted, children }) {
+  let swipeableRef;
+
+  function confirmDelete() {
+    Alert.alert("Supprimer ce voyage ?", `"${trip.name}" sera définitivement supprimé.`, [
+      { text: "Annuler", style: "cancel", onPress: () => swipeableRef?.close() },
+      {
+        text: "Supprimer",
+        style: "destructive",
+        onPress: async () => {
+          await deleteTrip(trip.id);
+          onDeleted();
+        },
+      },
+    ]);
+  }
+
+  return (
+    <Swipeable
+      ref={(r) => (swipeableRef = r)}
+      renderRightActions={() => (
+        <TouchableOpacity style={styles.deleteAction} onPress={confirmDelete}>
+          <Ionicons name="trash-outline" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+      overshootRight={false}
+    >
+      {children}
+    </Swipeable>
   );
 }
 
@@ -344,4 +386,12 @@ const styles = StyleSheet.create({
   },
   pastTitle: { fontSize: 13.5, color: THEME.inkMuted, fontFamily: FONTS.body },
   pastDates: { fontSize: 12, color: THEME.inkFaint, fontFamily: FONTS.body },
+  deleteAction: {
+    backgroundColor: THEME.stamp,
+    justifyContent: "center",
+    alignItems: "center",
+    width: 64,
+    borderRadius: 14,
+    marginBottom: 11,
+  },
 });

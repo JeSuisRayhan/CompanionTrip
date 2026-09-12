@@ -121,7 +121,6 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.pageTitle}>Réglages</Text>
 
         <View style={styles.card}>
           <View style={styles.cardHeader}>

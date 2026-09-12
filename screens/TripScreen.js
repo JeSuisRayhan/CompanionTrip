@@ -95,13 +95,13 @@ export default function TripScreen({ route, navigation }) {
         )}
       </View>
 
-      <View style={styles.tabBar}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBarScroll} contentContainerStyle={styles.tabBar}>
         {TABS.map((t) => (
           <TouchableOpacity key={t.key} style={[styles.tab, tab === t.key && styles.tabActive]} onPress={() => setTab(t.key)}>
             <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       {tab === "days" && <DaysTab trip={trip} navigation={navigation} onShiftDates={() => setShiftModalOpen(true)} />}
       {tab === "budget" && <BudgetTab trip={trip} />}
@@ -439,6 +439,7 @@ function DocumentsTab({ trip, onChange }) {
                 <Text style={styles.buttonText}>{busy ? "…" : "Enregistrer"}</Text>
               </TouchableOpacity>
             </View>
+            {error ? <Text style={{ color: THEME.stamp, fontSize: 12, marginTop: 12, textAlign: "center" }}>{error}</Text> : null}
           </View>
         </View>
       </Modal>
@@ -554,7 +555,8 @@ const styles = StyleSheet.create({
   dates: { color: THEME.inkMuted, fontSize: 13, textTransform: "capitalize", fontFamily: FONTS.body },
   statusBadge: { backgroundColor: THEME.goldDim, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   statusBadgeText: { color: THEME.gold, fontSize: 10, fontFamily: FONTS.bodySemiBold },
-  tabBar: { flexDirection: "row", paddingHorizontal: 20, gap: 8, marginTop: 12, marginBottom: 4 },
+  tabBarScroll: { flexGrow: 0, marginTop: 12, marginBottom: 4 },
+  tabBar: { flexDirection: "row", paddingHorizontal: 20, gap: 8 },
   tab: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 10, backgroundColor: THEME.bgCardAlt },
   tabActive: { backgroundColor: THEME.bgRaised },
   tabText: { color: THEME.inkMuted, fontSize: 13.5, fontFamily: FONTS.body },

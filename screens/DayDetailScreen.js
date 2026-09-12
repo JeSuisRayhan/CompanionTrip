@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME } from "../lib/theme";
+import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TYPES } from "../lib/constants";
 import { getTrip, toggleActivityDone } from "../lib/trips";
@@ -98,6 +98,7 @@ export default function DayDetailScreen({ route, navigation }) {
           <Ionicons name="chevron-back" size={22} color={THEME.ink} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
+          <Text style={styles.tripNameSubtitle}>{trip.name}</Text>
           <Text style={styles.headerTitle}>{day.title}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             {date && <Text style={styles.headerDate}>{formatDateLabel(date)}</Text>}
@@ -120,7 +121,8 @@ export default function DayDetailScreen({ route, navigation }) {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {sorted.length === 0 && (
-          <View style={styles.center}>
+          <View style={styles.emptyBox}>
+            <Ionicons name="calendar-outline" size={30} color={THEME.inkFaint} />
             <Text style={styles.emptyText}>Rien de prévu pour l'instant.</Text>
           </View>
         )}
@@ -135,6 +137,14 @@ export default function DayDetailScreen({ route, navigation }) {
             onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
           />
         ))}
+        <TouchableOpacity
+          style={styles.bigAddButton}
+          onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: null })}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={18} color={THEME.gold} />
+          <Text style={styles.bigAddButtonText}>Ajouter une étape</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -158,7 +168,7 @@ function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress 
         </TouchableOpacity>
         {!isLast && <View style={[styles.line, { backgroundColor: done ? THEME.teal : THEME.border }]} />}
       </View>
-      <TouchableOpacity style={[styles.rowContent, { opacity: done ? 0.6 : 1 }]} onPress={onPress} activeOpacity={0.8}>
+      <TouchableOpacity style={[styles.rowCard, { opacity: done ? 0.6 : 1 }]} onPress={onPress} activeOpacity={0.85}>
         <View style={styles.rowTop}>
           <View style={[styles.iconBadge, { backgroundColor: t.dim }]}>
             <Ionicons name={t.icon} size={15} color={t.color} />
@@ -178,7 +188,9 @@ function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40 },
+  emptyBox: { alignItems: "center", justifyContent: "center", paddingVertical: 50, gap: 10 },
   emptyText: { color: THEME.inkFaint, fontSize: 13.5, fontFamily: FONTS.body },
+  tripNameSubtitle: { fontSize: 11, color: THEME.inkFaint, letterSpacing: 0.4, fontFamily: FONTS.bodyMedium },
   header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingTop: 6 },
   backButton: { padding: 8 },
   addButton: { padding: 8 },
@@ -195,6 +207,17 @@ const styles = StyleSheet.create({
   dot: {},
   line: { flex: 1, width: 2, marginTop: 4 },
   rowContent: { flex: 1, paddingLeft: 12, paddingBottom: 22 },
+  rowCard: {
+    flex: 1,
+    marginLeft: 12,
+    marginBottom: 14,
+    backgroundColor: THEME.bgCard,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 14,
+    padding: 13,
+    ...CARD_SHADOW,
+  },
   rowTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconBadge: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   rowInfo: { flex: 1 },
@@ -203,4 +226,18 @@ const styles = StyleSheet.create({
   rowTime: { fontSize: 11, color: THEME.inkFaint, marginTop: 2, fontFamily: FONTS.mono },
   rowNote: { fontSize: 12, color: THEME.inkMuted, marginTop: 6, marginLeft: 44, fontFamily: FONTS.body },
   rowPrice: { fontSize: 13.5, color: THEME.gold, marginTop: 6, marginLeft: 44, fontFamily: FONTS.monoMedium },
+  bigAddButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: THEME.gold,
+    borderStyle: "dashed",
+    borderRadius: 14,
+    paddingVertical: 15,
+    marginLeft: 32,
+    marginTop: 4,
+  },
+  bigAddButtonText: { color: THEME.gold, fontSize: 14, fontFamily: FONTS.bodySemiBold },
 });
