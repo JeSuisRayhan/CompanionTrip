@@ -14,6 +14,7 @@
     "@react-navigation/native": "^6.1.18",
     "@react-navigation/native-stack": "^6.11.0",
     "expo": "~57.0.20",
+    "expo-constants": "~18.0.11",
     "expo-document-picker": "^57.0.1",
     "expo-file-system": "^57.0.6",
     "expo-font": "^57.0.4",
