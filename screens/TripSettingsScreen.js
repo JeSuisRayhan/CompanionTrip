@@ -1,28 +1,51 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList } from "react-native";
+import React, { useState, useEffect, useCallback } from "react";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
-import { CURRENCY_PRESETS, suggestRate } from "../lib/constants";
-import { updateTripSettings } from "../lib/trips";
-import { BUDGET_TYPES } from "../lib/constants";
+import { CURRENCY_PRESETS, suggestRate, BUDGET_TYPES } from "../lib/constants";
+import { getTrip, updateTripSettings } from "../lib/trips";
 
 const CATEGORY_LABELS = { transport: "Transport", hotel: "Hébergement", repas: "Repas" };
 
 export default function TripSettingsScreen({ route, navigation }) {
-  const { trip } = route.params;
-  const [currency, setCurrency] = useState(trip.currency || "EUR");
-  const [homeCurrency, setHomeCurrency] = useState(trip.homeCurrency || "EUR");
-  const [rate, setRate] = useState(trip.rate != null ? String(trip.rate) : "1");
-  const [targets, setTargets] = useState({
-    transport: trip.budgetTargets?.transport != null ? String(trip.budgetTargets.transport) : "",
-    hotel: trip.budgetTargets?.hotel != null ? String(trip.budgetTargets.hotel) : "",
-    repas: trip.budgetTargets?.repas != null ? String(trip.budgetTargets.repas) : "",
-  });
+  const { tripId } = route.params;
+  const [trip, setTrip] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState("EUR");
+  const [homeCurrency, setHomeCurrency] = useState("EUR");
+  const [rate, setRate] = useState("1");
+  const [targets, setTargets] = useState({ transport: "", hotel: "", repas: "" });
+  const [defaultLocation, setDefaultLocation] = useState("");
   const [pickerFor, setPickerFor] = useState(null); // "local" | "home" | null
   const [saving, setSaving] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const t = await getTrip(tripId);
+        if (cancelled || !t) return;
+        setTrip(t);
+        setCurrency(t.currency || "EUR");
+        setHomeCurrency(t.homeCurrency || "EUR");
+        setRate(t.rate != null ? String(t.rate) : "1");
+        setDefaultLocation(t.defaultLocation || "");
+        setTargets({
+          transport: t.budgetTargets?.transport != null ? String(t.budgetTargets.transport) : "",
+          hotel: t.budgetTargets?.hotel != null ? String(t.budgetTargets.hotel) : "",
+          repas: t.budgetTargets?.repas != null ? String(t.budgetTargets.repas) : "",
+        });
+        setLoading(false);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [tripId])
+  );
 
   function applySuggestedRate(local, home) {
     const suggested = suggestRate(local, home);
@@ -38,11 +61,12 @@ export default function TripSettingsScreen({ route, navigation }) {
         const v = targets[key];
         budgetTargets[key] = v && v.trim() ? parseFloat(v.replace(",", ".")) : null;
       }
-      await updateTripSettings(trip.id, {
+      await updateTripSettings(tripId, {
         currency,
         homeCurrency,
         rate: !isNaN(parsedRate) ? parsedRate : 1,
         budgetTargets,
+        defaultLocation: defaultLocation.trim() || null,
       });
       navigation.goBack();
     } finally {
@@ -51,6 +75,16 @@ export default function TripSettingsScreen({ route, navigation }) {
   }
 
   const currencyLabel = (code) => CURRENCY_PRESETS.find((c) => c.code === code)?.label || code;
+
+  if (loading || !trip) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={THEME.teal} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
@@ -65,7 +99,21 @@ export default function TripSettingsScreen({ route, navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.sectionTitle}>Devises</Text>
+        <Text style={styles.sectionTitle}>Météo</Text>
+        <Text style={styles.label}>Lieu principal du voyage</Text>
+        <TextInput
+          style={styles.input}
+          value={defaultLocation}
+          onChangeText={setDefaultLocation}
+          placeholder="ex : Tokyo"
+          placeholderTextColor={THEME.inkFaint}
+        />
+        <Text style={styles.helpText}>
+          Utilisé pour la météo de chaque jour, sauf si vous précisez un lieu différent pour un jour en particulier
+          (utile si le voyage passe par plusieurs villes).
+        </Text>
+
+        <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Devises</Text>
 
         <Text style={styles.label}>Devise locale</Text>
         <TouchableOpacity style={styles.picker} onPress={() => setPickerFor("local")}>

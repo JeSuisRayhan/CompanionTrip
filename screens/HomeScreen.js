@@ -185,19 +185,19 @@ function SwipeToDelete({ trip, onDeleted, children }) {
   );
 }
 
-function HomeWeatherPreview({ day, dateISO, light }) {
+function HomeWeatherPreview({ day, dateISO, light, fallbackLocation }) {
   const [weather, setWeather] = useState(undefined);
 
   useEffect(() => {
     let cancelled = false;
     if (!day || !dateISO) return;
-    fetchDayWeather(day, dateISO).then((w) => {
+    fetchDayWeather(day, dateISO, fallbackLocation).then((w) => {
       if (!cancelled) setWeather(w);
     });
     return () => {
       cancelled = true;
     };
-  }, [day?.id, day?.location, dateISO]);
+  }, [day?.id, day?.location, dateISO, fallbackLocation]);
 
   if (!weather) return null;
   const info = weatherInfo(weather.code);
@@ -231,7 +231,7 @@ function CurrentTripCard({ trip, today, onPress }) {
           {end && end !== start ? ` → ${formatDateLabel(end)}` : ""}
         </Text>
       )}
-      <HomeWeatherPreview day={todayDay} dateISO={today} light />
+      <HomeWeatherPreview day={todayDay} dateISO={today} light fallbackLocation={trip.defaultLocation} />
       {total > 0 && <Text style={styles.heroBudget}>Budget estimé : {formatMoney(total, trip.currency)}</Text>}
       {cover?.photographerName && (
         <Text style={styles.creditText}>Photo : {cover.photographerName} / Unsplash</Text>
@@ -284,7 +284,7 @@ function CountdownCard({ trip, today, onPress }) {
               {end && end !== start ? ` → ${formatDateLabel(end)}` : ""}
             </Text>
           )}
-          {start && <HomeWeatherPreview day={firstDay} dateISO={start} />}
+          {start && <HomeWeatherPreview day={firstDay} dateISO={start} fallbackLocation={trip.defaultLocation} />}
         </View>
         <Ionicons name="chevron-forward" size={18} color={THEME.inkFaint} />
       </LinearGradient>

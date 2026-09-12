@@ -12,30 +12,47 @@ import { resolveDayDate, formatDateLabel } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { fetchDayWeather, weatherInfo, guessDayLocation } from "../lib/weather";
 
-export function WeatherBadge({ day, dateISO }) {
+export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
   const [weather, setWeather] = useState(undefined); // undefined = loading, null = no data
+  const location = guessDayLocation(day, fallbackLocation);
 
   useEffect(() => {
     let cancelled = false;
     setWeather(undefined);
-    fetchDayWeather(day, dateISO).then((w) => {
+    fetchDayWeather(day, dateISO, fallbackLocation).then((w) => {
       if (!cancelled) setWeather(w);
     });
     return () => {
       cancelled = true;
     };
-  }, [day.id, day.location, day.title, dateISO]);
+  }, [day.id, day.location, day.title, dateISO, fallbackLocation]);
 
-  if (!weather) return null;
-  const info = weatherInfo(weather.code);
-  return (
-    <View style={styles.weatherBadge}>
-      <Text style={styles.weatherEmoji}>{info.emoji}</Text>
-      <Text style={styles.weatherTemps}>
-        {weather.tempMax}° / {weather.tempMin}°
-      </Text>
-    </View>
-  );
+  if (weather === undefined) return null; // still loading — avoid flashing a message
+  if (weather) {
+    const info = weatherInfo(weather.code);
+    return (
+      <View style={styles.weatherBadge}>
+        <Text style={styles.weatherEmoji}>{info.emoji}</Text>
+        <Text style={styles.weatherTemps}>
+          {weather.tempMax}° / {weather.tempMin}°
+        </Text>
+      </View>
+    );
+  }
+
+  // weather === null. In the compact (list-card) context, silently show nothing —
+  // explaining why on every single day card would be noisy. The full explanation
+  // only shows in the day detail view, right next to the location-edit action.
+  if (compact) return null;
+
+  if (!location) {
+    return <Text style={styles.weatherUnavailable}>Ajoutez un lieu pour la météo</Text>;
+  }
+  const daysAhead = dateISO ? Math.round((new Date(dateISO + "T00:00:00") - new Date()) / 86400000) : null;
+  if (daysAhead != null && (daysAhead > 15 || daysAhead < -1)) {
+    return <Text style={styles.weatherUnavailable}>Prévision indisponible (trop loin dans le temps)</Text>;
+  }
+  return <Text style={styles.weatherUnavailable}>Prévision indisponible pour "{location}"</Text>;
 }
 
 export default function DayDetailScreen({ route, navigation }) {
@@ -103,7 +120,7 @@ export default function DayDetailScreen({ route, navigation }) {
           <Text style={styles.headerTitle}>{day.title}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             {date && <Text style={styles.headerDate}>{formatDateLabel(date)}</Text>}
-            {date && <WeatherBadge day={day} dateISO={date} />}
+            {date && <WeatherBadge day={day} dateISO={date} fallbackLocation={trip.defaultLocation} />}
             <TouchableOpacity onPress={() => setLocationModalOpen(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="location-outline" size={13} color={THEME.inkFaint} />
             </TouchableOpacity>
@@ -248,6 +265,7 @@ const styles = StyleSheet.create({
   weatherBadge: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
   weatherEmoji: { fontSize: 13 },
   weatherTemps: { fontSize: 11.5, color: THEME.inkMuted, fontFamily: FONTS.mono },
+  weatherUnavailable: { fontSize: 10.5, color: THEME.inkFaint, fontFamily: FONTS.body },
   progressText: { fontSize: 11.5, color: THEME.teal, marginLeft: 44, marginTop: 2, fontFamily: FONTS.bodyMedium },
   scrollContent: { padding: 20, paddingTop: 16 },
   rowWrap: { flexDirection: "row" },

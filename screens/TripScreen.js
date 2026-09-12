@@ -99,7 +99,7 @@ export default function TripScreen({ route, navigation }) {
           </View>
         )}
         <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => navigation.navigate("TripSettings", { trip })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity onPress={() => navigation.navigate("TripSettings", { tripId: trip.id })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="options-outline" size={20} color={THEME.inkMuted} />
         </TouchableOpacity>
       </View>
@@ -204,7 +204,7 @@ function DaysTab({ trip, navigation, onShiftDates }) {
               {date && (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <Text style={styles.dayDate}>{formatDateLabel(date)}</Text>
-                  <WeatherBadge day={day} dateISO={date} />
+                  <WeatherBadge day={day} dateISO={date} compact fallbackLocation={trip.defaultLocation} />
                 </View>
               )}
               <Text style={styles.dayCount}>
