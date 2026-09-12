@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -7,10 +7,10 @@ import { useFocusEffect } from "@react-navigation/native";
 import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TYPES } from "../lib/constants";
-import { getTrip, toggleActivityDone } from "../lib/trips";
+import { getTrip, toggleActivityDone, setDayLocation } from "../lib/trips";
 import { resolveDayDate, formatDateLabel } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
-import { fetchDayWeather, weatherInfo } from "../lib/weather";
+import { fetchDayWeather, weatherInfo, guessDayLocation } from "../lib/weather";
 
 export function WeatherBadge({ day, dateISO }) {
   const [weather, setWeather] = useState(undefined); // undefined = loading, null = no data
@@ -42,6 +42,7 @@ export default function DayDetailScreen({ route, navigation }) {
   const { tripId, dayId } = route.params;
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const t = await getTrip(tripId);
@@ -103,6 +104,9 @@ export default function DayDetailScreen({ route, navigation }) {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             {date && <Text style={styles.headerDate}>{formatDateLabel(date)}</Text>}
             {date && <WeatherBadge day={day} dateISO={date} />}
+            <TouchableOpacity onPress={() => setLocationModalOpen(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="location-outline" size={13} color={THEME.inkFaint} />
+            </TouchableOpacity>
           </View>
         </View>
         <TouchableOpacity
@@ -112,6 +116,17 @@ export default function DayDetailScreen({ route, navigation }) {
           <Ionicons name="add" size={22} color={THEME.gold} />
         </TouchableOpacity>
       </View>
+
+      <LocationModal
+        visible={locationModalOpen}
+        initial={day.location || ""}
+        onClose={() => setLocationModalOpen(false)}
+        onSave={async (loc) => {
+          await setDayLocation(tripId, dayId, loc);
+          setLocationModalOpen(false);
+          refresh();
+        }}
+      />
 
       {day.activities.length > 0 && (
         <Text style={styles.progressText}>
@@ -185,6 +200,40 @@ function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress 
   );
 }
 
+function LocationModal({ visible, initial, onClose, onSave }) {
+  const [value, setValue] = useState(initial);
+
+  useEffect(() => {
+    if (visible) setValue(initial);
+  }, [visible, initial]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalCard}>
+          <Text style={styles.modalTitle}>Lieu de ce jour</Text>
+          <Text style={styles.modalHelp}>Utilisé pour trouver la météo — ex : "Kyoto", "Rome", "Paris".</Text>
+          <TextInput
+            style={styles.modalInput}
+            value={value}
+            onChangeText={setValue}
+            placeholder="Nom de la ville"
+            placeholderTextColor={THEME.inkFaint}
+          />
+          <View style={styles.modalButtonRow}>
+            <TouchableOpacity style={styles.modalButton} onPress={onClose}>
+              <Text style={styles.modalButtonText}>Annuler</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalButton} onPress={() => onSave(value)}>
+              <Text style={styles.modalButtonText}>Enregistrer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40 },
@@ -240,4 +289,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bigAddButtonText: { color: THEME.gold, fontSize: 14, fontFamily: FONTS.bodySemiBold },
+  modalOverlay: { flex: 1, backgroundColor: "#00000099", alignItems: "center", justifyContent: "center", padding: 24 },
+  modalCard: { backgroundColor: THEME.bgCard, borderRadius: 18, padding: 20, width: "100%", borderWidth: 1, borderColor: THEME.border, ...CARD_SHADOW },
+  modalTitle: { fontSize: 15.5, color: THEME.ink, fontFamily: FONTS.headingSemiBold },
+  modalHelp: { fontSize: 12, color: THEME.inkFaint, marginTop: 6, marginBottom: 12, fontFamily: FONTS.body },
+  modalInput: {
+    backgroundColor: THEME.bgCardAlt,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: THEME.ink,
+    fontSize: 14,
+    fontFamily: FONTS.body,
+  },
+  modalButtonRow: { flexDirection: "row", gap: 10, marginTop: 14 },
+  modalButton: { flex: 1, borderWidth: 1, borderColor: THEME.teal, borderRadius: 10, paddingVertical: 11, alignItems: "center" },
+  modalButtonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
 });

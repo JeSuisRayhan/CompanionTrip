@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, ImageBackground, Alert } from "react-native";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl, ImageBackground, Alert, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,8 +11,10 @@ import { FONTS } from "../lib/fonts";
 import { TRIP_TYPES } from "../lib/constants";
 import { loadTrips } from "../lib/storage";
 import { deleteTrip } from "../lib/trips";
-import { tripRange, tripStatus, formatDateLabel, daysUntilLabel, isoDate } from "../lib/dates";
+import { tripRange, tripStatus, formatDateLabel, daysUntilLabel, isoDate, resolveDayDate } from "../lib/dates";
 import { tripActivityTotal, formatMoney } from "../lib/budget";
+import { fetchDayWeather, weatherInfo } from "../lib/weather";
+import AnimatedPressable from "../components/AnimatedPressable";
 
 function todayISO() {
   return isoDate(new Date());
@@ -26,6 +28,14 @@ export default function HomeScreen({ navigation }) {
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!loading) {
+      fadeAnim.setValue(0);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }).start();
+    }
+  }, [loading]);
 
   const refresh = useCallback(async () => {
     const t = await loadTrips();
@@ -76,6 +86,7 @@ export default function HomeScreen({ navigation }) {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.teal} />}
       >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
         <View style={styles.header}>
           <View style={styles.headerIcon}>
             <Ionicons name="briefcase" size={20} color={THEME.gold} />
@@ -89,12 +100,12 @@ export default function HomeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.newTripButton} onPress={() => navigation.navigate("Onboarding")} activeOpacity={0.85}>
+        <AnimatedPressable style={styles.newTripButton} onPress={() => navigation.navigate("Onboarding")}>
           <LinearGradient colors={[THEME.gold, "#FF9D4D"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.newTripGradient}>
             <Ionicons name="add" size={18} color={THEME.bg} />
             <Text style={styles.newTripButtonText}>Nouveau voyage</Text>
           </LinearGradient>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
         {trips.length === 0 && (
           <View style={styles.emptyState}>
@@ -136,6 +147,7 @@ export default function HomeScreen({ navigation }) {
             ))}
           </View>
         )}
+      </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -173,10 +185,38 @@ function SwipeToDelete({ trip, onDeleted, children }) {
   );
 }
 
+function HomeWeatherPreview({ day, dateISO, light }) {
+  const [weather, setWeather] = useState(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!day || !dateISO) return;
+    fetchDayWeather(day, dateISO).then((w) => {
+      if (!cancelled) setWeather(w);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [day?.id, day?.location, dateISO]);
+
+  if (!weather) return null;
+  const info = weatherInfo(weather.code);
+  return (
+    <View style={styles.homeWeatherRow}>
+      <Text style={styles.homeWeatherEmoji}>{info.emoji}</Text>
+      <Text style={[styles.homeWeatherText, light && { color: "#E9DEF0" }]}>
+        {weather.tempMax}° / {weather.tempMin}°
+      </Text>
+    </View>
+  );
+}
+
 function CurrentTripCard({ trip, today, onPress }) {
   const { start, end } = tripRange(trip);
   const total = tripActivityTotal(trip);
   const cover = trip.coverImage;
+  const todayDayIndex = trip.days.findIndex((d, i) => resolveDayDate(trip, d, i) === today);
+  const todayDay = todayDayIndex >= 0 ? trip.days[todayDayIndex] : trip.days[0];
 
   const content = (
     <>
@@ -191,6 +231,7 @@ function CurrentTripCard({ trip, today, onPress }) {
           {end && end !== start ? ` → ${formatDateLabel(end)}` : ""}
         </Text>
       )}
+      <HomeWeatherPreview day={todayDay} dateISO={today} light />
       {total > 0 && <Text style={styles.heroBudget}>Budget estimé : {formatMoney(total, trip.currency)}</Text>}
       {cover?.photographerName && (
         <Text style={styles.creditText}>Photo : {cover.photographerName} / Unsplash</Text>
@@ -218,6 +259,7 @@ function CurrentTripCard({ trip, today, onPress }) {
 function CountdownCard({ trip, today, onPress }) {
   const { start, end } = tripRange(trip);
   const diff = start ? Math.round((new Date(start + "T00:00:00") - new Date(today + "T00:00:00")) / 86400000) : null;
+  const firstDay = trip.days[0];
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.9}>
       <LinearGradient colors={[THEME.tealDim, THEME.bgCard]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.countdownCard}>
@@ -242,6 +284,7 @@ function CountdownCard({ trip, today, onPress }) {
               {end && end !== start ? ` → ${formatDateLabel(end)}` : ""}
             </Text>
           )}
+          {start && <HomeWeatherPreview day={firstDay} dateISO={start} />}
         </View>
         <Ionicons name="chevron-forward" size={18} color={THEME.inkFaint} />
       </LinearGradient>
@@ -331,6 +374,9 @@ const styles = StyleSheet.create({
   heroTitle: { fontSize: 23, color: "#FFFFFF", marginHorizontal: 20, marginTop: 10, fontFamily: FONTS.headingBold },
   heroDates: { fontSize: 13.5, color: "#E9DEF0", marginHorizontal: 20, marginTop: 5, textTransform: "capitalize", fontFamily: FONTS.body },
   heroBudget: { fontSize: 13.5, color: THEME.gold, marginHorizontal: 20, marginTop: 8, marginBottom: 16, fontFamily: FONTS.monoMedium },
+  homeWeatherRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6, marginHorizontal: 20 },
+  homeWeatherEmoji: { fontSize: 13 },
+  homeWeatherText: { fontSize: 12, color: THEME.inkMuted, fontFamily: FONTS.mono },
   creditText: { fontSize: 9.5, color: "rgba(255,255,255,0.55)", marginHorizontal: 20, marginBottom: 10, fontFamily: FONTS.body },
   section: { marginTop: 4, marginBottom: 22 },
   sectionLabel: { fontSize: 13, color: THEME.inkMuted, marginBottom: 12, fontFamily: FONTS.bodyMedium },

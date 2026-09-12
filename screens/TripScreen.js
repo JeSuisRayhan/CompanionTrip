@@ -1,9 +1,13 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal, Alert, Image, ImageBackground } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal, Alert, Image, ImageBackground, LayoutAnimation, Platform, UIManager } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
+
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
@@ -14,6 +18,7 @@ import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, othe
 import { pickImage, addDocument, removeDocument } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
+import DonutChart from "../components/DonutChart";
 
 const TABS = [
   { key: "days", label: "Jours" },
@@ -93,6 +98,10 @@ export default function TripScreen({ route, navigation }) {
             <Text style={styles.statusBadgeText}>EN COURS</Text>
           </View>
         )}
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={() => navigation.navigate("TripSettings", { trip })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="options-outline" size={20} color={THEME.inkMuted} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBarScroll} contentContainerStyle={styles.tabBar}>
@@ -222,6 +231,13 @@ function BudgetTab({ trip }) {
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
+      {total > 0 && (
+        <DonutChart
+          segments={categories.map((c) => ({ value: c.value, color: c.color }))}
+          centerValue={formatMoney(total, trip.currency).replace(/\s?[A-Z€$£¥]+$/, "")}
+          centerLabel={trip.currency}
+        />
+      )}
       <View style={styles.totalCard}>
         <Text style={styles.totalLabel}>TOTAL ESTIMÉ</Text>
         <Text style={styles.totalValue}>{formatMoney(total, trip.currency)}</Text>
@@ -232,15 +248,26 @@ function BudgetTab({ trip }) {
           <Text style={styles.shiftDatesButtonText}>Convertisseur rapide</Text>
         </TouchableOpacity>
       )}
-      {categories.map((c) => (
-        <View key={c.key} style={styles.budgetRow}>
-          <View style={[styles.budgetIcon, { backgroundColor: c.color + "22" }]}>
-            <Ionicons name={c.icon} size={17} color={c.color} />
+      {categories.map((c) => {
+        const target = trip.budgetTargets && trip.budgetTargets[c.key];
+        const overTarget = target != null && c.value > target;
+        return (
+          <View key={c.key} style={styles.budgetRow}>
+            <View style={[styles.budgetIcon, { backgroundColor: c.color + "22" }]}>
+              <Ionicons name={c.icon} size={17} color={c.color} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.budgetLabel}>{c.label}</Text>
+              {target != null && (
+                <Text style={[styles.budgetTargetText, overTarget && { color: THEME.stamp }]}>
+                  Objectif : {formatMoney(target, trip.currency)}
+                </Text>
+              )}
+            </View>
+            <Text style={[styles.budgetValue, overTarget && { color: THEME.stamp }]}>{formatMoney(c.value, trip.currency)}</Text>
           </View>
-          <Text style={styles.budgetLabel}>{c.label}</Text>
-          <Text style={styles.budgetValue}>{formatMoney(c.value, trip.currency)}</Text>
-        </View>
-      ))}
+        );
+      })}
       <CurrencyConverterModal visible={converterOpen} onClose={() => setConverterOpen(false)} trip={trip} />
     </ScrollView>
   );
@@ -294,11 +321,16 @@ function ChecklistSection({ title, trip, listKey, onChange }) {
   const items = trip[listKey] || [];
   const doneCount = items.filter((i) => i.checked).length;
 
+  function animateThenChange() {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    onChange();
+  }
+
   async function addItem() {
     if (!newLabel.trim()) return;
     await addChecklistItem(trip.id, listKey, newLabel);
     setNewLabel("");
-    onChange();
+    animateThenChange();
   }
 
   return (
@@ -317,7 +349,7 @@ function ChecklistSection({ title, trip, listKey, onChange }) {
           style={styles.checklistRow}
           onPress={async () => {
             await toggleChecklistItem(trip.id, listKey, item.id);
-            onChange();
+            animateThenChange();
           }}
           activeOpacity={0.8}
         >
@@ -330,7 +362,7 @@ function ChecklistSection({ title, trip, listKey, onChange }) {
           <TouchableOpacity
             onPress={async () => {
               await removeChecklistItem(trip.id, listKey, item.id);
-              onChange();
+              animateThenChange();
             }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
@@ -602,6 +634,7 @@ const styles = StyleSheet.create({
   },
   budgetIcon: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   budgetLabel: { flex: 1, fontSize: 14.5, color: THEME.ink, fontFamily: FONTS.body },
+  budgetTargetText: { fontSize: 11, color: THEME.inkFaint, marginTop: 2, fontFamily: FONTS.body },
   budgetValue: { fontSize: 14, color: THEME.inkMuted, fontFamily: FONTS.mono },
   checklistSection: { marginBottom: 26 },
   checklistHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },

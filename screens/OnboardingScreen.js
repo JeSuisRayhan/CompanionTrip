@@ -11,6 +11,7 @@ import { runScriptCorrection } from "../lib/script";
 import { getSetting } from "../lib/storage";
 import { searchDestinationPhoto, trackUnsplashDownload } from "../lib/unsplash";
 import VoiceInputButton from "../components/VoiceInputButton";
+import AnimatedPressable from "../components/AnimatedPressable";
 
 const STEP_COUNT = 3;
 
@@ -192,18 +193,18 @@ export default function OnboardingScreen({ navigation }) {
 
         <View style={styles.footer}>
           {step < STEP_COUNT && (
-            <TouchableOpacity
+            <AnimatedPressable
               style={[styles.primaryButton, step === 2 && !name.trim() && styles.primaryButtonDisabled]}
               onPress={() => setStep(step + 1)}
               disabled={step === 2 && !name.trim()}
             >
               <Text style={styles.primaryButtonText}>Continuer</Text>
-            </TouchableOpacity>
+            </AnimatedPressable>
           )}
           {step === STEP_COUNT && (
-            <TouchableOpacity style={styles.primaryButton} onPress={finish} disabled={creating || !name.trim()}>
+            <AnimatedPressable style={styles.primaryButton} onPress={finish} disabled={creating || !name.trim()}>
               {creating ? <ActivityIndicator color={THEME.bg} /> : <Text style={styles.primaryButtonText}>Créer le voyage</Text>}
-            </TouchableOpacity>
+            </AnimatedPressable>
           )}
         </View>
       </KeyboardAvoidingView>

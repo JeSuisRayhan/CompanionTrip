@@ -108,8 +108,13 @@ export default function SettingsScreen() {
       if (result.cancelled) {
         setBackupStatus("");
       } else {
-        setBackupStatus(`${result.imported} voyage${result.imported !== 1 ? "s" : ""} importé${result.imported !== 1 ? "s" : ""}${result.skipped ? ` (${result.skipped} déjà présents ignorés)` : ""}.`);
+        const keyNote = result.restoredSettings ? ` Clés restaurées : ${result.restoredSettings}.` : "";
+        setBackupStatus(`${result.imported} voyage${result.imported !== 1 ? "s" : ""} importé${result.imported !== 1 ? "s" : ""}${result.skipped ? ` (${result.skipped} déjà présents ignorés)` : ""}.${keyNote}`);
         await refreshTripCount();
+        const key = await getSetting("anthropicApiKey");
+        if (key) setApiKey(key);
+        const uKey = await getSetting("unsplashAccessKey");
+        if (uKey) setUnsplashKey(uKey);
       }
     } catch (e) {
       setBackupStatus(e && e.code === "INVALID_BACKUP" ? "Ce fichier n'est pas une sauvegarde valide." : "Échec de l'import.");
@@ -226,7 +231,8 @@ export default function SettingsScreen() {
           </View>
           <Text style={styles.cardText}>
             {tripCount} voyage{tripCount !== 1 ? "s" : ""} enregistré{tripCount !== 1 ? "s" : ""} sur cet appareil,
-            uniquement en local. Exportez régulièrement une sauvegarde pour ne rien perdre.
+            uniquement en local. Exportez régulièrement une sauvegarde pour ne rien perdre — vos clés API ci-dessus
+            sont incluses, donc pas besoin de les retaper après une réinstallation.
           </Text>
           <View style={styles.buttonRow}>
             <TouchableOpacity style={[styles.button, styles.buttonHalf]} onPress={onExportBackup} disabled={backupBusy}>
