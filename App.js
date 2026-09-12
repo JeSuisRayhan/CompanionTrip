@@ -3,6 +3,7 @@ import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import { SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
@@ -67,28 +68,30 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
-      <StatusBar style="light" />
-      <Stack.Navigator
-        initialRouteName="Home"
-        screenOptions={{
-          headerStyle: { backgroundColor: THEME.bgCard },
-          headerTintColor: THEME.ink,
-          headerShadowVisible: false,
-          contentStyle: { backgroundColor: THEME.bg },
-        }}
-      >
-        <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
-        <Stack.Screen name="Trip" component={TripScreen} options={{ title: "" }} />
-        <Stack.Screen name="DayDetail" component={DayDetailScreen} options={{ headerShown: false }} />
-        <Stack.Screen
-          name="ActivityEditor"
-          component={ActivityEditorScreen}
-          options={{ headerShown: false, presentation: "modal" }}
-        />
-        <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Réglages" }} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer theme={navTheme}>
+        <StatusBar style="light" />
+        <Stack.Navigator
+          initialRouteName="Home"
+          screenOptions={{
+            headerStyle: { backgroundColor: THEME.bgCard },
+            headerTintColor: THEME.ink,
+            headerShadowVisible: false,
+            contentStyle: { backgroundColor: THEME.bg },
+          }}
+        >
+          <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="Trip" component={TripScreen} options={{ title: "" }} />
+          <Stack.Screen name="DayDetail" component={DayDetailScreen} options={{ headerShown: false }} />
+          <Stack.Screen
+            name="ActivityEditor"
+            component={ActivityEditorScreen}
+            options={{ headerShown: false, presentation: "modal" }}
+          />
+          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Réglages" }} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </GestureHandlerRootView>
   );
 }
