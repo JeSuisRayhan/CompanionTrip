@@ -178,7 +178,7 @@ export default function DayDetailScreen({ route, navigation }) {
         {sorted.length === 0 && (
           <View style={styles.emptyBox}>
             <Ionicons name="calendar-outline" size={30} color={THEME.inkFaint} />
-            <Text style={styles.emptyText}>Rien de prévu pour l'instant.</Text>
+            <Text style={styles.emptyText}>La page est blanche — à vous de l'écrire.</Text>
           </View>
         )}
         {sorted.map((a, i) => (

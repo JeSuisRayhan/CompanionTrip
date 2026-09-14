@@ -9,6 +9,7 @@ import { FONTS } from "../lib/fonts";
 import { CURRENCY_PRESETS, suggestRate, BUDGET_TYPES } from "../lib/constants";
 import { getTrip, updateTripSettings } from "../lib/trips";
 import { scheduleDailySummaries, scheduleDepartureReminder } from "../lib/notifications";
+import { requestGeofencingPermissions, scheduleHotelProximityAlerts, stopHotelProximityAlerts, isHotelProximityActiveForTrip } from "../lib/geofencing";
 
 const CATEGORY_LABELS = { transport: "Transport", hotel: "Hébergement", repas: "Repas" };
 
@@ -26,6 +27,9 @@ export default function TripSettingsScreen({ route, navigation }) {
   const [saving, setSaving] = useState(false);
   const [remindersBusy, setRemindersBusy] = useState(false);
   const [remindersStatus, setRemindersStatus] = useState("");
+  const [geofenceBusy, setGeofenceBusy] = useState(false);
+  const [geofenceStatus, setGeofenceStatus] = useState("");
+  const [geofenceEnabled, setGeofenceEnabled] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -52,6 +56,7 @@ export default function TripSettingsScreen({ route, navigation }) {
           repas: t.budgetTargets?.repas != null ? String(t.budgetTargets.repas) : "",
         });
         setLoading(false);
+        setGeofenceEnabled(await isHotelProximityActiveForTrip(tripId));
       })();
       return () => {
         cancelled = true;
@@ -76,6 +81,38 @@ export default function TripSettingsScreen({ route, navigation }) {
       setRemindersStatus(parts.length ? `Programmés : ${parts.join(" + ")}.` : "Rien à programmer (voyage déjà commencé ou trop proche).");
     } finally {
       setRemindersBusy(false);
+    }
+  }
+
+  async function enableHotelProximity() {
+    setGeofenceBusy(true);
+    setGeofenceStatus("");
+    try {
+      const granted = await requestGeofencingPermissions();
+      if (!granted) {
+        setGeofenceStatus("Autorisation de localisation \"toujours\" refusée — nécessaire pour détecter votre arrivée même app fermée.");
+        return;
+      }
+      const count = await scheduleHotelProximityAlerts(trip);
+      setGeofenceEnabled(count > 0);
+      setGeofenceStatus(
+        count > 0
+          ? `Activé pour ${count} hôtel${count !== 1 ? "s" : ""} avec adresse renseignée.`
+          : "Aucun hôtel avec adresse renseignée sur ce voyage — ajoutez une adresse aux étapes hôtel pour activer ceci."
+      );
+    } finally {
+      setGeofenceBusy(false);
+    }
+  }
+
+  async function disableHotelProximity() {
+    setGeofenceBusy(true);
+    try {
+      await stopHotelProximityAlerts();
+      setGeofenceEnabled(false);
+      setGeofenceStatus("Désactivé.");
+    } finally {
+      setGeofenceBusy(false);
     }
   }
 
@@ -213,6 +250,23 @@ export default function TripSettingsScreen({ route, navigation }) {
           <Text style={styles.buttonText}>{remindersBusy ? "…" : "Programmer les rappels"}</Text>
         </TouchableOpacity>
         {remindersStatus ? <Text style={{ color: THEME.inkMuted, fontSize: 12, marginTop: 10, textAlign: "center", fontFamily: FONTS.body }}>{remindersStatus}</Text> : null}
+
+        <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Rappel à l'approche de l'hôtel</Text>
+        <Text style={styles.helpText}>
+          Une notification apparaît avec le code de réservation quand vous arrivez près d'un hôtel de ce voyage —
+          fonctionne même si l'app est fermée. Nécessite une adresse sur chaque étape hôtel et l'autorisation de
+          localisation "toujours".
+        </Text>
+        {geofenceEnabled ? (
+          <TouchableOpacity style={styles.button} onPress={disableHotelProximity} disabled={geofenceBusy}>
+            <Text style={styles.buttonText}>{geofenceBusy ? "…" : "Désactiver"}</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.button} onPress={enableHotelProximity} disabled={geofenceBusy}>
+            <Text style={styles.buttonText}>{geofenceBusy ? "…" : "Activer"}</Text>
+          </TouchableOpacity>
+        )}
+        {geofenceStatus ? <Text style={{ color: THEME.inkMuted, fontSize: 12, marginTop: 10, textAlign: "center", fontFamily: FONTS.body }}>{geofenceStatus}</Text> : null}
       </ScrollView>
 
       <CurrencyPickerModal

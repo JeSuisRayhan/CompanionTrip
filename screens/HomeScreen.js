@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
     padding: 13,
     marginBottom: 11,
   },
-  rowIcon: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  rowIcon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" },
   rowIconImage: { resizeMode: "cover" },
   rowInfo: { flex: 1 },
   rowTitle: { fontSize: 15, color: THEME.ink, fontFamily: FONTS.headingRegular },

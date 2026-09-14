@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Modal, Alert, Image, ImageBackground, LayoutAnimation, Platform, UIManager } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -41,6 +41,15 @@ export default function TripScreen({ route, navigation }) {
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [gridView, setGridView] = useState(false);
+  const [incomingScan, setIncomingScan] = useState(null);
+
+  useEffect(() => {
+    if (route.params?.scannedUri) {
+      setTab("documents");
+      setIncomingScan({ uri: route.params.scannedUri, scannedCode: route.params.scannedCode || null });
+      navigation.setParams({ scannedUri: undefined, scannedCode: undefined });
+    }
+  }, [route.params?.scannedUri]);
 
   const refresh = useCallback(async () => {
     const t = await getTrip(tripId);
@@ -135,7 +144,15 @@ export default function TripScreen({ route, navigation }) {
       )}
       {tab === "budget" && <BudgetTab trip={trip} />}
       {tab === "checklists" && <ChecklistsTab trip={trip} onChange={refresh} />}
-      {tab === "documents" && <DocumentsTab trip={trip} onChange={refresh} />}
+      {tab === "documents" && (
+        <DocumentsTab
+          trip={trip}
+          onChange={refresh}
+          navigation={navigation}
+          incomingScan={incomingScan}
+          onConsumeIncomingScan={() => setIncomingScan(null)}
+        />
+      )}
       {tab === "phrases" && <PhrasesTab trip={trip} onChange={refresh} />}
 
       <ShiftDatesModal
@@ -241,6 +258,7 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, se
       ) : (
         (() => {
           const q = (searchQuery || "").trim().toLowerCase();
+          const today = isoToday();
           const filtered = trip.days
             .map((day, index) => ({ day, index }))
             .filter(({ day, index }) => {
@@ -255,46 +273,42 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, se
             return <Text style={styles.helpText}>Aucun jour ne correspond à "{searchQuery}".</Text>;
           }
 
+          function openDayMenu(day, index) {
+            const options = [{ text: "Annuler", style: "cancel" }];
+            if (index > 0) options.push({ text: "Monter", onPress: () => onMoveDay(day.id, "up") });
+            if (index < trip.days.length - 1) options.push({ text: "Descendre", onPress: () => onMoveDay(day.id, "down") });
+            options.push({ text: "Dupliquer", onPress: () => onDuplicateDay(day.id) });
+            Alert.alert(day.title, "Que voulez-vous faire ?", options);
+          }
+
           return (
             <View style={gridView ? styles.dayGrid : undefined}>
               {filtered.map(({ day, index }) => {
                 const date = resolveDayDate(trip, day, index);
+                const isToday = date === today;
                 return (
                   <TouchableOpacity
                     key={day.id}
-                    style={gridView ? styles.dayCardGrid : styles.dayCard}
+                    style={[gridView ? styles.dayCardGrid : styles.dayCard, isToday && styles.dayCardActive]}
                     onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })}
                     activeOpacity={0.85}
                   >
                     <View style={styles.dayCardHeader}>
-                      <Text style={styles.dayIndexLabel}>J{index + 1}</Text>
-                      {!q && !gridView && (
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text style={[styles.dayIndexLabel, isToday && styles.dayIndexLabelActive]}>J{index + 1}</Text>
+                        {isToday && <Text style={styles.todayPill}>AUJOURD'HUI</Text>}
+                      </View>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
+                        {!q && !gridView && (
                           <TouchableOpacity
-                            onPress={() => onMoveDay(day.id, "up")}
-                            disabled={index === 0}
+                            onPress={() => openDayMenu(day, index)}
                             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           >
-                            <Ionicons name="chevron-up" size={16} color={index === 0 ? THEME.border : THEME.inkFaint} />
+                            <Ionicons name="ellipsis-horizontal" size={17} color={THEME.inkFaint} />
                           </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => onMoveDay(day.id, "down")}
-                            disabled={index === trip.days.length - 1}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          >
-                            <Ionicons
-                              name="chevron-down"
-                              size={16}
-                              color={index === trip.days.length - 1 ? THEME.border : THEME.inkFaint}
-                            />
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => onDuplicateDay(day.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                            <Ionicons name="copy-outline" size={16} color={THEME.inkFaint} />
-                          </TouchableOpacity>
-                          <Ionicons name="chevron-forward" size={16} color={THEME.inkFaint} />
-                        </View>
-                      )}
-                      {(q || gridView) && <Ionicons name="chevron-forward" size={16} color={THEME.inkFaint} />}
+                        )}
+                        <Ionicons name="chevron-forward" size={16} color={THEME.inkFaint} />
+                      </View>
                     </View>
                     <Text style={styles.dayTitle} numberOfLines={gridView ? 2 : undefined}>
                       {day.title}
@@ -489,18 +503,29 @@ function ChecklistSection({ title, trip, listKey, onChange }) {
   );
 }
 
-function DocumentsTab({ trip, onChange }) {
+function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncomingScan }) {
   const [pendingUri, setPendingUri] = useState(null);
+  const [pendingScannedCode, setPendingScannedCode] = useState(null);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [viewingDoc, setViewingDoc] = useState(null);
   const docs = trip.documents || [];
 
+  useEffect(() => {
+    if (incomingScan) {
+      setPendingUri(incomingScan.uri);
+      setPendingScannedCode(incomingScan.scannedCode);
+      setTitle(incomingScan.scannedCode ? "Billet scanné" : "Photo scannée");
+      onConsumeIncomingScan();
+    }
+  }, [incomingScan]);
+
   function choosePhoto() {
     setError("");
-    Alert.alert("Ajouter un document", "Photographiez ou choisissez une image existante.", [
+    Alert.alert("Ajouter un document", "Comment voulez-vous l'ajouter ?", [
       { text: "Annuler", style: "cancel" },
+      { text: "Scanner un billet / code-barres", onPress: () => navigation.navigate("TicketScanner", { tripId: trip.id }) },
       { text: "Prendre une photo", onPress: () => pick("camera") },
       { text: "Depuis la galerie", onPress: () => pick("library") },
     ]);
@@ -518,8 +543,9 @@ function DocumentsTab({ trip, onChange }) {
   async function confirmAdd() {
     setBusy(true);
     try {
-      await addDocument(trip.id, { title, category: "autre", tempUri: pendingUri });
+      await addDocument(trip.id, { title, category: "autre", tempUri: pendingUri, scannedCode: pendingScannedCode });
       setPendingUri(null);
+      setPendingScannedCode(null);
       setTitle("");
       onChange();
     } catch (e) {
@@ -542,7 +568,7 @@ function DocumentsTab({ trip, onChange }) {
       </TouchableOpacity>
       {error && <Text style={{ color: THEME.stamp, fontSize: 12, marginBottom: 10 }}>{error}</Text>}
 
-      {docs.length === 0 && <Text style={styles.helpText}>Vos billets, réservations et QR codes, en photo.</Text>}
+      {docs.length === 0 && <Text style={styles.helpText}>Billets, réservations, codes Wi-Fi de l'hôtel — tout ce qu'on cherche toujours au pire moment.</Text>}
 
       {docs.map((doc) => (
         <TouchableOpacity key={doc.id} style={styles.docRow} onPress={() => setViewingDoc(doc)} activeOpacity={0.8}>
@@ -557,6 +583,14 @@ function DocumentsTab({ trip, onChange }) {
       <Modal visible={!!viewingDoc} transparent animationType="fade" onRequestClose={() => setViewingDoc(null)}>
         <TouchableOpacity style={styles.viewerOverlay} activeOpacity={1} onPress={() => setViewingDoc(null)}>
           {viewingDoc && <Image source={{ uri: viewingDoc.uri }} style={styles.viewerImage} resizeMode="contain" />}
+          {viewingDoc?.scannedCode && (
+            <View style={[styles.scannedCodeBadge, { position: "absolute", bottom: 90, left: 20, right: 20 }]}>
+              <Ionicons name="qr-code-outline" size={13} color={THEME.teal} />
+              <Text style={styles.scannedCodeText} numberOfLines={1}>
+                {viewingDoc.scannedCode}
+              </Text>
+            </View>
+          )}
           <View style={styles.viewerTitleBar}>
             <Text style={styles.viewerTitleText}>{viewingDoc?.title}</Text>
             <TouchableOpacity onPress={() => setViewingDoc(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -570,6 +604,14 @@ function DocumentsTab({ trip, onChange }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             {pendingUri && <Image source={{ uri: pendingUri }} style={styles.previewImage} />}
+            {pendingScannedCode && (
+              <View style={styles.scannedCodeBadge}>
+                <Ionicons name="qr-code-outline" size={13} color={THEME.teal} />
+                <Text style={styles.scannedCodeText} numberOfLines={1}>
+                  {pendingScannedCode}
+                </Text>
+              </View>
+            )}
             <TextInput
               style={[styles.input, { marginTop: 14 }]}
               value={title}
@@ -578,7 +620,7 @@ function DocumentsTab({ trip, onChange }) {
               placeholderTextColor={THEME.inkFaint}
             />
             <View style={styles.buttonRow}>
-              <TouchableOpacity style={[styles.button, styles.buttonHalf]} onPress={() => setPendingUri(null)} disabled={busy}>
+              <TouchableOpacity style={[styles.button, styles.buttonHalf]} onPress={() => { setPendingUri(null); setPendingScannedCode(null); }} disabled={busy}>
                 <Text style={styles.buttonText}>Annuler</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.button, styles.buttonHalf]} onPress={confirmAdd} disabled={busy}>
@@ -608,7 +650,7 @@ function PhrasesTab({ trip, onChange }) {
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent}>
-      <Text style={styles.helpText}>Petites phrases à garder sous la main avec leur traduction.</Text>
+      <Text style={styles.helpText}>Les phrases qui sauvent — "où sont les toilettes", "c'est trop épicé", ce genre de choses.</Text>
       {phrases.map((p) => (
         <View key={p.id} style={styles.phraseRow}>
           <View style={{ flex: 1 }}>
@@ -717,6 +759,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     ...CARD_SHADOW,
   },
+  dayCardActive: {
+    borderColor: THEME.teal,
+    borderWidth: 1.5,
+    backgroundColor: THEME.tealDim,
+  },
   dayCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   dayIndexLabel: {
     backgroundColor: THEME.goldDim,
@@ -728,6 +775,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignSelf: "flex-start",
   },
+  dayIndexLabelActive: { backgroundColor: THEME.teal, color: THEME.bg },
+  todayPill: { color: THEME.teal, fontSize: 10, fontFamily: FONTS.bodySemiBold, letterSpacing: 0.4 },
   dayTitle: { fontSize: 16.5, color: THEME.ink, marginTop: 9, fontFamily: FONTS.headingSemiBold },
   dayDate: { fontSize: 12, color: THEME.inkMuted, marginTop: 2, textTransform: "capitalize", fontFamily: FONTS.body },
   dayCount: { fontSize: 11.5, color: THEME.inkFaint, marginTop: 6, fontFamily: FONTS.body },
@@ -746,7 +795,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     ...CARD_SHADOW,
   },
-  budgetIcon: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  budgetIcon: { width: 38, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   budgetLabel: { flex: 1, fontSize: 14.5, color: THEME.ink, fontFamily: FONTS.body },
   budgetTargetText: { fontSize: 11, color: THEME.inkFaint, marginTop: 2, fontFamily: FONTS.body },
   budgetValue: { fontSize: 14, color: THEME.inkMuted, fontFamily: FONTS.mono },
@@ -862,6 +911,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   viewerTitleText: { color: "#FFFFFF", fontSize: 15, fontFamily: FONTS.bodySemiBold, flex: 1 },
+  scannedCodeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: THEME.tealDim,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 10,
+  },
+  scannedCodeText: { color: THEME.teal, fontSize: 11.5, fontFamily: FONTS.mono, flex: 1 },
   attractionRow: {
     flexDirection: "row",
     alignItems: "center",
