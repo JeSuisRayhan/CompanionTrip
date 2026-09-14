@@ -356,6 +356,9 @@ function BudgetTab({ trip }) {
       <View style={styles.totalCard}>
         <Text style={styles.totalLabel}>TOTAL ESTIMÉ</Text>
         <Text style={styles.totalValue}>{formatMoney(total, trip.currency)}</Text>
+        {trip.homeCurrency !== trip.currency && (
+          <Text style={styles.totalHomeEquivalent}>≈ {formatMoney(convertAmount(total, trip.rate), trip.homeCurrency)}</Text>
+        )}
       </View>
       {showConverter && (
         <TouchableOpacity style={styles.shiftDatesButton} onPress={() => setConverterOpen(true)}>
@@ -365,7 +368,8 @@ function BudgetTab({ trip }) {
       )}
       {categories.map((c) => {
         const target = trip.budgetTargets && trip.budgetTargets[c.key];
-        const overTarget = target != null && c.value > target;
+        const spentInHome = convertAmount(c.value, trip.rate);
+        const overTarget = target != null && spentInHome > target;
         return (
           <View key={c.key} style={styles.budgetRow}>
             <View style={[styles.budgetIcon, { backgroundColor: c.color + "22" }]}>
@@ -375,7 +379,8 @@ function BudgetTab({ trip }) {
               <Text style={styles.budgetLabel}>{c.label}</Text>
               {target != null && (
                 <Text style={[styles.budgetTargetText, overTarget && { color: THEME.stamp }]}>
-                  Objectif : {formatMoney(target, trip.currency)}
+                  Objectif : {formatMoney(target, trip.homeCurrency)}
+                  {trip.homeCurrency !== trip.currency ? ` (≈ ${formatMoney(spentInHome, trip.homeCurrency)} dépensé)` : ""}
                 </Text>
               )}
             </View>
@@ -783,6 +788,7 @@ const styles = StyleSheet.create({
   totalCard: { alignItems: "center", paddingVertical: 22, marginBottom: 10 },
   totalLabel: { fontSize: 11, color: THEME.inkFaint, letterSpacing: 1, fontFamily: FONTS.bodyMedium },
   totalValue: { fontSize: 32, color: THEME.gold, marginTop: 5, fontFamily: FONTS.headingBold },
+  totalHomeEquivalent: { fontSize: 13, color: THEME.inkMuted, marginTop: 4, fontFamily: FONTS.mono },
   budgetRow: {
     flexDirection: "row",
     alignItems: "center",

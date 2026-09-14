@@ -164,6 +164,10 @@ export default function TripSettingsScreen({ route, navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <TouchableOpacity style={[styles.button, { marginBottom: 10 }]} onPress={() => navigation.navigate("Hotels", { tripId })}>
+          <Text style={styles.buttonText}>Gérer les hôtels du voyage</Text>
+        </TouchableOpacity>
+
         <Text style={styles.sectionTitle}>Météo</Text>
         <Text style={styles.label}>Lieu principal du voyage</Text>
         <TextInput
@@ -211,7 +215,10 @@ export default function TripSettingsScreen({ route, navigation }) {
         <Text style={styles.helpText}>1 {currency} = taux × 1 {homeCurrency}. Le taux suggéré est approximatif — ajustez-le librement.</Text>
 
         <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Objectifs de budget (optionnel)</Text>
-        <Text style={styles.helpText}>Laissez vide pour ne pas fixer de limite sur une catégorie.</Text>
+        <Text style={styles.helpText}>
+          En {homeCurrency} — votre devise de référence, même si vos dépenses sont en {currency}. Laissez vide pour
+          ne pas fixer de limite sur une catégorie.
+        </Text>
         {BUDGET_TYPES.map((key) => (
           <View key={key}>
             <Text style={styles.label}>{CATEGORY_LABELS[key]}</Text>
