@@ -13,6 +13,7 @@ import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivit
 import { resolveDayDate, formatDateLabel } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { fetchDayWeather, weatherInfo, guessDayLocation } from "../lib/weather";
+import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
 import UndoToast from "../components/UndoToast";
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
@@ -170,7 +171,7 @@ export default function DayDetailScreen({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
-      {day.dayType === "flight" && <FlightDayBanner day={day} />}
+      {day.dayType === "flight" && <FlightDayBanner day={day} dateISO={date} />}
       {day.dayType === "park" && <ParkDayBanner day={day} />}
 
       <LocationModal
@@ -280,8 +281,28 @@ function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress,
   );
 }
 
-function FlightDayBanner({ day }) {
+function FlightDayBanner({ day, dateISO }) {
   const info = day.flightInfo;
+  const [liveStatus, setLiveStatus] = useState(undefined); // undefined = not tried/loading, null = unavailable
+
+  useEffect(() => {
+    let cancelled = false;
+    if (info?.flightNumber && hasFlightStatusKey()) {
+      setLiveStatus(undefined);
+      fetchFlightStatus(info.flightNumber.replace(/\s+/g, ""), dateISO)
+        .then((s) => !cancelled && setLiveStatus(s))
+        .catch(() => !cancelled && setLiveStatus(null));
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [info?.flightNumber, dateISO]);
+
+  function formatTime(iso) {
+    if (!iso) return null;
+    return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  }
+
   return (
     <LinearGradient colors={[THEME.blueDim, THEME.bgCard]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.flightBanner}>
       {info ? (
@@ -289,6 +310,7 @@ function FlightDayBanner({ day }) {
           <View style={styles.flightRoute}>
             <View style={styles.flightAirport}>
               <Text style={styles.flightAirportCode}>{info.origin}</Text>
+              {liveStatus?.departure?.gate && <Text style={styles.flightGateText}>Porte {liveStatus.departure.gate}</Text>}
             </View>
             <View style={styles.flightRouteLine}>
               <View style={styles.flightDotsLine} />
@@ -296,12 +318,23 @@ function FlightDayBanner({ day }) {
             </View>
             <View style={styles.flightAirport}>
               <Text style={styles.flightAirportCode}>{info.destination}</Text>
+              {liveStatus?.arrival?.gate && <Text style={styles.flightGateText}>Porte {liveStatus.arrival.gate}</Text>}
             </View>
           </View>
           <View style={styles.flightDetailsRow}>
             {info.flightNumber && <Text style={styles.flightDetailText}>Vol {info.flightNumber}</Text>}
             {info.seat && <Text style={styles.flightDetailText}>Siège {info.seat}</Text>}
           </View>
+          {liveStatus?.departure?.estimated && (
+            <Text style={styles.flightLiveText}>
+              Départ estimé {formatTime(liveStatus.departure.estimated)}
+              {liveStatus.status === "cancelled" ? " · Vol annulé" : ""}
+              {liveStatus.departure.terminal ? ` · Terminal ${liveStatus.departure.terminal}` : ""}
+            </Text>
+          )}
+          {liveStatus === null && hasFlightStatusKey() && (
+            <Text style={styles.flightLiveTextMuted}>Statut en temps réel indisponible pour ce vol.</Text>
+          )}
         </>
       ) : (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -376,6 +409,9 @@ const styles = StyleSheet.create({
   flightDotsLine: { position: "absolute", height: 1.5, borderStyle: "dashed", borderWidth: 1, borderColor: THEME.blue, width: "100%" },
   flightDetailsRow: { flexDirection: "row", justifyContent: "center", gap: 18, marginTop: 12 },
   flightDetailText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.mono },
+  flightGateText: { color: THEME.blue, fontSize: 11, fontFamily: FONTS.monoMedium, marginTop: 3 },
+  flightLiveText: { color: THEME.teal, fontSize: 11.5, fontFamily: FONTS.body, textAlign: "center", marginTop: 10 },
+  flightLiveTextMuted: { color: THEME.inkFaint, fontSize: 11, fontFamily: FONTS.body, textAlign: "center", marginTop: 10 },
   flightPlaceholderText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.body, flex: 1, lineHeight: 17 },
   parkBanner: {
     marginHorizontal: 20,
