@@ -12,8 +12,9 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TYPES } from "../lib/constants";
-import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay } from "../lib/trips";
+import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, tripRange, tripStatus } from "../lib/dates";
+import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
 import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, formatMoney, convertAmount } from "../lib/budget";
 import { pickImage, addDocument, removeDocument } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
@@ -297,6 +298,8 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, se
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                         <Text style={[styles.dayIndexLabel, isToday && styles.dayIndexLabelActive]}>J{index + 1}</Text>
                         {isToday && <Text style={styles.todayPill}>AUJOURD'HUI</Text>}
+                        {day.dayType === "flight" && <Ionicons name="airplane" size={13} color={THEME.blue} />}
+                        {day.dayType === "park" && <Ionicons name="sparkles" size={13} color={THEME.pink} />}
                       </View>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
                         {!q && !gridView && (
@@ -521,7 +524,36 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
     if (incomingScan) {
       setPendingUri(incomingScan.uri);
       setPendingScannedCode(incomingScan.scannedCode);
-      setTitle(incomingScan.scannedCode ? "Billet scanné" : "Photo scannée");
+      const boardingPass = incomingScan.scannedCode ? decodeBoardingPass(incomingScan.scannedCode) : null;
+      if (boardingPass) {
+        setTitle(`Vol ${boardingPass.flightNumber} — ${boardingPass.origin} → ${boardingPass.destination}`);
+        const flightDateISO = resolveJulianDate(boardingPass.julianDay, trip.startDate);
+        const matchIndex = trip.days.findIndex((d, i) => resolveDayDate(trip, d, i) === flightDateISO);
+        if (matchIndex !== -1) {
+          const matchDay = trip.days[matchIndex];
+          Alert.alert(
+            "Carte d'embarquement détectée",
+            `Vol ${boardingPass.flightNumber} (${boardingPass.origin} → ${boardingPass.destination}) le ${formatDateLabel(flightDateISO)}. Marquer "${matchDay.title}" comme jour de vol ?`,
+            [
+              { text: "Non merci", style: "cancel" },
+              {
+                text: "Oui",
+                onPress: async () => {
+                  await setDayType(trip.id, matchDay.id, "flight", {
+                    origin: boardingPass.origin,
+                    destination: boardingPass.destination,
+                    flightNumber: boardingPass.flightNumber,
+                    seat: boardingPass.seat,
+                  });
+                  onChange();
+                },
+              },
+            ]
+          );
+        }
+      } else {
+        setTitle(incomingScan.scannedCode ? "Billet scanné" : "Photo scannée");
+      }
       onConsumeIncomingScan();
     }
   }, [incomingScan]);

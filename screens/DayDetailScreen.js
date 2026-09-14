@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, TextInput } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, TextInput, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TYPES } from "../lib/constants";
-import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity } from "../lib/trips";
+import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDateLabel } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { fetchDayWeather, weatherInfo, guessDayLocation } from "../lib/weather";
@@ -132,6 +133,15 @@ export default function DayDetailScreen({ route, navigation }) {
     setToast({ visible: false, message: "", undoActivity: null });
   }
 
+  function openDayTypeMenu() {
+    Alert.alert("Type de jour", "Donne un habillage et des rappels adaptés à ce jour.", [
+      { text: "Annuler", style: "cancel" },
+      { text: "Jour normal", onPress: () => setDayType(tripId, dayId, null).then(refresh) },
+      { text: "Jour de vol ✈️", onPress: () => setDayType(tripId, dayId, "flight").then(refresh) },
+      { text: "Jour parc d'attraction 🎡", onPress: () => setDayType(tripId, dayId, "park").then(refresh) },
+    ]);
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.header}>
@@ -147,6 +157,9 @@ export default function DayDetailScreen({ route, navigation }) {
             <TouchableOpacity onPress={() => setLocationModalOpen(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="location-outline" size={13} color={THEME.inkFaint} />
             </TouchableOpacity>
+            <TouchableOpacity onPress={openDayTypeMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="sparkles-outline" size={13} color={THEME.inkFaint} />
+            </TouchableOpacity>
           </View>
         </View>
         <TouchableOpacity
@@ -156,6 +169,9 @@ export default function DayDetailScreen({ route, navigation }) {
           <Ionicons name="add" size={22} color={THEME.gold} />
         </TouchableOpacity>
       </View>
+
+      {day.dayType === "flight" && <FlightDayBanner day={day} />}
+      {day.dayType === "park" && <ParkDayBanner day={day} />}
 
       <LocationModal
         visible={locationModalOpen}
@@ -264,6 +280,52 @@ function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress,
   );
 }
 
+function FlightDayBanner({ day }) {
+  const info = day.flightInfo;
+  return (
+    <LinearGradient colors={[THEME.blueDim, THEME.bgCard]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.flightBanner}>
+      {info ? (
+        <>
+          <View style={styles.flightRoute}>
+            <View style={styles.flightAirport}>
+              <Text style={styles.flightAirportCode}>{info.origin}</Text>
+            </View>
+            <View style={styles.flightRouteLine}>
+              <View style={styles.flightDotsLine} />
+              <Ionicons name="airplane" size={18} color={THEME.blue} style={{ transform: [{ rotate: "90deg" }] }} />
+            </View>
+            <View style={styles.flightAirport}>
+              <Text style={styles.flightAirportCode}>{info.destination}</Text>
+            </View>
+          </View>
+          <View style={styles.flightDetailsRow}>
+            {info.flightNumber && <Text style={styles.flightDetailText}>Vol {info.flightNumber}</Text>}
+            {info.seat && <Text style={styles.flightDetailText}>Siège {info.seat}</Text>}
+          </View>
+        </>
+      ) : (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Ionicons name="airplane" size={20} color={THEME.blue} />
+          <Text style={styles.flightPlaceholderText}>Jour de vol — scannez votre carte d'embarquement dans Documents pour remplir automatiquement le vol.</Text>
+        </View>
+      )}
+    </LinearGradient>
+  );
+}
+
+function ParkDayBanner({ day }) {
+  const done = day.activities.filter((a) => a.done).length;
+  const total = day.activities.length;
+  return (
+    <LinearGradient colors={[THEME.pinkDim, THEME.bgCard]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.parkBanner}>
+      <Ionicons name="sparkles" size={20} color={THEME.pink} />
+      <Text style={styles.parkBannerText}>
+        {total > 0 ? `${done}/${total} attraction${total !== 1 ? "s" : ""} faite${done !== 1 ? "s" : ""} — bonne journée parc !` : "Jour parc d'attraction — ajoutez vos attractions !"}
+      </Text>
+    </LinearGradient>
+  );
+}
+
 function LocationModal({ visible, initial, onClose, onSave }) {
   const [value, setValue] = useState(initial);
 
@@ -299,6 +361,34 @@ function LocationModal({ visible, initial, onClose, onSave }) {
 }
 
 const styles = StyleSheet.create({
+  flightBanner: {
+    marginHorizontal: 20,
+    marginTop: 14,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: THEME.blue,
+  },
+  flightRoute: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  flightAirport: { alignItems: "center" },
+  flightAirportCode: { fontSize: 24, color: THEME.ink, fontFamily: FONTS.headingBold, letterSpacing: 1 },
+  flightRouteLine: { flex: 1, alignItems: "center", justifyContent: "center" },
+  flightDotsLine: { position: "absolute", height: 1.5, borderStyle: "dashed", borderWidth: 1, borderColor: THEME.blue, width: "100%" },
+  flightDetailsRow: { flexDirection: "row", justifyContent: "center", gap: 18, marginTop: 12 },
+  flightDetailText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.mono },
+  flightPlaceholderText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.body, flex: 1, lineHeight: 17 },
+  parkBanner: {
+    marginHorizontal: 20,
+    marginTop: 14,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: THEME.pink,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  parkBannerText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.bodyMedium, flex: 1 },
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40 },
   emptyBox: { alignItems: "center", justifyContent: "center", paddingVertical: 50, gap: 10 },
