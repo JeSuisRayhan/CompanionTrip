@@ -79,3 +79,19 @@ depuis cette source si demandé).
 
 Remplacez les fichiers modifiés sur GitHub (je vous dirai lesquels à chaque
 fois), la compilation se relance automatiquement.
+
+## Ajouter la clé Aviationstack (statut de vol en temps réel)
+
+Cette clé **ne va jamais dans le dépôt GitHub** — elle est injectée directement à la compilation par Expo, à partir d'une variable configurée sur leur tableau de bord.
+
+1. Créez un compte gratuit sur [aviationstack.com/signup/free](https://aviationstack.com/signup/free) (aucune carte bancaire), copiez votre clé d'accès (Access Key).
+2. Allez sur [expo.dev](https://expo.dev), ouvrez votre projet `compagnon-de-voyage`.
+3. Dans le menu du projet, cherchez **Environment variables** (ou "Variables d'environnement").
+4. **Create a variable** (ou équivalent) :
+   - **Name** : `EXPO_PUBLIC_AVIATIONSTACK_API_KEY` (exactement ce nom, avec le préfixe `EXPO_PUBLIC_` — c'est ce qui permet à Expo de l'injecter dans l'app au moment de la compilation)
+   - **Value** : votre clé Aviationstack
+   - **Visibility** : `Sensitive` (chiffrée, jamais affichée dans les logs)
+   - **Environment** : `preview` (doit correspondre au profil utilisé dans `eas.json`)
+5. Enregistrez, puis relancez une compilation (**Actions → Build Android APK (EAS) → Run workflow**).
+
+Une fois fait, plus rien à taper dans l'app — le statut de vol en temps réel apparaît automatiquement sur les jours marqués "vol", si Aviationstack a l'information pour ce vol précis.
