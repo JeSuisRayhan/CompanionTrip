@@ -19,6 +19,7 @@ import ActivityEditorScreen from "./screens/ActivityEditorScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import TripSettingsScreen from "./screens/TripSettingsScreen";
 import WeatherReorgScreen from "./screens/WeatherReorgScreen";
+import TicketScannerScreen from "./screens/TicketScannerScreen";
 import LockScreen from "./screens/LockScreen";
 
 const Stack = createNativeStackNavigator();
@@ -98,6 +99,7 @@ export default function App() {
             options={{ headerShown: false, presentation: "modal" }}
           />
           <Stack.Screen name="WeatherReorg" component={WeatherReorgScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="TicketScanner" component={TicketScannerScreen} options={{ headerShown: false, presentation: "fullScreenModal" }} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>

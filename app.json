@@ -45,6 +45,19 @@
           "photosPermission": "Autoriser Compagnon de voyage à accéder à vos photos pour ajouter des documents.",
           "cameraPermission": "Autoriser Compagnon de voyage à utiliser l'appareil photo pour ajouter des documents."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Autoriser Compagnon de voyage à utiliser l'appareil photo pour scanner vos billets et codes-barres."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Autoriser Compagnon de voyage à utiliser votre position pour vous rappeler le code de réservation quand vous approchez de votre hôtel.",
+          "isAndroidBackgroundLocationEnabled": true
+        }
       ]
     ]
   }
