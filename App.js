@@ -100,7 +100,7 @@ export default function App() {
             options={{ headerShown: false, presentation: "modal" }}
           />
           <Stack.Screen name="WeatherReorg" component={WeatherReorgScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="TicketScanner" component={TicketScannerScreen} options={{ headerShown: false, presentation: "fullScreenModal" }} />
+          <Stack.Screen name="TicketScanner" component={TicketScannerScreen} options={{ headerShown: false, animation: "none" }} />
           <Stack.Screen name="Hotels" component={HotelsScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>
