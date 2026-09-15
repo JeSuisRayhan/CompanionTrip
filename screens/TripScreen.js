@@ -558,14 +558,11 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
     }
   }, [incomingScan]);
 
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+
   function choosePhoto() {
     setError("");
-    Alert.alert("Ajouter un document", "Comment voulez-vous l'ajouter ?", [
-      { text: "Annuler", style: "cancel" },
-      { text: "Scanner un billet / code-barres", onPress: () => navigation.navigate("TicketScanner", { tripId: trip.id }) },
-      { text: "Prendre une photo", onPress: () => pick("camera") },
-      { text: "Depuis la galerie", onPress: () => pick("library") },
-    ]);
+    setAddMenuOpen(true);
   }
 
   async function pick(source) {
@@ -616,6 +613,47 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
           </TouchableOpacity>
         </TouchableOpacity>
       ))}
+
+      <Modal visible={addMenuOpen} transparent animationType="fade" onRequestClose={() => setAddMenuOpen(false)}>
+        <TouchableOpacity style={styles.viewerOverlay} activeOpacity={1} onPress={() => setAddMenuOpen(false)}>
+          <View style={styles.addMenuCard} onStartShouldSetResponder={() => true}>
+            <Text style={styles.addMenuTitle}>Ajouter un document</Text>
+            <TouchableOpacity
+              style={styles.addMenuOption}
+              onPress={() => {
+                setAddMenuOpen(false);
+                navigation.navigate("TicketScanner", { tripId: trip.id });
+              }}
+            >
+              <Ionicons name="qr-code-outline" size={18} color={THEME.teal} />
+              <Text style={styles.addMenuOptionText}>Scanner un billet / code-barres</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.addMenuOption}
+              onPress={() => {
+                setAddMenuOpen(false);
+                pick("camera");
+              }}
+            >
+              <Ionicons name="camera-outline" size={18} color={THEME.teal} />
+              <Text style={styles.addMenuOptionText}>Prendre une photo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.addMenuOption}
+              onPress={() => {
+                setAddMenuOpen(false);
+                pick("library");
+              }}
+            >
+              <Ionicons name="images-outline" size={18} color={THEME.teal} />
+              <Text style={styles.addMenuOptionText}>Depuis la galerie</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.addMenuOption, { marginTop: 6 }]} onPress={() => setAddMenuOpen(false)}>
+              <Text style={[styles.addMenuOptionText, { color: THEME.inkFaint }]}>Annuler</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <Modal visible={!!viewingDoc} transparent animationType="fade" onRequestClose={() => setViewingDoc(null)}>
         <TouchableOpacity style={styles.viewerOverlay} activeOpacity={1} onPress={() => setViewingDoc(null)}>
@@ -960,6 +998,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   scannedCodeText: { color: THEME.teal, fontSize: 11.5, fontFamily: FONTS.mono, flex: 1 },
+  addMenuCard: {
+    backgroundColor: THEME.bgRaised,
+    borderRadius: 16,
+    padding: 8,
+    width: "82%",
+    ...CARD_SHADOW,
+  },
+  addMenuTitle: { color: THEME.ink, fontSize: 15, fontFamily: FONTS.headingSemiBold, padding: 14, paddingBottom: 8 },
+  addMenuOption: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, paddingVertical: 13 },
+  addMenuOptionText: { color: THEME.ink, fontSize: 14.5, fontFamily: FONTS.bodyMedium },
   attractionRow: {
     flexDirection: "row",
     alignItems: "center",

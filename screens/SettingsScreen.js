@@ -9,6 +9,7 @@ import { getSetting, setSetting, removeSetting, loadTrips } from "../lib/storage
 import { requestNotificationPermission, getNotificationPermission } from "../lib/notifications";
 import { exportBackup, importBackupFromPicker } from "../lib/backup";
 import { hasPin, setPin, clearPin } from "../lib/pin";
+import { hasBuildTimeUnsplashKey } from "../lib/unsplash";
 
 export default function SettingsScreen() {
   const [apiKey, setApiKey] = useState("");
@@ -156,10 +157,17 @@ export default function SettingsScreen() {
             <Ionicons name="image-outline" size={18} color={THEME.blue} />
             <Text style={styles.cardTitle}>Photos de couverture (Unsplash)</Text>
           </View>
-          <Text style={styles.cardText}>
-            Ajoute automatiquement une photo de destination à chaque nouveau voyage. Créez une clé gratuite sur
-            unsplash.com/developers (compte "Demo", aucune carte bancaire requise).
-          </Text>
+          {hasBuildTimeUnsplashKey() ? (
+            <Text style={styles.cardText}>
+              Déjà activé pour cette version de l'app — rien à faire ici. Le champ ci-dessous ne sert que si cette
+              clé intégrée venait à manquer.
+            </Text>
+          ) : (
+            <Text style={styles.cardText}>
+              Ajoute automatiquement une photo de destination à chaque nouveau voyage. Créez une clé gratuite sur
+              unsplash.com/developers (compte "Demo", aucune carte bancaire requise).
+            </Text>
+          )}
           <TextInput
             style={styles.input}
             value={unsplashKey}

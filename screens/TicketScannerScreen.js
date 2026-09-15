@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, requestCameraPermissionsAsync } from "expo-camera";
@@ -15,17 +15,29 @@ import { FONTS } from "../lib/fonts";
 export default function TicketScannerScreen({ navigation, route }) {
   const [permissionChecked, setPermissionChecked] = useState(false);
   const [granted, setGranted] = useState(false);
+  const [permissionError, setPermissionError] = useState(null);
   const [capturing, setCapturing] = useState(false);
   const [detectedCode, setDetectedCode] = useState(null);
   const cameraRef = useRef(null);
   const hasHandledScan = useRef(false);
 
   React.useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const perm = await requestCameraPermissionsAsync();
-      setGranted(perm.granted);
-      setPermissionChecked(true);
+      try {
+        const perm = await requestCameraPermissionsAsync();
+        if (cancelled) return;
+        setGranted(perm.granted);
+      } catch (e) {
+        if (cancelled) return;
+        setPermissionError(e?.message || "Impossible d'accéder à l'appareil photo.");
+      } finally {
+        if (!cancelled) setPermissionChecked(true);
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function capture(scannedCode) {
@@ -48,7 +60,15 @@ export default function TicketScannerScreen({ navigation, route }) {
     capture(result.data);
   }
 
-  if (!permissionChecked) return <SafeAreaView style={styles.safe} />;
+  if (!permissionChecked) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.center}>
+          <ActivityIndicator color={THEME.teal} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!granted) {
     return (
@@ -56,7 +76,7 @@ export default function TicketScannerScreen({ navigation, route }) {
         <View style={styles.center}>
           <Ionicons name="camera-outline" size={30} color={THEME.inkFaint} />
           <Text style={styles.permissionText}>
-            Autorisation caméra refusée. Activez-la dans les réglages du téléphone pour scanner vos billets.
+            {permissionError || "Autorisation caméra refusée. Activez-la dans les réglages du téléphone pour scanner vos billets."}
           </Text>
           <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
             <Text style={styles.closeButtonText}>Retour</Text>
