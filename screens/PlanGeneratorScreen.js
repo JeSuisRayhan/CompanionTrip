@@ -10,7 +10,7 @@ import { formatDayLabel } from "../lib/dates";
 import { formatIdeaDuration, ideaAddressLine, hasPosition } from "../lib/ideas";
 import { RHYTHMS, generatePlan, buildPreview, moveInPlan, applyPlan, undoPlan } from "../lib/planner";
 import DayPickerModal from "../components/DayPickerModal";
-import { Txt, Button, Chip, Group, Row, EmptyState, BackHeader } from "../components/ui";
+import { Txt, Button, IconButton, Chip, Group, Row, EmptyState, BackHeader } from "../components/ui";
 
 // Same lookup as the Idées tab: a category stores its colour, the tone with
 // that foreground gives the tinted pair.
@@ -140,6 +140,11 @@ export default function PlanGeneratorScreen({ route, navigation }) {
   const chosen = RHYTHMS.find((r) => r.key === rhythm) || RHYTHMS[1];
   const noPosition = preview.days.reduce((n, d) => n + d.items.filter((it) => !hasPosition(it.idea)).length, 0);
 
+  // The map shows this proposal (with the hand changes), not what is saved.
+  function openMap(dayId) {
+    navigation.navigate("TripMap", { tripId: trip.id, dayId, plan: { assign, order: plan.order } });
+  }
+
   function pickDay(dayId) {
     const idea = pickerIdea;
     setPickerIdea(null);
@@ -163,12 +168,15 @@ export default function PlanGeneratorScreen({ route, navigation }) {
         </Txt>
 
         <View style={styles.summary}>
-          <Txt variant="label">{`${plural(preview.placedCount, "idée")} sur ${plural(preview.days.length, "jour")}`}</Txt>
-          {preview.unplaced.length > 0 && (
-            <Txt variant="caption" color="stamp">
-              {`${preview.unplaced.length} sans place`}
-            </Txt>
-          )}
+          <View style={styles.summaryText}>
+            <Txt variant="label">{`${plural(preview.placedCount, "idée")} sur ${plural(preview.days.length, "jour")}`}</Txt>
+            {preview.unplaced.length > 0 && (
+              <Txt variant="caption" color="stamp">
+                {`${preview.unplaced.length} sans place`}
+              </Txt>
+            )}
+          </View>
+          <Button title="Carte" icon="map-outline" variant="secondary" size="sm" accessibilityLabel="Voir le planning proposé sur la carte" onPress={() => openMap()} />
         </View>
         {noPosition > 0 && (
           <Txt variant="caption" color="inkFaint" style={styles.note}>
@@ -179,10 +187,15 @@ export default function PlanGeneratorScreen({ route, navigation }) {
         {preview.days.map((day) => (
           <View key={day.dayId} style={styles.daySection}>
             <View style={styles.dayHead}>
-              <Text style={type.heading} accessibilityRole="header" numberOfLines={1}>
-                {day.title}
-              </Text>
-              {day.date ? <Txt variant="subhead">{formatDayLabel(day.date)}</Txt> : null}
+              <View style={styles.dayHeadText}>
+                <Text style={[type.heading, styles.dayTitle]} accessibilityRole="header" numberOfLines={1}>
+                  {day.title}
+                </Text>
+                {day.date ? <Txt variant="subhead">{formatDayLabel(day.date)}</Txt> : null}
+              </View>
+              {day.items.some((it) => hasPosition(it.idea)) ? (
+                <IconButton icon="map-outline" label={`Voir ${day.title} sur la carte`} onPress={() => openMap(day.dayId)} style={styles.dayMap} />
+              ) : null}
             </View>
             {day.flight ? (
               <Txt variant="caption" color="inkFaint" style={styles.note}>
@@ -295,9 +308,13 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   hint: { marginTop: space.md },
   summary: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginTop: space.xl },
+  summaryText: { flex: 1, gap: 2 },
   note: { marginTop: space.xs, marginBottom: space.sm },
   daySection: { marginTop: space.xl },
-  dayHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: space.md, marginBottom: space.sm },
+  dayHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginBottom: space.sm },
+  dayHeadText: { flex: 1, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: space.md },
+  dayTitle: { flexShrink: 1 },
+  dayMap: { marginRight: -space.sm },
   time: { width: 48, alignSelf: "flex-start", paddingTop: 2 },
   metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.md, rowGap: 2, marginTop: space.xs },
   metaItem: { flexDirection: "row", alignItems: "center", gap: space.xs + 2 },

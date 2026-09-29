@@ -274,6 +274,8 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
 
   const q = (searchQuery || "").trim().toLowerCase();
   const today = isoToday();
+  // The map has something to show once a step or an idea has a position.
+  const hasMap = !isPark && (trip.days.some((d) => d.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng))) || (trip.ideas || []).some((i) => Number.isFinite(i.lat) && Number.isFinite(i.lng)));
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
@@ -321,6 +323,19 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
         >
           <Ionicons name="partly-sunny-outline" size={18} color={THEME.gold} />
           <Text style={[type.label, { color: THEME.gold, flex: 1 }]}>Réorganiser selon la météo</Text>
+          <Ionicons name="chevron-forward" size={16} color={THEME.gold} />
+        </Pressable>
+      )}
+
+      {hasMap && (
+        <Pressable
+          onPress={() => navigation.navigate("TripMap", { tripId: trip.id })}
+          accessibilityRole="button"
+          accessibilityLabel="Voir le voyage sur la carte"
+          style={({ pressed }) => [styles.inlineLink, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="map-outline" size={18} color={THEME.gold} />
+          <Text style={[type.label, { color: THEME.gold, flex: 1 }]}>Voir sur la carte</Text>
           <Ionicons name="chevron-forward" size={16} color={THEME.gold} />
         </Pressable>
       )}

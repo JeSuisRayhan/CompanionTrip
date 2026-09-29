@@ -6,6 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, TONES, space, layout, radius, type } from "../lib/theme";
 import { getTrip } from "../lib/trips";
+import { previewTrip } from "../lib/planner";
 import { formatIdeaDuration, placeIdeaOnDay } from "../lib/ideas";
 import { buildMapModel, pinsForFilter, filterOptions, externalMapUrl, locateIdeas, saveIdeaPositions } from "../lib/map";
 import TileMap from "../components/TileMap";
@@ -22,8 +23,12 @@ const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 // "Construire mon voyage", phase 4: the trip on a map. Every idea with a
 // position is a pin; a day shows its steps in order with the route between
 // them. Ideas with no position can be looked up in one go.
+//
+// With route.params.plan ({ assign, order }) it shows the proposed planning
+// instead, before it is added: same map, read-only.
 export default function TripMapScreen({ route, navigation }) {
-  const { tripId } = route.params;
+  const { tripId, plan } = route.params;
+  const isPreview = !!plan;
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(route.params.dayId || "all");
@@ -58,14 +63,15 @@ export default function TripMapScreen({ route, navigation }) {
     }, [tripId])
   );
 
-  const model = useMemo(() => (trip ? buildMapModel(trip) : null), [trip]);
+  const shownTrip = useMemo(() => (trip && plan ? previewTrip(trip, plan.assign, plan.order) : trip), [trip, plan]);
+  const model = useMemo(() => (shownTrip ? buildMapModel(shownTrip) : null), [shownTrip]);
   const options = useMemo(() => (model ? filterOptions(model) : []), [model]);
   const activeFilter = options.some((o) => o.id === filter) ? filter : "all";
   const shown = useMemo(() => (model ? pinsForFilter(model, activeFilter) : { pins: [], route: [], day: null }), [model, activeFilter]);
   const selected = model && selectedId ? model.pins.find((p) => p.id === selectedId) : null;
 
   const back = () => navigation.goBack();
-  const header = <BackHeader title="Carte" subtitle={trip ? trip.name : undefined} onBack={back} />;
+  const header = <BackHeader title={isPreview ? "Carte du planning" : "Carte"} subtitle={trip ? trip.name : undefined} onBack={back} />;
 
   if (loading || !trip) {
     return (
@@ -117,7 +123,7 @@ export default function TripMapScreen({ route, navigation }) {
   }
 
   const unlocatedCount = model.unlocated.length;
-  const showBanner = unlocatedCount > 0 || !!result || !!locating;
+  const showBanner = !isPreview && (unlocatedCount > 0 || !!result || !!locating);
   const nothingToShow = model.pins.length === 0;
 
   return (
@@ -130,6 +136,12 @@ export default function TripMapScreen({ route, navigation }) {
             <Chip key={o.id} label={o.label} count={o.count} selected={activeFilter === o.id} tone="gold" accessibilityLabel={`${o.label}, ${o.count}`} onPress={() => pickFilter(o.id)} />
           ))}
         </ScrollView>
+      ) : null}
+
+      {isPreview ? (
+        <Txt variant="caption" color="inkFaint" style={styles.dayNote}>
+          Aperçu : ces étapes ne sont pas encore ajoutées au programme.
+        </Txt>
       ) : null}
 
       {shown.day && shown.day.missing > 0 ? (
@@ -169,11 +181,13 @@ export default function TripMapScreen({ route, navigation }) {
             tone="gold"
             title="Aucun lieu sur la carte"
             text={
-              (trip.ideas || []).length
+              isPreview
+                ? "Les idées de ce planning n'ont pas de position. Localisez-les depuis la carte du voyage (onglet Idées)."
+                : (trip.ideas || []).length
                 ? "Vos idées n'ont pas encore de position. Lancez la recherche ci-dessus, ou choisissez une adresse dans chaque fiche."
                 : "Ajoutez des idées avec une adresse : elles apparaissent ici."
             }
-            action={(trip.ideas || []).length ? undefined : { label: "Ajouter une idée", icon: "add", onPress: () => navigation.navigate("IdeaEditor", { tripId: trip.id }) }}
+            action={isPreview || (trip.ideas || []).length ? undefined : { label: "Ajouter une idée", icon: "add", onPress: () => navigation.navigate("IdeaEditor", { tripId: trip.id }) }}
           />
         </View>
       ) : (
@@ -183,6 +197,7 @@ export default function TripMapScreen({ route, navigation }) {
       {selected ? (
         <PinCard
           pin={selected}
+          readOnly={isPreview}
           onClose={() => setSelectedId(null)}
           onPlace={() => setPickerIdea({ id: selected.ideaId, name: selected.name })}
           onBook={() =>
@@ -200,7 +215,7 @@ export default function TripMapScreen({ route, navigation }) {
 }
 
 // The selected pin: what it is, where it is in the programme, what to do next.
-function PinCard({ pin, onClose, onPlace, onBook, onOpenDay, onEdit, onGo }) {
+function PinCard({ pin, readOnly, onClose, onPlace, onBook, onOpenDay, onEdit, onGo }) {
   const placed = pin.dayId != null;
   const duration = pin.isHotel ? null : formatIdeaDuration(pin.durationMin);
   const dayLabel = placed ? `Jour ${pin.dayIndex + 1}${pin.time ? ` · ${pin.time}` : ""}` : null;
@@ -223,7 +238,7 @@ function PinCard({ pin, onClose, onPlace, onBook, onOpenDay, onEdit, onGo }) {
       </View>
 
       <View style={styles.cardMeta}>
-        {placed ? <Badge label={dayLabel} icon="checkmark" tone="teal" /> : <Badge label="À placer" tone="gold" />}
+        {placed ? <Badge label={dayLabel} icon={readOnly ? undefined : "checkmark"} tone={readOnly ? "gold" : "teal"} /> : <Badge label="À placer" tone="gold" />}
         {pin.priorityLabel ? (
           <View style={styles.metaItem}>
             <View style={[styles.dot, { backgroundColor: pin.priority === "must" ? THEME.stamp : pin.priority === "want" ? THEME.gold : THEME.inkMuted }]} />
@@ -234,11 +249,11 @@ function PinCard({ pin, onClose, onPlace, onBook, onOpenDay, onEdit, onGo }) {
       </View>
 
       <View style={styles.cardActions}>
-        {!placed && pin.kind === "idea" ? (
+        {!readOnly && !placed && pin.kind === "idea" ? (
           pin.isHotel ? <Button title="Réserver" size="sm" tone="gold" style={styles.action} onPress={onBook} /> : <Button title="Placer" size="sm" tone="gold" style={styles.action} onPress={onPlace} />
         ) : null}
-        {placed ? <Button title="Voir le jour" size="sm" variant="secondary" style={styles.action} onPress={onOpenDay} /> : null}
-        {pin.kind === "idea" ? <Button title="Modifier" size="sm" variant="secondary" style={styles.action} onPress={onEdit} /> : null}
+        {!readOnly && placed ? <Button title="Voir le jour" size="sm" variant="secondary" style={styles.action} onPress={onOpenDay} /> : null}
+        {!readOnly && pin.kind === "idea" ? <Button title="Modifier" size="sm" variant="secondary" style={styles.action} onPress={onEdit} /> : null}
         <Button title="Y aller" icon="navigate-outline" size="sm" variant="secondary" style={styles.action} accessibilityLabel={`Ouvrir ${pin.name} dans une application de cartes`} onPress={onGo} />
       </View>
     </Surface>
