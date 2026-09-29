@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, FlatList, ActivityIndicator } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, Switch, Pressable, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, CARD_SHADOW } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, space, layout, type } from "../lib/theme";
 import { CURRENCY_PRESETS, suggestRate, BUDGET_TYPES } from "../lib/constants";
 import { getTrip, updateTripSettings } from "../lib/trips";
 import { scheduleDailySummaries, scheduleDepartureReminder } from "../lib/notifications";
 import { requestGeofencingPermissions, scheduleHotelProximityAlerts, stopHotelProximityAlerts, isHotelProximityActiveForTrip } from "../lib/geofencing";
+import { Txt, Button, Group, Row, SectionTitle, Field, ModalHeader, Sheet } from "../components/ui";
 
 const CATEGORY_LABELS = { transport: "Transport", hotel: "Hébergement", repas: "Repas" };
 
@@ -140,144 +140,156 @@ export default function TripSettingsScreen({ route, navigation }) {
   }
 
   const currencyLabel = (code) => CURRENCY_PRESETS.find((c) => c.code === code)?.label || code;
+  const cancel = { label: "Annuler", onPress: () => navigation.goBack() };
 
   if (loading || !trip) {
     return (
       <SafeAreaView style={styles.safe}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ModalHeader title="Réglages du voyage" left={cancel} />
+        <View style={styles.loading}>
           <ActivityIndicator color={THEME.teal} />
         </View>
       </SafeAreaView>
     );
   }
 
+  const geofenceRefused = /^Autorisation/.test(geofenceStatus);
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Text style={styles.headerButtonText}>Annuler</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Réglages du voyage</Text>
-        <TouchableOpacity onPress={save} style={styles.headerButton} disabled={saving}>
-          <Text style={[styles.headerButtonText, styles.headerSaveText]}>{saving ? "…" : "Enregistrer"}</Text>
-        </TouchableOpacity>
-      </View>
+      <ModalHeader
+        title="Réglages du voyage"
+        left={cancel}
+        right={{ label: saving ? "…" : "Enregistrer", onPress: save, disabled: saving }}
+      />
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <TouchableOpacity style={[styles.button, { marginBottom: 10 }]} onPress={() => navigation.navigate("Hotels", { tripId })}>
-          <Text style={styles.buttonText}>Gérer les hôtels du voyage</Text>
-        </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        <Group>
+          <Row
+            icon="bed-outline"
+            tone="stamp"
+            title="Hôtels du voyage"
+            subtitle="Ajouter ou modifier vos hôtels"
+            chevron
+            onPress={() => navigation.navigate("Hotels", { tripId })}
+          />
+        </Group>
 
-        <Text style={styles.sectionTitle}>Météo</Text>
-        <Text style={styles.label}>Lieu principal du voyage</Text>
-        <TextInput
-          style={styles.input}
-          value={defaultLocation}
-          onChangeText={setDefaultLocation}
-          placeholder="ex : Tokyo"
-          placeholderTextColor={THEME.inkFaint}
-        />
-        <Text style={styles.helpText}>
-          Utilisé pour la météo de chaque jour, sauf si vous précisez un lieu différent pour un jour en particulier
-          (utile si le voyage passe par plusieurs villes).
-        </Text>
+        <Section title="Météo">
+          <Field
+            label="Lieu principal du voyage"
+            value={defaultLocation}
+            onChangeText={setDefaultLocation}
+            placeholder="ex : Tokyo"
+            hint="Utilisé pour la météo de chaque jour, sauf si vous précisez un lieu différent pour un jour en particulier (utile si le voyage passe par plusieurs villes)."
+            style={styles.fieldTight}
+          />
+        </Section>
 
-        <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Devises</Text>
-
-        <Text style={styles.label}>Devise locale</Text>
-        <TouchableOpacity style={styles.picker} onPress={() => setPickerFor("local")}>
-          <Text style={styles.pickerText}>{currencyLabel(currency)}</Text>
-          <Ionicons name="chevron-down" size={16} color={THEME.inkMuted} />
-        </TouchableOpacity>
-
-        <Text style={styles.label}>Devise de référence (chez vous)</Text>
-        <TouchableOpacity style={styles.picker} onPress={() => setPickerFor("home")}>
-          <Text style={styles.pickerText}>{currencyLabel(homeCurrency)}</Text>
-          <Ionicons name="chevron-down" size={16} color={THEME.inkMuted} />
-        </TouchableOpacity>
-
-        <View style={styles.rateRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Taux de conversion</Text>
-            <TextInput
-              style={styles.input}
+        <Section title="Devises">
+          <PickerField label="Devise locale" value={currencyLabel(currency)} onPress={() => setPickerFor("local")} />
+          <PickerField label="Devise de référence (chez vous)" value={currencyLabel(homeCurrency)} onPress={() => setPickerFor("home")} />
+          <View style={styles.rateRow}>
+            <Field
+              label="Taux de conversion"
               value={rate}
               onChangeText={setRate}
               keyboardType="decimal-pad"
               placeholder="1"
-              placeholderTextColor={THEME.inkFaint}
+              inputStyle={styles.numericInput}
+              style={styles.rateField}
             />
+            <Button title="Suggérer" variant="secondary" onPress={() => applySuggestedRate(currency, homeCurrency)} />
           </View>
-          <TouchableOpacity style={styles.suggestButton} onPress={() => applySuggestedRate(currency, homeCurrency)}>
-            <Text style={styles.suggestButtonText}>Suggérer</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.helpText}>1 {currency} = taux × 1 {homeCurrency}. Le taux suggéré est approximatif — ajustez-le librement.</Text>
+          <Txt variant="caption" color="inkFaint" style={styles.note}>
+            1 {currency} = taux × 1 {homeCurrency}. Le taux suggéré est approximatif — ajustez-le librement.
+          </Txt>
+        </Section>
 
-        <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Objectifs de budget (optionnel)</Text>
-        <Text style={styles.helpText}>
-          En {homeCurrency} — votre devise de référence, même si vos dépenses sont en {currency}. Laissez vide pour
-          ne pas fixer de limite sur une catégorie.
-        </Text>
-        {BUDGET_TYPES.map((key) => (
-          <View key={key}>
-            <Text style={styles.label}>{CATEGORY_LABELS[key]}</Text>
-            <TextInput
-              style={styles.input}
+        <Section title="Objectifs de budget (optionnel)">
+          <Txt variant="subhead" style={styles.intro}>
+            En {homeCurrency} — votre devise de référence, même si vos dépenses sont en {currency}. Laissez vide pour ne pas fixer de limite sur une catégorie.
+          </Txt>
+          {BUDGET_TYPES.map((key, i) => (
+            <Field
+              key={key}
+              label={CATEGORY_LABELS[key]}
               value={targets[key]}
               onChangeText={(v) => setTargets((t) => ({ ...t, [key]: v }))}
               keyboardType="decimal-pad"
               placeholder="Pas de limite"
-              placeholderTextColor={THEME.inkFaint}
+              inputStyle={styles.numericInput}
+              right={<Text style={type.numeralSmall}>{homeCurrency}</Text>}
+              style={i === BUDGET_TYPES.length - 1 ? styles.fieldTight : undefined}
             />
-          </View>
-        ))}
+          ))}
+        </Section>
 
-        <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Fiche d'urgence (optionnel)</Text>
-        <Text style={styles.helpText}>Gardée sur cet appareil, jamais partagée automatiquement.</Text>
-        <Text style={styles.label}>Groupe sanguin</Text>
-        <TextInput style={styles.input} value={emergency.bloodType} onChangeText={(v) => setEmergency((e) => ({ ...e, bloodType: v }))} placeholder="O+" placeholderTextColor={THEME.inkFaint} />
-        <Text style={styles.label}>Allergies</Text>
-        <TextInput style={styles.input} value={emergency.allergies} onChangeText={(v) => setEmergency((e) => ({ ...e, allergies: v }))} placeholder="Pénicilline, arachides..." placeholderTextColor={THEME.inkFaint} />
-        <Text style={styles.label}>Contact d'urgence — nom</Text>
-        <TextInput style={styles.input} value={emergency.contactName} onChangeText={(v) => setEmergency((e) => ({ ...e, contactName: v }))} placeholder="Nom du contact" placeholderTextColor={THEME.inkFaint} />
-        <Text style={styles.label}>Contact d'urgence — téléphone</Text>
-        <TextInput style={styles.input} value={emergency.contactPhone} onChangeText={(v) => setEmergency((e) => ({ ...e, contactPhone: v }))} placeholder="+33 6 ..." placeholderTextColor={THEME.inkFaint} keyboardType="phone-pad" />
-        <Text style={styles.label}>Ambassade / consulat</Text>
-        <TextInput style={styles.input} value={emergency.embassy} onChangeText={(v) => setEmergency((e) => ({ ...e, embassy: v }))} placeholder="Adresse ou numéro" placeholderTextColor={THEME.inkFaint} />
-        <Text style={styles.label}>Notes</Text>
-        <TextInput style={[styles.input, { minHeight: 70 }]} value={emergency.notes} onChangeText={(v) => setEmergency((e) => ({ ...e, notes: v }))} multiline textAlignVertical="top" placeholderTextColor={THEME.inkFaint} />
+        <Section title="Fiche d'urgence (optionnel)">
+          <Txt variant="subhead" style={styles.intro}>
+            Gardée sur cet appareil, jamais partagée automatiquement.
+          </Txt>
+          <Field label="Groupe sanguin" value={emergency.bloodType} onChangeText={(v) => setEmergency((e) => ({ ...e, bloodType: v }))} placeholder="O+" />
+          <Field label="Allergies" value={emergency.allergies} onChangeText={(v) => setEmergency((e) => ({ ...e, allergies: v }))} placeholder="Pénicilline, arachides..." />
+          <Field label="Contact d'urgence — nom" value={emergency.contactName} onChangeText={(v) => setEmergency((e) => ({ ...e, contactName: v }))} placeholder="Nom du contact" />
+          <Field
+            label="Contact d'urgence — téléphone"
+            value={emergency.contactPhone}
+            onChangeText={(v) => setEmergency((e) => ({ ...e, contactPhone: v }))}
+            placeholder="+33 6 ..."
+            keyboardType="phone-pad"
+            inputStyle={styles.numericInput}
+          />
+          <Field label="Ambassade / consulat" value={emergency.embassy} onChangeText={(v) => setEmergency((e) => ({ ...e, embassy: v }))} placeholder="Adresse ou numéro" />
+          <Field label="Notes" value={emergency.notes} onChangeText={(v) => setEmergency((e) => ({ ...e, notes: v }))} multiline style={styles.fieldTight} />
+        </Section>
 
-        <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Rappels</Text>
-        <Text style={styles.helpText}>
-          Programme un résumé chaque matin du voyage (8h) et un rappel de la checklist avant-départ 3 jours avant.
-          À relancer si vous modifiez beaucoup le programme.
-        </Text>
-        <TouchableOpacity style={styles.button} onPress={scheduleReminders} disabled={remindersBusy}>
-          <Text style={styles.buttonText}>{remindersBusy ? "…" : "Programmer les rappels"}</Text>
-        </TouchableOpacity>
-        {remindersStatus ? <Text style={{ color: THEME.inkMuted, fontSize: 12, marginTop: 10, textAlign: "center", fontFamily: FONTS.body }}>{remindersStatus}</Text> : null}
+        <Section title="Rappels">
+          <Txt variant="subhead" style={styles.intro}>
+            Programme un résumé chaque matin du voyage (8h) et un rappel de la checklist avant-départ 3 jours avant. À relancer si vous modifiez beaucoup le programme.
+          </Txt>
+          <Button title="Programmer les rappels" icon="alarm-outline" variant="secondary" full loading={remindersBusy} onPress={scheduleReminders} />
+          {remindersStatus ? (
+            <Txt variant="caption" style={styles.note} accessibilityLiveRegion="polite">
+              {remindersStatus}
+            </Txt>
+          ) : null}
+        </Section>
 
-        <Text style={[styles.sectionTitle, { marginTop: 26 }]}>Rappel à l'approche de l'hôtel</Text>
-        <Text style={styles.helpText}>
-          Une notification apparaît avec le code de réservation quand vous arrivez près d'un hôtel de ce voyage —
-          fonctionne même si l'app est fermée. Nécessite une adresse sur chaque étape hôtel et l'autorisation de
-          localisation "toujours".
-        </Text>
-        {geofenceEnabled ? (
-          <TouchableOpacity style={styles.button} onPress={disableHotelProximity} disabled={geofenceBusy}>
-            <Text style={styles.buttonText}>{geofenceBusy ? "…" : "Désactiver"}</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={styles.button} onPress={enableHotelProximity} disabled={geofenceBusy}>
-            <Text style={styles.buttonText}>{geofenceBusy ? "…" : "Activer"}</Text>
-          </TouchableOpacity>
-        )}
-        {geofenceStatus ? <Text style={{ color: THEME.inkMuted, fontSize: 12, marginTop: 10, textAlign: "center", fontFamily: FONTS.body }}>{geofenceStatus}</Text> : null}
+        <Section title="Rappel à l'approche de l'hôtel">
+          <Txt variant="subhead" style={styles.intro}>
+            Une notification apparaît avec le code de réservation quand vous arrivez près d'un hôtel de ce voyage — fonctionne même si l'app est fermée. Nécessite une adresse sur chaque étape hôtel et l'autorisation de localisation « toujours ».
+          </Txt>
+          <Group>
+            <Row
+              icon="location-outline"
+              tone={geofenceEnabled ? "teal" : "neutral"}
+              title="Alerte à l'arrivée"
+              subtitle="Avec le code de réservation"
+              right={
+                <Switch
+                  value={geofenceEnabled}
+                  onValueChange={(on) => (on ? enableHotelProximity() : disableHotelProximity())}
+                  disabled={geofenceBusy}
+                  accessibilityLabel="Rappel à l'approche de l'hôtel"
+                  trackColor={{ false: THEME.bgRaised, true: THEME.teal }}
+                  thumbColor={THEME.ink}
+                  ios_backgroundColor={THEME.bgRaised}
+                />
+              }
+            />
+          </Group>
+          {geofenceStatus ? (
+            <Txt variant="caption" color={geofenceRefused ? "stamp" : "inkMuted"} style={styles.note} accessibilityLiveRegion="polite">
+              {geofenceStatus}
+            </Txt>
+          ) : null}
+        </Section>
       </ScrollView>
 
       <CurrencyPickerModal
         visible={!!pickerFor}
+        selected={pickerFor === "local" ? currency : homeCurrency}
         onClose={() => setPickerFor(null)}
         onSelect={(code) => {
           if (pickerFor === "local") setCurrency(code);
@@ -289,95 +301,61 @@ export default function TripSettingsScreen({ route, navigation }) {
   );
 }
 
-function CurrencyPickerModal({ visible, onClose, onSelect }) {
+// A titled block: section title, then its content.
+function Section({ title, children }) {
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Choisir une devise</Text>
-          <FlatList
-            data={CURRENCY_PRESETS}
-            keyExtractor={(item) => item.code}
-            style={{ maxHeight: 420, marginTop: 10 }}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.currencyRow} onPress={() => onSelect(item.code)}>
-                <Text style={styles.currencyRowText}>{item.label}</Text>
-              </TouchableOpacity>
-            )}
-          />
-          <TouchableOpacity onPress={onClose} style={{ marginTop: 12, alignItems: "center" }}>
-            <Text style={{ color: THEME.inkFaint, fontSize: 13, fontFamily: FONTS.body }}>Fermer</Text>
-          </TouchableOpacity>
-        </View>
+    <View style={styles.section}>
+      <SectionTitle title={title} />
+      {children}
+    </View>
+  );
+}
+
+// A read-only Field that opens a picker: same look as its sibling inputs.
+function PickerField({ label, value, onPress }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} : ${value}`}
+      style={({ pressed }) => (pressed ? styles.pressed : null)}
+    >
+      <View pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+        <Field label={label} value={value} editable={false} right={<Ionicons name="chevron-down" size={18} color={THEME.inkMuted} />} />
       </View>
-    </Modal>
+    </Pressable>
+  );
+}
+
+function CurrencyPickerModal({ visible, selected, onClose, onSelect }) {
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Choisir une devise">
+      <Group style={styles.currencyList}>
+        {CURRENCY_PRESETS.map((item) => (
+          <Row
+            key={item.code}
+            title={item.label}
+            selected={item.code === selected}
+            right={item.code === selected ? <Ionicons name="checkmark" size={20} color={THEME.gold} /> : null}
+            onPress={() => onSelect(item.code)}
+          />
+        ))}
+      </Group>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: THEME.bg },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.border,
-  },
-  headerButton: { padding: 4 },
-  headerButtonText: { color: THEME.inkMuted, fontSize: 15, fontFamily: FONTS.body },
-  headerSaveText: { color: THEME.gold, fontFamily: FONTS.bodySemiBold },
-  headerTitle: { color: THEME.ink, fontSize: 15.5, fontFamily: FONTS.headingSemiBold },
-  scrollContent: { padding: 20 },
-  sectionTitle: { fontSize: 15, color: THEME.ink, fontFamily: FONTS.headingSemiBold, marginBottom: 4 },
-  label: { fontSize: 12.5, color: THEME.inkMuted, marginBottom: 6, marginTop: 14, fontFamily: FONTS.bodyMedium },
-  helpText: { fontSize: 11.5, color: THEME.inkFaint, marginTop: 6, lineHeight: 16, fontFamily: FONTS.body },
-  picker: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  pickerText: { color: THEME.ink, fontSize: 14.5, fontFamily: FONTS.body },
-  input: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: THEME.ink,
-    fontSize: 15,
-    fontFamily: FONTS.mono,
-  },
-  rateRow: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
-  suggestButton: {
-    borderWidth: 1,
-    borderColor: THEME.teal,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  suggestButtonText: { color: THEME.teal, fontSize: 13, fontFamily: FONTS.bodyMedium },
-  button: { borderWidth: 1, borderColor: THEME.teal, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
-  buttonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
-  modalOverlay: { flex: 1, backgroundColor: "#00000099", justifyContent: "flex-end" },
-  modalCard: {
-    backgroundColor: THEME.bgCard,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    ...CARD_SHADOW,
-  },
-  modalTitle: { fontSize: 15.5, color: THEME.ink, fontFamily: FONTS.headingSemiBold },
-  currencyRow: { paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: THEME.border },
-  currencyRowText: { color: THEME.ink, fontSize: 14.5, fontFamily: FONTS.body },
+  loading: { flex: 1, alignItems: "center", justifyContent: "center" },
+  scrollContent: { paddingHorizontal: layout.gutter, paddingTop: space.lg, paddingBottom: space.xxl },
+  section: { marginTop: space.xxl },
+  intro: { marginBottom: space.lg },
+  note: { marginTop: space.md },
+  fieldTight: { marginBottom: 0 },
+  numericInput: { ...type.numeral },
+  rateRow: { flexDirection: "row", alignItems: "flex-end", gap: space.md },
+  rateField: { flex: 1, marginBottom: 0 },
+  pressed: { opacity: 0.8 },
+  currencyList: { marginBottom: space.md },
 });

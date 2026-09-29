@@ -9,7 +9,7 @@ import { SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold 
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
 
-import { THEME } from "./lib/theme";
+import { THEME, type } from "./lib/theme";
 import { hasPin } from "./lib/pin";
 import HomeScreen from "./screens/HomeScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
@@ -21,6 +21,7 @@ import TripSettingsScreen from "./screens/TripSettingsScreen";
 import WeatherReorgScreen from "./screens/WeatherReorgScreen";
 import TicketScannerScreen from "./screens/TicketScannerScreen";
 import HotelsScreen from "./screens/HotelsScreen";
+import IdeaEditorScreen from "./screens/IdeaEditorScreen";
 import LockScreen from "./screens/LockScreen";
 
 const Stack = createNativeStackNavigator();
@@ -30,10 +31,10 @@ const navTheme = {
   colors: {
     ...DefaultTheme.colors,
     background: THEME.bg,
-    card: THEME.bgCard,
+    card: THEME.bg,
     text: THEME.ink,
-    border: THEME.border,
-    primary: THEME.teal,
+    border: THEME.hairStrong,
+    primary: THEME.gold,
   },
 };
 
@@ -78,15 +79,16 @@ export default function App() {
         <Stack.Navigator
           initialRouteName="Home"
           screenOptions={{
-            headerStyle: { backgroundColor: THEME.bgCard },
+            headerStyle: { backgroundColor: THEME.bg },
             headerTintColor: THEME.ink,
+            headerTitleStyle: { fontFamily: type.heading.fontFamily, fontSize: type.heading.fontSize },
             headerShadowVisible: false,
             contentStyle: { backgroundColor: THEME.bg },
           }}
         >
           <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
           <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Trip" component={TripScreen} options={{ title: "" }} />
+          <Stack.Screen name="Trip" component={TripScreen} options={{ headerShown: false }} />
           <Stack.Screen name="DayDetail" component={DayDetailScreen} options={{ headerShown: false }} />
           <Stack.Screen
             name="ActivityEditor"
@@ -102,6 +104,11 @@ export default function App() {
           <Stack.Screen name="WeatherReorg" component={WeatherReorgScreen} options={{ headerShown: false }} />
           <Stack.Screen name="TicketScanner" component={TicketScannerScreen} options={{ headerShown: false, animation: "none" }} />
           <Stack.Screen name="Hotels" component={HotelsScreen} options={{ headerShown: false }} />
+          <Stack.Screen
+            name="IdeaEditor"
+            component={IdeaEditorScreen}
+            options={{ headerShown: false, presentation: "modal" }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>

@@ -1,12 +1,11 @@
 import React, { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { CameraView, requestCameraPermissionsAsync } from "expo-camera";
 import * as Haptics from "expo-haptics";
 
-import { THEME } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, space, layout, radius, type } from "../lib/theme";
+import { IconButton, EmptyState, round } from "../components/ui";
 
 // Live camera view that watches for a barcode/QR code. As soon as one is
 // detected, it snaps a photo automatically (so the ticket itself is saved,
@@ -74,67 +73,76 @@ export default function TicketScannerScreen({ navigation, route }) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Ionicons name="camera-outline" size={30} color={THEME.inkFaint} />
-          <Text style={styles.permissionText}>
-            {permissionError || "Autorisation caméra refusée. Activez-la dans les réglages du téléphone pour scanner vos billets."}
-          </Text>
-          <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.closeButtonText}>Retour</Text>
-          </TouchableOpacity>
+          <EmptyState
+            icon="camera-outline"
+            title={permissionError ? "Caméra indisponible" : "Accès à la caméra refusé"}
+            text={permissionError || "Activez-la dans les réglages du téléphone pour scanner vos billets."}
+            action={{ label: "Retour", onPress: () => navigation.goBack() }}
+          />
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#000" }}>
+    <View style={styles.root}>
       <CameraView
         ref={cameraRef}
-        style={{ flex: 1 }}
+        style={styles.camera}
         facing="back"
         barcodeScannerSettings={{ barcodeTypes: ["qr", "ean13", "ean8", "code128", "pdf417", "aztec"] }}
         onBarcodeScanned={onBarcodeScanned}
       />
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.closeCircle} onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={22} color="#FFFFFF" />
-          </TouchableOpacity>
+          <IconButton icon="close" label="Fermer" filled onPress={() => navigation.goBack()} />
         </View>
         <View style={styles.frameBox} pointerEvents="none">
-          <Text style={styles.hintText}>
-            {detectedCode ? "Code détecté — capture…" : "Visez le billet ou le code-barres"}
-          </Text>
+          <View style={[styles.hint, round("md")]}>
+            <Text style={styles.hintText}>
+              {detectedCode ? "Code détecté — capture…" : "Visez le billet ou le code-barres"}
+            </Text>
+          </View>
         </View>
-        <TouchableOpacity style={styles.manualShutter} onPress={() => capture(null)} disabled={capturing}>
+        <Pressable
+          style={({ pressed }) => [styles.manualShutter, (pressed || capturing) && { opacity: 0.6 }]}
+          onPress={() => capture(null)}
+          disabled={capturing}
+          accessibilityRole="button"
+          accessibilityLabel="Photographier le billet"
+          accessibilityState={{ disabled: capturing }}
+        >
           <View style={styles.manualShutterInner} />
-        </TouchableOpacity>
+        </Pressable>
       </SafeAreaView>
     </View>
   );
 }
 
+// Shutter button: ring + disc, sized from the spacing scale (48 + 24 = 72).
+const SHUTTER = space.xxxl + space.xl;
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: THEME.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 30, gap: 14 },
-  permissionText: { color: THEME.inkMuted, fontSize: 13.5, fontFamily: FONTS.body, textAlign: "center", lineHeight: 19 },
-  closeButton: { borderWidth: 1, borderColor: THEME.teal, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 11 },
-  closeButtonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
-  overlay: { flex: 1, justifyContent: "space-between" },
-  topBar: { flexDirection: "row", justifyContent: "flex-end", padding: 16 },
-  closeCircle: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#00000077", alignItems: "center", justifyContent: "center" },
-  frameBox: { alignItems: "center", paddingHorizontal: 30 },
-  hintText: { color: "#FFFFFF", fontSize: 13.5, fontFamily: FONTS.bodyMedium, textAlign: "center", backgroundColor: "#00000088", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: layout.gutter },
+  root: { flex: 1, backgroundColor: THEME.bg },
+  camera: { flex: 1 },
+  // Chrome sits on top of the camera preview.
+  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: "space-between" },
+  topBar: { flexDirection: "row", justifyContent: "flex-end", padding: space.lg },
+  frameBox: { alignItems: "center", paddingHorizontal: layout.gutter },
+  hint: { backgroundColor: THEME.scrim, paddingHorizontal: space.lg, paddingVertical: space.sm },
+  hintText: { ...type.subhead, color: THEME.ink, textAlign: "center" },
   manualShutter: {
     alignSelf: "center",
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    borderWidth: 3,
-    borderColor: "#FFFFFF",
+    width: SHUTTER,
+    height: SHUTTER,
+    borderRadius: radius.full,
+    borderWidth: space.xs,
+    borderColor: THEME.ink,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 30,
+    marginBottom: space.xl,
   },
-  manualShutterInner: { width: 54, height: 54, borderRadius: 27, backgroundColor: "#FFFFFF" },
+  manualShutterInner: { width: SHUTTER - space.xs * 4, height: SHUTTER - space.xs * 4, borderRadius: radius.full, backgroundColor: THEME.ink },
 });

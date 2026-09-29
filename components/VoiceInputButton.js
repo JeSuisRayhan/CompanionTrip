@@ -1,11 +1,11 @@
 import React, { useState } from "react";
-import { TouchableOpacity, Text, View, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Text, View, StyleSheet } from "react-native";
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
-import { THEME } from "../lib/theme";
+import { THEME, space, type } from "../lib/theme";
+import { IconButton } from "./ui";
 
 // Press to dictate; stops automatically at the end of speech (or press again
 // to stop early). Appends the final transcript via onResult — the caller
@@ -53,30 +53,26 @@ export default function VoiceInputButton({ onResult }) {
 
   return (
     <View style={styles.wrap}>
-      <TouchableOpacity
+      {error ? (
+        <Text style={[type.caption, styles.errorText]} accessibilityLiveRegion="polite">
+          {error}
+        </Text>
+      ) : null}
+      <IconButton
+        icon={listening ? "stop" : "mic"}
+        label={listening ? "Arrêter la dictée" : "Dicter le programme"}
+        tone={listening ? "stamp" : "neutral"}
+        filled
         onPress={toggle}
-        style={[styles.button, listening && styles.buttonActive]}
-        accessibilityLabel={listening ? "Arrêter la dictée" : "Dicter le programme"}
-      >
-        <Ionicons name="mic" size={16} color={listening ? THEME.stamp : THEME.inkMuted} />
-      </TouchableOpacity>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      />
     </View>
   );
 }
 
+// The error sits to the left of the button so the button keeps its place. The
+// wrapper may shrink, so a long message wraps inside it (a parent with
+// flexWrap moves it to its own line).
 const styles = StyleSheet.create({
-  wrap: { flexDirection: "row", alignItems: "center", gap: 8 },
-  button: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1.5,
-    borderColor: THEME.border,
-    backgroundColor: THEME.bgCardAlt,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonActive: { borderColor: THEME.stamp, backgroundColor: THEME.stampDim },
-  errorText: { color: THEME.stamp, fontSize: 10.5, flexShrink: 1 },
+  wrap: { flexDirection: "row", alignItems: "center", gap: space.sm, flexShrink: 1 },
+  errorText: { color: THEME.stamp, flexShrink: 1, textAlign: "right" },
 });

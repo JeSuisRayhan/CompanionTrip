@@ -1,14 +1,13 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Modal, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, CARD_SHADOW } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, space, layout, type } from "../lib/theme";
 import { getTrip, listHotelStays, upsertHotelStay, removeHotelStay } from "../lib/trips";
-import { formatDateLabel } from "../lib/dates";
+import { addDaysISO, formatDateRange } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
+import { Txt, Button, IconButton, Group, Row, Field, EmptyState, Sheet, BackHeader, Fab } from "../components/ui";
 
 export default function HotelsScreen({ route, navigation }) {
   const { tripId } = route.params;
@@ -29,6 +28,16 @@ export default function HotelsScreen({ route, navigation }) {
       refresh();
     }, [refresh])
   );
+
+  // Arriving from an idea ("Construire mon voyage"): open the form pre-filled
+  // with the idea's name/address. Consumed once so going back doesn't reopen it.
+  React.useEffect(() => {
+    const prefill = route.params?.prefill;
+    if (prefill) {
+      setEditing({ name: prefill.name, address: prefill.address, ideaId: prefill.ideaId, lat: prefill.lat, lng: prefill.lng });
+      navigation.setParams({ prefill: undefined });
+    }
+  }, [route.params?.prefill]);
 
   function confirmDelete(stay) {
     Alert.alert("Supprimer cet hôtel ?", `"${stay.name}" sera retiré du programme.`, [
@@ -56,44 +65,56 @@ export default function HotelsScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
-          <Ionicons name="chevron-back" size={22} color={THEME.ink} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Hôtels</Text>
-        <TouchableOpacity onPress={() => setEditing({})} style={{ padding: 4 }}>
-          <Ionicons name="add" size={24} color={THEME.gold} />
-        </TouchableOpacity>
-      </View>
+      <BackHeader title="Hôtels" onBack={() => navigation.goBack()} />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {stays.length === 0 ? (
-          <Text style={styles.helpText}>
-            Ajoutez chaque hôtel une fois — nom, adresse, dates, prix total — et l'app crée l'étape correspondante et
-            compte les nuits automatiquement dans le budget.
-          </Text>
+          <EmptyState
+            icon="bed-outline"
+            tone="stamp"
+            title="Aucun hôtel pour l'instant"
+            text="Ajoutez chaque hôtel une fois — nom, adresse, dates, prix total — et l'app crée l'étape correspondante et compte les nuits automatiquement dans le budget."
+            action={{ label: "Ajouter un hôtel", icon: "add", onPress: () => setEditing({}) }}
+          />
         ) : (
-          stays
-            .sort((a, b) => (a.checkIn || "").localeCompare(b.checkIn || ""))
-            .map((stay) => (
-              <TouchableOpacity key={stay.stayId} style={styles.card} onPress={() => setEditing(stay)} activeOpacity={0.85}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.cardTitle}>{stay.name}</Text>
-                  <TouchableOpacity onPress={() => confirmDelete(stay)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name="trash-outline" size={16} color={THEME.inkFaint} />
-                  </TouchableOpacity>
-                </View>
-                {stay.address ? <Text style={styles.cardAddress}>{stay.address}</Text> : null}
-                <View style={styles.cardMetaRow}>
-                  <Text style={styles.cardMeta}>
-                    {stay.checkIn ? formatDateLabel(stay.checkIn) : "Date à définir"} · {stay.nights} nuit{stay.nights !== 1 ? "s" : ""}
-                  </Text>
-                  <Text style={styles.cardPrice}>{formatMoney(stay.pricePerNight * stay.nights, trip.currency)}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
+          <Group>
+            {stays
+              .sort((a, b) => (a.checkIn || "").localeCompare(b.checkIn || ""))
+              .map((stay) => (
+                <Row
+                  key={stay.stayId}
+                  title={
+                    <Text style={styles.stayName} numberOfLines={2}>
+                      {stay.name}
+                    </Text>
+                  }
+                  accessibilityLabel={`${stay.name}, modifier`}
+                  onPress={() => setEditing(stay)}
+                  right={<IconButton icon="trash-outline" label={`Supprimer ${stay.name}`} size={18} onPress={() => confirmDelete(stay)} />}
+                  style={styles.stayRow}
+                >
+                  {stay.address ? (
+                    <Text style={type.subhead} numberOfLines={1}>
+                      {stay.address}
+                    </Text>
+                  ) : null}
+                  <View style={styles.metaRow}>
+                    {stay.checkIn ? (
+                      <Text style={type.numeralSmall}>
+                        {`${formatDateRange(stay.checkIn, addDaysISO(stay.checkIn, stay.nights))} · ${stay.nights} nuit${stay.nights !== 1 ? "s" : ""}`}
+                      </Text>
+                    ) : (
+                      <Text style={type.caption}>{`Date à définir · ${stay.nights} nuit${stay.nights !== 1 ? "s" : ""}`}</Text>
+                    )}
+                    <Text style={type.numeral}>{formatMoney(stay.pricePerNight * stay.nights, trip.currency)}</Text>
+                  </View>
+                </Row>
+              ))}
+          </Group>
         )}
       </ScrollView>
+
+      {stays.length > 0 && <Fab label="Ajouter un hôtel" onPress={() => setEditing({})} />}
 
       <HotelFormModal
         visible={!!editing}
@@ -101,7 +122,7 @@ export default function HotelsScreen({ route, navigation }) {
         currency={trip.currency}
         onClose={() => setEditing(null)}
         onSave={async (values) => {
-          await upsertHotelStay(tripId, { stayId: editing?.stayId, ...values });
+          await upsertHotelStay(tripId, { stayId: editing?.stayId, ideaId: editing?.ideaId, lat: editing?.lat, lng: editing?.lng, ...values });
           setEditing(null);
           refresh();
         }}
@@ -158,109 +179,43 @@ function HotelFormModal({ visible, initial, currency, onClose, onSave }) {
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={styles.modalTitle}>{initial?.stayId ? "Modifier l'hôtel" : "Ajouter un hôtel"}</Text>
+    <Sheet visible={visible} onClose={onClose} title={initial?.stayId ? "Modifier l'hôtel" : "Ajouter un hôtel"}>
+      <Field label="Nom de l'hôtel" value={name} onChangeText={setName} placeholder="Hotel Gracery Shinjuku" />
 
-            <Text style={styles.label}>Nom de l'hôtel</Text>
-            <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Hotel Gracery Shinjuku" placeholderTextColor={THEME.inkFaint} />
+      <Field label="Adresse" value={address} onChangeText={setAddress} placeholder="1-19-1 Kabukicho, Tokyo" />
 
-            <Text style={styles.label}>Adresse</Text>
-            <TextInput style={styles.input} value={address} onChangeText={setAddress} placeholder="1-19-1 Kabukicho, Tokyo" placeholderTextColor={THEME.inkFaint} />
-
-            <View style={styles.dateRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Arrivée</Text>
-                <TextInput style={styles.input} value={checkIn} onChangeText={setCheckIn} placeholder="2026-09-15" placeholderTextColor={THEME.inkFaint} autoCapitalize="none" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Départ</Text>
-                <TextInput style={styles.input} value={checkOut} onChangeText={setCheckOut} placeholder="2026-09-18" placeholderTextColor={THEME.inkFaint} autoCapitalize="none" />
-              </View>
-            </View>
-
-            <Text style={styles.label}>Prix total du séjour ({currency})</Text>
-            <TextInput style={styles.input} value={totalPrice} onChangeText={setTotalPrice} placeholder="0" placeholderTextColor={THEME.inkFaint} keyboardType="decimal-pad" />
-
-            <Text style={styles.label}>Code de réservation (optionnel)</Text>
-            <TextInput style={styles.input} value={confirmationCode} onChangeText={setConfirmationCode} placeholder="ABC123" placeholderTextColor={THEME.inkFaint} autoCapitalize="characters" />
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-            <View style={styles.modalButtonRow}>
-              <TouchableOpacity style={styles.modalButton} onPress={onClose}>
-                <Text style={styles.modalButtonText}>Annuler</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalButton} onPress={save}>
-                <Text style={styles.modalButtonText}>Enregistrer</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
+      <View style={styles.dateRow}>
+        <Field label="Arrivée" value={checkIn} onChangeText={setCheckIn} placeholder="2026-09-15" autoCapitalize="none" inputStyle={type.numeral} style={styles.flex} />
+        <Field label="Départ" value={checkOut} onChangeText={setCheckOut} placeholder="2026-09-18" autoCapitalize="none" inputStyle={type.numeral} style={styles.flex} />
       </View>
-    </Modal>
+
+      <Field label={`Prix total du séjour (${currency})`} value={totalPrice} onChangeText={setTotalPrice} placeholder="0" keyboardType="decimal-pad" inputStyle={type.numeral} />
+
+      <Field label="Code de réservation (optionnel)" value={confirmationCode} onChangeText={setConfirmationCode} placeholder="ABC123" autoCapitalize="characters" />
+
+      {error ? (
+        <Txt variant="caption" color="stamp" style={styles.error}>
+          {error}
+        </Txt>
+      ) : null}
+
+      <View style={styles.sheetButtons}>
+        <Button title="Annuler" variant="secondary" style={styles.flex} onPress={onClose} />
+        <Button title="Enregistrer" style={styles.flex} onPress={save} />
+      </View>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.border,
-  },
-  headerTitle: { color: THEME.ink, fontSize: 16, fontFamily: FONTS.headingSemiBold },
-  scrollContent: { padding: 20 },
-  helpText: { color: THEME.inkMuted, fontSize: 13.5, fontFamily: FONTS.body, lineHeight: 19, textAlign: "center", marginTop: 30 },
-  card: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 15,
-    marginBottom: 12,
-    ...CARD_SHADOW,
-  },
-  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  cardTitle: { color: THEME.ink, fontSize: 15, fontFamily: FONTS.headingSemiBold, flex: 1, marginRight: 10 },
-  cardAddress: { color: THEME.inkFaint, fontSize: 12, marginTop: 4, fontFamily: FONTS.body },
-  cardMetaRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 10 },
-  cardMeta: { color: THEME.inkMuted, fontSize: 12, textTransform: "capitalize", fontFamily: FONTS.body },
-  cardPrice: { color: THEME.gold, fontSize: 13.5, fontFamily: FONTS.monoMedium },
-  modalOverlay: { flex: 1, backgroundColor: "#00000099", justifyContent: "flex-end" },
-  modalCard: {
-    backgroundColor: THEME.bgCard,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: "85%",
-    borderWidth: 1,
-    borderColor: THEME.border,
-    ...CARD_SHADOW,
-  },
-  modalTitle: { fontSize: 16, color: THEME.ink, fontFamily: FONTS.headingSemiBold, marginBottom: 6 },
-  label: { fontSize: 12.5, color: THEME.inkMuted, marginBottom: 6, marginTop: 14, fontFamily: FONTS.bodyMedium },
-  input: {
-    backgroundColor: THEME.bgCardAlt,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    color: THEME.ink,
-    fontSize: 14,
-    fontFamily: FONTS.body,
-  },
-  dateRow: { flexDirection: "row", gap: 10 },
-  errorText: { color: THEME.stamp, fontSize: 12.5, marginTop: 14, fontFamily: FONTS.body },
-  modalButtonRow: { flexDirection: "row", gap: 10, marginTop: 20, marginBottom: 10 },
-  modalButton: { flex: 1, borderWidth: 1, borderColor: THEME.teal, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
-  modalButtonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
+  scrollContent: { padding: layout.gutter, paddingBottom: layout.tabBarClearance },
+  stayRow: { paddingRight: space.xs },
+  stayName: { ...type.name },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", justifyContent: "space-between", columnGap: space.md, rowGap: 2, marginTop: space.xs },
+  dateRow: { flexDirection: "row", gap: space.md },
+  error: { marginBottom: space.md },
+  sheetButtons: { flexDirection: "row", gap: space.md, marginTop: space.xs },
 });

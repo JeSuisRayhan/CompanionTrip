@@ -1,15 +1,20 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert } from "react-native";
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, Switch, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, space, layout, type as ramp } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, addActivity, editActivity, deleteActivity } from "../lib/trips";
 import { resolveDayDate } from "../lib/dates";
 import { scheduleActivityReminder, cancelScheduledNotification } from "../lib/notifications";
 import { transportDeparturePlace, TRANSPORT_MODES, CONFIRMATION_TYPES } from "../lib/constants";
+import { Txt, Button, Chip, Group, Row, Field, ModalHeader, round } from "../components/ui";
+
+// Same tone per step type everywhere (route rows, editor chips).
+function typeTone(key) {
+  return key === "repas" ? "gold" : key === "hotel" ? "stamp" : key === "transport" ? "blue" : "teal";
+}
 
 export default function ActivityEditorScreen({ route, navigation }) {
   const { tripId, dayId, activity } = route.params; // activity is null/undefined when creating
@@ -114,131 +119,115 @@ export default function ActivityEditorScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-            <Text style={styles.headerButtonText}>Annuler</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isEditing ? "Modifier l'étape" : "Nouvelle étape"}</Text>
-          <TouchableOpacity onPress={save} style={styles.headerButton} disabled={saving}>
-            <Text style={[styles.headerButtonText, styles.headerSaveText]}>Enregistrer</Text>
-          </TouchableOpacity>
-        </View>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ModalHeader
+          title={isEditing ? "Modifier l'étape" : "Nouvelle étape"}
+          left={{ label: "Annuler", onPress: () => navigation.goBack() }}
+          right={{ label: "Enregistrer", onPress: save, disabled: saving }}
+        />
+
+        {/* Pinned under the header so a validation message is never scrolled out of sight. */}
+        {error ? (
+          <View style={[styles.errorBanner, round("sm")]} accessibilityRole="alert" accessibilityLiveRegion="polite">
+            <Ionicons name="alert-circle" size={18} color={THEME.stamp} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
 
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.label}>Titre</Text>
-          <TextInput
-            style={styles.input}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Visite du sanctuaire Meiji Jingu"
-            placeholderTextColor={THEME.inkFaint}
-          />
+          <Field label="Titre" value={title} onChangeText={setTitle} placeholder="Visite du sanctuaire Meiji Jingu" />
 
-          <Text style={styles.label}>Heure (optionnel)</Text>
-          <TextInput
-            style={styles.input}
+          <Field
+            label="Heure (optionnel)"
             value={time}
             onChangeText={setTime}
             placeholder="09:30"
-            placeholderTextColor={THEME.inkFaint}
             keyboardType="numbers-and-punctuation"
+            inputStyle={ramp.numeral}
           />
 
-          <Text style={styles.label}>Type</Text>
-          <View style={styles.typeRow}>
-            {Object.entries(TYPES).map(([key, t]) => (
-              <TouchableOpacity
-                key={key}
-                style={[styles.typeChip, type === key && { borderColor: t.color, backgroundColor: t.dim }]}
-                onPress={() => setType(key)}
-              >
-                <Ionicons name={t.icon} size={14} color={type === key ? t.color : THEME.inkMuted} />
-                <Text style={[styles.typeChipText, type === key && { color: t.color }]}>{t.label}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.choiceGroup}>
+            <Txt variant="caption" style={styles.choiceLabel}>
+              Type
+            </Txt>
+            <View style={styles.chipRow}>
+              {Object.entries(TYPES).map(([key, t]) => (
+                <Chip key={key} label={t.label} icon={t.icon} tone={typeTone(key)} selected={type === key} onPress={() => setType(key)} />
+              ))}
+            </View>
           </View>
 
           {(type === "transport" || type === "hotel" || type === "repas") && (
-            <>
-              <Text style={styles.label}>Prix (optionnel)</Text>
-              <TextInput
-                style={styles.input}
-                value={price}
-                onChangeText={setPrice}
-                placeholder="0"
-                placeholderTextColor={THEME.inkFaint}
-                keyboardType="decimal-pad"
-              />
-            </>
+            <Field
+              label="Prix (optionnel)"
+              value={price}
+              onChangeText={setPrice}
+              placeholder="0"
+              keyboardType="decimal-pad"
+              inputStyle={ramp.numeral}
+            />
           )}
 
           {type === "transport" && (
-            <>
-              <Text style={styles.label}>Mode de transport (optionnel)</Text>
-              <View style={styles.typeRow}>
+            <View style={styles.choiceGroup}>
+              <Txt variant="caption" style={styles.choiceLabel}>
+                Mode de transport (optionnel)
+              </Txt>
+              <View style={styles.chipRow}>
                 {TRANSPORT_MODES.map((m) => (
-                  <TouchableOpacity
+                  <Chip
                     key={m.key}
-                    style={[styles.typeChip, transportMode === m.key && { borderColor: THEME.blue, backgroundColor: THEME.blueDim }]}
+                    label={m.label}
+                    tone="blue"
+                    selected={transportMode === m.key}
                     onPress={() => setTransportMode(transportMode === m.key ? null : m.key)}
-                  >
-                    <Text style={[styles.typeChipText, transportMode === m.key && { color: THEME.blue }]}>{m.label}</Text>
-                  </TouchableOpacity>
+                  />
                 ))}
               </View>
-            </>
+            </View>
           )}
 
           {CONFIRMATION_TYPES.includes(type) && (
-            <>
-              <Text style={styles.label}>Code de confirmation (optionnel)</Text>
-              <TextInput
-                style={styles.input}
-                value={confirmationCode}
-                onChangeText={setConfirmationCode}
-                placeholder="ABC123"
-                placeholderTextColor={THEME.inkFaint}
-                autoCapitalize="characters"
-              />
-            </>
+            <Field
+              label="Code de confirmation (optionnel)"
+              value={confirmationCode}
+              onChangeText={setConfirmationCode}
+              placeholder="ABC123"
+              autoCapitalize="characters"
+              inputStyle={ramp.numeral}
+            />
           )}
 
-          <Text style={styles.label}>Adresse (optionnel)</Text>
-          <TextInput
-            style={styles.input}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="12 rue de la Paix, Paris"
-            placeholderTextColor={THEME.inkFaint}
-          />
+          <Field label="Adresse (optionnel)" value={address} onChangeText={setAddress} placeholder="12 rue de la Paix, Paris" />
 
           {(type === "activite" || type === "repas") && (
-            <TouchableOpacity style={styles.outdoorRow} onPress={() => setOutdoor((v) => !v)}>
-              <Ionicons name={outdoor ? "checkbox" : "square-outline"} size={20} color={outdoor ? THEME.teal : THEME.inkMuted} />
-              <Text style={styles.outdoorText}>En extérieur (utile pour la météo)</Text>
-            </TouchableOpacity>
+            <Group style={styles.toggleGroup}>
+              <Row
+                icon="sunny-outline"
+                tone="gold"
+                title="En extérieur"
+                subtitle="Utile pour la météo"
+                selected={outdoor}
+                accessibilityLabel={`En extérieur, utile pour la météo : ${outdoor ? "activé" : "désactivé"}`}
+                onPress={() => setOutdoor((v) => !v)}
+                // The row is the touch target; the switch only shows the state.
+                right={
+                  <View pointerEvents="none">
+                    <Switch
+                      value={outdoor}
+                      trackColor={{ false: THEME.bgRaised, true: THEME.teal }}
+                      thumbColor={THEME.ink}
+                      ios_backgroundColor={THEME.bgRaised}
+                    />
+                  </View>
+                }
+              />
+            </Group>
           )}
 
-          <Text style={styles.label}>Note (optionnel)</Text>
-          <TextInput
-            style={[styles.input, styles.noteInput]}
-            value={note}
-            onChangeText={setNote}
-            placeholder="Réserver un créneau à l'avance"
-            placeholderTextColor={THEME.inkFaint}
-            multiline
-            textAlignVertical="top"
-          />
+          <Field label="Note (optionnel)" value={note} onChangeText={setNote} placeholder="Réserver un créneau à l'avance" multiline />
 
-          {error && <Text style={styles.errorText}>{error}</Text>}
-
-          {isEditing && (
-            <TouchableOpacity style={styles.deleteButton} onPress={confirmDelete}>
-              <Ionicons name="trash-outline" size={16} color={THEME.stamp} />
-              <Text style={styles.deleteButtonText}>Supprimer cette étape</Text>
-            </TouchableOpacity>
-          )}
+          {isEditing && <Button title="Supprimer cette étape" icon="trash-outline" variant="danger" full onPress={confirmDelete} style={styles.deleteButton} />}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -247,55 +236,23 @@ export default function ActivityEditorScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: THEME.bg },
-  header: {
+  flex: { flex: 1 },
+  scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
+  errorBanner: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.border,
+    gap: space.sm,
+    marginHorizontal: layout.gutter,
+    marginTop: space.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    backgroundColor: THEME.stampDim,
   },
-  headerButton: { padding: 4 },
-  headerButtonText: { color: THEME.inkMuted, fontSize: 15, fontFamily: FONTS.body },
-  headerSaveText: { color: THEME.gold, fontFamily: FONTS.bodySemiBold },
-  headerTitle: { color: THEME.ink, fontSize: 15.5, fontFamily: FONTS.headingSemiBold },
-  scrollContent: { padding: 20 },
-  label: { fontSize: 12.5, color: THEME.inkMuted, marginBottom: 6, marginTop: 16, fontFamily: FONTS.bodyMedium },
-  input: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: THEME.ink,
-    fontSize: 15,
-    fontFamily: FONTS.body,
-  },
-  noteInput: { minHeight: 80 },
-  typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  typeChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  typeChipText: { color: THEME.inkMuted, fontSize: 13, fontFamily: FONTS.bodyMedium },
-  outdoorRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 16 },
-  outdoorText: { color: THEME.inkMuted, fontSize: 13.5, fontFamily: FONTS.body },
-  errorText: { color: THEME.stamp, fontSize: 12.5, marginTop: 14, fontFamily: FONTS.body },
-  deleteButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 30,
-    paddingVertical: 12,
-  },
-  deleteButtonText: { color: THEME.stamp, fontSize: 14 },
+  errorText: { ...ramp.subhead, color: THEME.stamp, flex: 1 },
+  // Same rhythm as Field: label, then the control, then a 16pt gap.
+  choiceGroup: { marginBottom: space.lg },
+  choiceLabel: { marginBottom: space.sm - 2 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  toggleGroup: { marginBottom: space.lg },
+  deleteButton: { marginTop: space.md },
 });

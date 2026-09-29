@@ -1,8 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import { THEME } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, type } from "../lib/theme";
 
 const SIZE = 160;
 const STROKE = 20;
@@ -62,6 +61,6 @@ export default function DonutChart({ segments, centerLabel, centerValue }) {
 const styles = StyleSheet.create({
   wrap: { width: SIZE, height: SIZE, alignItems: "center", justifyContent: "center", alignSelf: "center" },
   centerLabel: { position: "absolute", alignItems: "center" },
-  centerValue: { fontSize: 18, color: THEME.ink, fontFamily: FONTS.headingBold },
-  centerText: { fontSize: 10, color: THEME.inkFaint, fontFamily: FONTS.bodyMedium, marginTop: 2 },
+  centerValue: { ...type.heading },
+  centerText: { ...type.caption, color: THEME.inkFaint, marginTop: 2 },
 });
