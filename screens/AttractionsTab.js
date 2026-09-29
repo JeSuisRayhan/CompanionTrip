@@ -6,6 +6,7 @@ import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/
 import { PARK_PRIORITIES, getIdeaCategory, placementIndex, priorityMeta } from "../lib/ideas";
 import { setPark, setMinHeight, tooTall, groupByLand, attractionInputs, importParkAttractions } from "../lib/park";
 import { fetchParks, searchParks, fetchQueueTimes, liveByRideId, liveSummary, latestUpdate, ageLabel, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
+import { logError } from "../lib/errorLog";
 import AttractionSheet from "../components/AttractionSheet";
 import WaitBadge from "../components/WaitBadge";
 import DayPickerModal from "../components/DayPickerModal";
@@ -56,6 +57,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
         if (mounted.current) setLive(data);
         return data;
       } catch (e) {
+        logError(e, { source: "Queue-Times" });
         if (mounted.current) setLiveError(e.message);
         return null;
       } finally {
@@ -99,6 +101,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
         const r = await importParkAttractions(trip.id, data.rides);
         if (mounted.current) setNotice(`${plural(r.added, "attraction ajoutée", "attractions ajoutées")}.`);
       } catch (e) {
+        logError(e, { source: "Queue-Times" });
         if (mounted.current) setNotice(e.message);
       }
     }
@@ -336,7 +339,10 @@ function ParkPickerSheet({ visible, onClose, onPick }) {
     setError(null);
     fetchParks()
       .then((p) => !cancelled && setParks(p))
-      .catch((e) => !cancelled && setError(e.message));
+      .catch((e) => {
+        logError(e, { source: "Queue-Times" });
+        if (!cancelled) setError(e.message);
+      });
     return () => {
       cancelled = true;
     };

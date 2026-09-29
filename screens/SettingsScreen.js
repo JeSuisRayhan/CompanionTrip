@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 
 import { space, layout, radius, THEME, PALETTES, PALETTE_IDS, currentPalette, themedStyles } from "../lib/theme";
 import { choosePalette } from "../lib/appearance";
@@ -8,10 +9,11 @@ import { getSetting, setSetting, removeSetting, loadTrips } from "../lib/storage
 import { requestNotificationPermission, getNotificationPermission } from "../lib/notifications";
 import { exportBackup, importBackupFromPicker } from "../lib/backup";
 import { hasPin, setPin, clearPin } from "../lib/pin";
+import { errorCount } from "../lib/errorLog";
 import { hasBuildTimeUnsplashKey } from "../lib/unsplash";
 import { Txt, Button, Badge, Group, Row, SectionTitle, Field } from "../components/ui";
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }) {
   const [apiKey, setApiKey] = useState("");
   const [unsplashKey, setUnsplashKey] = useState("");
   const [unsplashSaved, setUnsplashSaved] = useState(false);
@@ -23,6 +25,13 @@ export default function SettingsScreen() {
   const [pinEnabled, setPinEnabled] = useState(false);
   const [pinInput, setPinInput] = useState("");
   const [pinStatus, setPinStatus] = useState("");
+  const [errors, setErrors] = useState(0);
+
+  useFocusEffect(
+    useCallback(() => {
+      errorCount().then(setErrors);
+    }, [])
+  );
 
   useEffect(() => {
     (async () => {
@@ -274,6 +283,19 @@ export default function SettingsScreen() {
             </View>
             {backupStatus ? <StatusNote text={backupStatus} failed={backupFailed} /> : null}
           </View>
+        </Section>
+
+        <Section title="Assistance">
+          <Group>
+            <Row
+              icon="bug-outline"
+              tone={errors > 0 ? "stamp" : "neutral"}
+              title="Journal d'erreurs"
+              subtitle={errors === 0 ? "Aucune erreur enregistrée." : `${errors} erreur${errors > 1 ? "s" : ""} enregistrée${errors > 1 ? "s" : ""}, à partager si besoin.`}
+              chevron
+              onPress={() => navigation.navigate("ErrorLog")}
+            />
+          </Group>
         </Section>
       </ScrollView>
     </SafeAreaView>

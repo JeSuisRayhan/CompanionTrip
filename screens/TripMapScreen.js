@@ -10,6 +10,7 @@ import { previewTrip } from "../lib/planner";
 import { formatIdeaDuration, placeIdeaOnDay } from "../lib/ideas";
 import { buildMapModel, pinsForFilter, filterOptions, externalMapUrl, locateIdeas, saveIdeaPositions } from "../lib/map";
 import { isParkTrip, hasParkPosition, locateParkAttractions } from "../lib/park";
+import { logError } from "../lib/errorLog";
 import { withParkSteps } from "../lib/parkPlanner";
 import { fetchQueueTimes, liveByRideId } from "../lib/queueTimes";
 import TileMap from "../components/TileMap";
@@ -134,6 +135,9 @@ export default function TripMapScreen({ route, navigation }) {
     if (isPark && hasParkPosition(trip.park)) {
       const p = await locateParkAttractions(trip);
       fromPark = p.foundCount;
+      // the real answer of OpenStreetMap is the least tested part of the park mode: keep a trace of what fails
+      if (p.error) logError(p.error, { source: "Overpass" });
+      else if (p.total > 0 && p.foundCount === 0) logError(new Error(`Aucune des ${p.total} attractions n'a été reconnue sur OpenStreetMap.`), { source: "Overpass" });
       await saveIdeaPositions(trip.id, p.found);
       current = await getTrip(trip.id);
     }

@@ -11,6 +11,8 @@ import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-font
 
 import { THEME, type, subscribeTheme, getThemeVersion } from "./lib/theme";
 import { loadPalette } from "./lib/appearance";
+import { installErrorHandlers } from "./lib/errorLog";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { hasPin } from "./lib/pin";
 import HomeScreen from "./screens/HomeScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
@@ -29,6 +31,9 @@ import ParkLiveScreen from "./screens/ParkLiveScreen";
 import PlanGeneratorScreen from "./screens/PlanGeneratorScreen";
 import ImportIdeasScreen from "./screens/ImportIdeasScreen";
 import LockScreen from "./screens/LockScreen";
+import ErrorLogScreen from "./screens/ErrorLogScreen";
+
+installErrorHandlers();
 
 const Stack = createNativeStackNavigator();
 
@@ -85,55 +90,57 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <NavigationContainer
-        key={themeVersion}
-        theme={buildNavTheme()}
-        initialState={navState.current}
-        onStateChange={(state) => {
-          navState.current = state;
-        }}
-      >
-        <StatusBar style="light" />
-        <Stack.Navigator
-          initialRouteName="Home"
-          screenOptions={{
-            headerStyle: { backgroundColor: THEME.bg },
-            headerTintColor: THEME.ink,
-            headerTitleStyle: { fontFamily: type.heading.fontFamily, fontSize: type.heading.fontSize },
-            headerShadowVisible: false,
-            contentStyle: { backgroundColor: THEME.bg },
+      <ErrorBoundary>
+        <NavigationContainer
+          key={themeVersion}
+          theme={buildNavTheme()}
+          initialState={navState.current}
+          onStateChange={(state) => {
+            navState.current = state;
           }}
         >
-          <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Trip" component={TripScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="DayDetail" component={DayDetailScreen} options={{ headerShown: false }} />
-          <Stack.Screen
-            name="ActivityEditor"
-            component={ActivityEditorScreen}
-            options={{ headerShown: false, presentation: "modal" }}
-          />
-          <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Réglages" }} />
-          <Stack.Screen
-            name="TripSettings"
-            component={TripSettingsScreen}
-            options={{ headerShown: false, presentation: "modal" }}
-          />
-          <Stack.Screen name="WeatherReorg" component={WeatherReorgScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="TicketScanner" component={TicketScannerScreen} options={{ headerShown: false, animation: "none" }} />
-          <Stack.Screen name="Hotels" component={HotelsScreen} options={{ headerShown: false }} />
-          <Stack.Screen
-            name="IdeaEditor"
-            component={IdeaEditorScreen}
-            options={{ headerShown: false, presentation: "modal" }}
-          />
-          <Stack.Screen name="TripMap" component={TripMapScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="ParkPlan" component={ParkPlanScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="ParkLive" component={ParkLiveScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="PlanGenerator" component={PlanGeneratorScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="ImportIdeas" component={ImportIdeasScreen} options={{ headerShown: false, presentation: "modal" }} />
-        </Stack.Navigator>
-      </NavigationContainer>
+          <StatusBar style="light" />
+          <Stack.Navigator
+            initialRouteName="Home"
+            screenOptions={{
+              headerStyle: { backgroundColor: THEME.bg },
+              headerTintColor: THEME.ink,
+              headerTitleStyle: { fontFamily: type.heading.fontFamily, fontSize: type.heading.fontSize },
+              headerShadowVisible: false,
+              contentStyle: { backgroundColor: THEME.bg },
+            }}
+          >
+            <Stack.Screen name="Home" component={HomeScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Trip" component={TripScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="DayDetail" component={DayDetailScreen} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="ActivityEditor"
+              component={ActivityEditorScreen}
+              options={{ headerShown: false, presentation: "modal" }}
+            />
+            <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Réglages" }} />
+            <Stack.Screen
+              name="TripSettings"
+              component={TripSettingsScreen}
+              options={{ headerShown: false, presentation: "modal" }}
+            />
+            <Stack.Screen name="WeatherReorg" component={WeatherReorgScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="TicketScanner" component={TicketScannerScreen} options={{ headerShown: false, animation: "none" }} />
+            <Stack.Screen name="Hotels" component={HotelsScreen} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="IdeaEditor"
+              component={IdeaEditorScreen}
+              options={{ headerShown: false, presentation: "modal" }}
+            />
+            <Stack.Screen name="TripMap" component={TripMapScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ParkPlan" component={ParkPlanScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ParkLive" component={ParkLiveScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="PlanGenerator" component={PlanGeneratorScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ImportIdeas" component={ImportIdeasScreen} options={{ headerShown: false, presentation: "modal" }} />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </ErrorBoundary>
     </GestureHandlerRootView>
   );
 }

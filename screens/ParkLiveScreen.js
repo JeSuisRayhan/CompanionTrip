@@ -8,6 +8,7 @@ import { THEME, TONES, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip, toggleActivityDone, editActivity } from "../lib/trips";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { fetchQueueTimes, liveByRideId, latestUpdate, ageLabel, waitTone, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
+import { logError } from "../lib/errorLog";
 import { waitOf } from "../lib/parkPlanner";
 import { dayStops, isMeal, currentWait, isClosed, endLabel, postponedTime, shortQueues, doNow, timeBefore } from "../lib/parkLive";
 import WaitBadge from "../components/WaitBadge";
@@ -64,6 +65,7 @@ export default function ParkLiveScreen({ route, navigation }) {
           setError(null);
         }
       } catch (e) {
+        logError(e, { source: "Queue-Times" });
         if (mounted.current) setError(e.message);
       } finally {
         if (mounted.current) setRefreshing(false);
