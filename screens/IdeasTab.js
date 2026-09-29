@@ -99,6 +99,18 @@ export default function IdeasTab({ trip, navigation, onChange }) {
     />
   );
 
+  const canGenerate = plannable > 0 && trip.days.length > 0;
+  const importButton = (
+    <Button
+      title="Importer"
+      icon="download-outline"
+      variant="secondary"
+      accessibilityLabel="Importer des idées depuis un lien ou un texte"
+      style={ideas.length === 0 ? styles.selfCenter : canGenerate ? null : styles.flex}
+      onPress={() => navigation.navigate("ImportIdeas", { tripId: trip.id })}
+    />
+  );
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       {ideas.length > 0 && (
@@ -107,17 +119,19 @@ export default function IdeasTab({ trip, navigation, onChange }) {
             <Button title="Ajouter une idée" icon="add" onPress={() => openEditor(undefined)} style={styles.flex} />
             {hotelsButton}
           </View>
-          {plannable > 0 && trip.days.length > 0 && (
-            <Button
-              title="Générer le planning"
-              icon="sparkles-outline"
-              tone="gold"
-              full
-              style={styles.generate}
-              accessibilityLabel={`Générer le planning avec ${plannable} idée${plannable !== 1 ? "s" : ""} à placer`}
-              onPress={() => navigation.navigate("PlanGenerator", { tripId: trip.id })}
-            />
-          )}
+          <View style={[styles.actionRow, styles.generate]}>
+            {importButton}
+            {canGenerate && (
+              <Button
+                title="Générer le planning"
+                icon="sparkles-outline"
+                tone="gold"
+                style={styles.flex}
+                accessibilityLabel={`Générer le planning avec ${plannable} idée${plannable !== 1 ? "s" : ""} à placer`}
+                onPress={() => navigation.navigate("PlanGenerator", { tripId: trip.id })}
+              />
+            )}
+          </View>
           <View style={styles.statsRow}>
             <Txt variant="subhead">
               {`${stats.total} idée${stats.total !== 1 ? "s" : ""}, ${stats.placed} placée${stats.placed !== 1 ? "s" : ""}`}
@@ -163,7 +177,10 @@ export default function IdeasTab({ trip, navigation, onChange }) {
             text="Notez les lieux qui vous font envie : restos, activités, endroits vus sur TikTok… Chaque idée a un lieu, une priorité et une durée. Vous les posez ensuite sur vos jours."
             action={{ label: "Ajouter une idée", icon: "add", onPress: () => openEditor(undefined) }}
           />
-          {hotelsButton}
+          <View style={styles.emptyActions}>
+            {importButton}
+            {hotelsButton}
+          </View>
         </>
       ) : (
         visibleCategories.map((cat) => {
@@ -338,6 +355,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
   actionRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   selfCenter: { alignSelf: "center" },
+  emptyActions: { alignItems: "center", gap: space.md },
   generate: { marginTop: space.sm },
   statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginTop: space.lg },
   chipScroll: { flexGrow: 0, marginHorizontal: -layout.gutter },

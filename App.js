@@ -23,6 +23,7 @@ import TicketScannerScreen from "./screens/TicketScannerScreen";
 import HotelsScreen from "./screens/HotelsScreen";
 import IdeaEditorScreen from "./screens/IdeaEditorScreen";
 import PlanGeneratorScreen from "./screens/PlanGeneratorScreen";
+import ImportIdeasScreen from "./screens/ImportIdeasScreen";
 import LockScreen from "./screens/LockScreen";
 
 const Stack = createNativeStackNavigator();
@@ -111,6 +112,7 @@ export default function App() {
             options={{ headerShown: false, presentation: "modal" }}
           />
           <Stack.Screen name="PlanGenerator" component={PlanGeneratorScreen} options={{ headerShown: false }} />
+          <Stack.Screen name="ImportIdeas" component={ImportIdeasScreen} options={{ headerShown: false, presentation: "modal" }} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>
