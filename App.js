@@ -14,6 +14,8 @@ import { loadPalette } from "./lib/appearance";
 import { installErrorHandlers } from "./lib/errorLog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { hasPin } from "./lib/pin";
+// imported here so the park alert task is defined whenever the app starts, even in the background
+import { syncParkAlertTask } from "./lib/parkAlertsTask";
 import HomeScreen from "./screens/HomeScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
 import TripScreen from "./screens/TripScreen";
@@ -70,6 +72,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       await loadPalette();
+      syncParkAlertTask(); // registers or removes the background check to match the trips' settings
       const pinSet = await hasPin();
       setLocked(pinSet);
       setChecking(false);

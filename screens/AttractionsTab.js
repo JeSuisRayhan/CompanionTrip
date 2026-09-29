@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { View, Text, ScrollView, Pressable, Linking, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, Linking, ActivityIndicator, Switch, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
@@ -7,6 +7,8 @@ import { PARK_PRIORITIES, getIdeaCategory, placementIndex, priorityMeta } from "
 import { setPark, setMinHeight, tooTall, groupByLand, attractionInputs, importParkAttractions } from "../lib/park";
 import { fetchParks, searchParks, fetchQueueTimes, liveByRideId, liveSummary, latestUpdate, ageLabel, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
 import { logError } from "../lib/errorLog";
+import { ALERT_CHOICES, alertSettings, setParkAlerts, watchedIdeas, hasAlertDays } from "../lib/parkAlerts";
+import { syncParkAlertTask, checkAlertsOnScreen, requestNotificationPermission } from "../lib/parkAlertsTask";
 import AttractionSheet from "../components/AttractionSheet";
 import WaitBadge from "../components/WaitBadge";
 import DayPickerModal from "../components/DayPickerModal";
@@ -34,10 +36,13 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
   const [filter, setFilter] = useState("all");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [heightOpen, setHeightOpen] = useState(false);
+  const [alertOpen, setAlertOpen] = useState(false);
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
   const [editing, setEditing] = useState(undefined); // undefined = closed, null = new, idea = editing
   const [notice, setNotice] = useState(null);
   const mounted = useRef(true);
+  const tripRef = useRef(trip); // loadLive only restarts with the park: it reads the alert settings from here
+  tripRef.current = trip;
   const qtId = park ? park.qtId : null;
 
   useEffect(() => {
@@ -55,6 +60,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
       try {
         const data = await fetchQueueTimes(qtId, { force });
         if (mounted.current) setLive(data);
+        checkAlertsOnScreen(tripRef.current, data);
         return data;
       } catch (e) {
         logError(e, { source: "Queue-Times" });
@@ -80,6 +86,8 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
   const placed = useMemo(() => placementIndex(trip), [trip]);
   const newRides = useMemo(() => (live ? attractionInputs(live.rides, trip).inputs.length : 0), [live, trip]);
   const tallCount = ideas.filter((i) => tooTall(i, trip)).length;
+  const alerts = alertSettings(trip);
+  const watchedCount = useMemo(() => watchedIdeas(trip).length, [trip]);
   const planCount = ideas.filter((i) => i.priority !== "skip" && !placed.has(i.id) && getIdeaCategory(trip, i.categoryId).activityType !== "repas").length;
 
   async function addFromPark() {
@@ -105,6 +113,19 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
         if (mounted.current) setNotice(e.message);
       }
     }
+    onChange();
+  }
+
+  async function setAlerts(change) {
+    if (change.on) {
+      const perm = await requestNotificationPermission();
+      if (perm !== "granted") {
+        Alert.alert("Notifications refusées", "Activez les notifications de l'application dans les réglages du téléphone pour recevoir l'alerte.");
+        return;
+      }
+    }
+    await setParkAlerts(trip.id, change);
+    await syncParkAlertTask();
     onChange();
   }
 
@@ -226,6 +247,16 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
           accessibilityLabel={`Taille du plus petit du groupe, ${park.minHeightCm ? park.minHeightCm + " centimètres" : "non renseignée"}`}
           onPress={() => setHeightOpen(true)}
         />
+        <Row
+          icon="notifications-outline"
+          tone="teal"
+          title="Alerte de file courte"
+          subtitle={alerts.on ? `Sous ${alerts.maxWait} min, ${plural(watchedCount, "attraction surveillée", "attractions surveillées")}` : "Désactivée"}
+          right={alerts.on ? <Badge label="Activée" tone="teal" /> : null}
+          chevron
+          accessibilityLabel={`Alerte de file courte, ${alerts.on ? "activée, sous " + alerts.maxWait + " minutes" : "désactivée"}`}
+          onPress={() => setAlertOpen(true)}
+        />
       </Group>
 
       {ideas.length > 0 ? (
@@ -278,6 +309,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
           onChange();
         }}
       />
+      <AlertSheet visible={alertOpen} trip={trip} settings={alerts} watched={watchedCount} onClose={() => setAlertOpen(false)} onChange={setAlerts} />
       <AttractionSheet
         visible={editing !== undefined}
         trip={trip}
@@ -415,8 +447,56 @@ function HeightSheet({ visible, value, onClose, onSave }) {
   );
 }
 
+function AlertSheet({ visible, trip, settings, watched, onClose, onChange }) {
+  const dated = hasAlertDays(trip);
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Alerte de file courte">
+      <Txt variant="subhead" style={styles.sheetText}>
+        Une notification quand une attraction « Indispensable » ouverte passe sous l'attente que vous choisissez.
+      </Txt>
+      <Group>
+        <Row
+          icon="notifications-outline"
+          tone="teal"
+          title="Me prévenir"
+          selected={settings.on}
+          accessibilityLabel={`Me prévenir : ${settings.on ? "activé" : "désactivé"}`}
+          onPress={() => onChange({ on: !settings.on })}
+          // The row is the touch target; the switch only shows the state.
+          right={
+            <View pointerEvents="none">
+              <Switch value={settings.on} trackColor={{ false: THEME.bgRaised, true: THEME.teal }} thumbColor={THEME.ink} ios_backgroundColor={THEME.bgRaised} />
+            </View>
+          }
+        />
+      </Group>
+      <Txt variant="caption" color="inkFaint" style={styles.alertLabel}>
+        Attente maximale
+      </Txt>
+      <View style={styles.alertChips}>
+        {ALERT_CHOICES.map((m) => (
+          <Chip key={m} label={`${m} min`} selected={settings.maxWait === m} tone="teal" accessibilityLabel={`Attente maximale ${m} minutes`} onPress={() => onChange({ maxWait: m })} />
+        ))}
+      </View>
+      <Txt variant="caption" color="inkFaint" style={styles.alertNote}>
+        {watched > 0 ? `${plural(watched, "attraction surveillée", "attractions surveillées")}.` : "Aucune attraction surveillée : marquez-en comme « Indispensable »."}
+        {" "}
+        Les attractions trop hautes pour le groupe et déjà faites sont ignorées.
+      </Txt>
+      <Txt variant="caption" color="inkFaint" style={styles.alertNote}>
+        {dated
+          ? "Application fermée, le téléphone vérifie environ toutes les 15 à 30 minutes, les jours du voyage entre 8 h et 23 h. Il peut espacer les vérifications en économie d'énergie."
+          : "Sans dates de voyage, l'alerte ne fonctionne que lorsque l'application est ouverte."}
+      </Txt>
+    </Sheet>
+  );
+}
+
 const styles = themedStyles(() => ({
   flex: { flex: 1 },
+  alertLabel: { marginTop: space.lg, marginBottom: space.sm },
+  alertChips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  alertNote: { marginTop: space.md },
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
   parkHead: { flexDirection: "row", alignItems: "center", gap: space.md },
   parkTitle: { flex: 1, gap: 2 },

@@ -58,7 +58,8 @@
           "locationAlwaysAndWhenInUsePermission": "Autoriser Compagnon de voyage à utiliser votre position pour vous rappeler le code de réservation quand vous approchez de votre hôtel.",
           "isAndroidBackgroundLocationEnabled": true
         }
-      ]
+      ],
+      "expo-background-task"
     ]
   }
 }

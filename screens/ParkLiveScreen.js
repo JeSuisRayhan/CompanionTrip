@@ -9,6 +9,7 @@ import { getTrip, toggleActivityDone, editActivity } from "../lib/trips";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { fetchQueueTimes, liveByRideId, latestUpdate, ageLabel, waitTone, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
 import { logError } from "../lib/errorLog";
+import { checkAlertsOnScreen } from "../lib/parkAlertsTask";
 import { waitOf } from "../lib/parkPlanner";
 import { dayStops, isMeal, currentWait, isClosed, endLabel, postponedTime, shortQueues, doNow, timeBefore } from "../lib/parkLive";
 import WaitBadge from "../components/WaitBadge";
@@ -31,6 +32,8 @@ export default function ParkLiveScreen({ route, navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const mounted = useRef(true);
+  const tripRef = useRef(trip); // load only restarts with the park: it reads the alert settings from here
+  tripRef.current = trip;
   const qtId = trip && trip.park ? trip.park.qtId : null;
 
   useEffect(() => {
@@ -64,6 +67,7 @@ export default function ParkLiveScreen({ route, navigation }) {
           setData(d);
           setError(null);
         }
+        checkAlertsOnScreen(tripRef.current, d);
       } catch (e) {
         logError(e, { source: "Queue-Times" });
         if (mounted.current) setError(e.message);
