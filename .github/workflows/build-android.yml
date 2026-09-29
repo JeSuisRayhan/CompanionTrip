@@ -19,8 +19,17 @@ jobs:
         with:
           node-version: "22"
 
+      # npm ci installe exactement les versions du fichier package-lock.json :
+      # deux builds du même code embarquent les mêmes dépendances.
       - name: Installer les dépendances npm
-        run: npm install
+        run: npm ci
+
+      # Un build EAS coûte des crédits : si le code ne compile pas, on s'arrête ici, gratuitement.
+      - name: Vérifier que le code compile
+        run: npx expo export --platform android --output-dir "$RUNNER_TEMP/verification"
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
 
       - name: Installer et authentifier EAS CLI
         uses: expo/expo-github-action@v8
