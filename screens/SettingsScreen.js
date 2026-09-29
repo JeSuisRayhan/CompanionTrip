@@ -10,6 +10,8 @@ import { requestNotificationPermission, getNotificationPermission } from "../lib
 import { exportBackup, importBackupFromPicker } from "../lib/backup";
 import { hasPin, setPin, clearPin } from "../lib/pin";
 import { errorCount } from "../lib/errorLog";
+import { getTileCache } from "../lib/tileStore";
+import { formatBytes } from "../lib/tileCache";
 import { hasBuildTimeUnsplashKey } from "../lib/unsplash";
 import { Txt, Button, Badge, Group, Row, SectionTitle, Field } from "../components/ui";
 
@@ -27,11 +29,28 @@ export default function SettingsScreen({ navigation }) {
   const [pinStatus, setPinStatus] = useState("");
   const [errors, setErrors] = useState(0);
 
+  const [tiles, setTiles] = useState(null); // { count, bytes } of the saved map tiles
+
   useFocusEffect(
     useCallback(() => {
       errorCount().then(setErrors);
+      getTileCache().stats().then(setTiles, () => setTiles({ count: 0, bytes: 0 }));
     }, [])
   );
+
+  function confirmClearTiles() {
+    Alert.alert("Vider les cartes enregistrées ?", "Les zones déjà consultées devront être rechargées avec du réseau.", [
+      { text: "Annuler", style: "cancel" },
+      {
+        text: "Vider",
+        style: "destructive",
+        onPress: async () => {
+          await getTileCache().clear().catch(() => {});
+          setTiles(await getTileCache().stats().catch(() => ({ count: 0, bytes: 0 })));
+        },
+      },
+    ]);
+  }
 
   useEffect(() => {
     (async () => {
@@ -282,6 +301,23 @@ export default function SettingsScreen({ navigation }) {
               <Button title="Importer" icon="download-outline" variant="secondary" disabled={backupBusy} onPress={onImportBackup} style={styles.flex} />
             </View>
             {backupStatus ? <StatusNote text={backupStatus} failed={backupFailed} /> : null}
+          </View>
+        </Section>
+
+        <Section title="Cartes enregistrées">
+          <Group>
+            <Row
+              icon="map-outline"
+              tone={tiles && tiles.count > 0 ? "teal" : "neutral"}
+              title={!tiles ? "Calcul…" : tiles.count === 0 ? "Aucune tuile enregistrée" : `${tiles.count} tuile${tiles.count > 1 ? "s" : ""}, ${formatBytes(tiles.bytes)}`}
+              subtitle="Les zones que vous consultez restent disponibles sans réseau."
+            />
+          </Group>
+          <View style={styles.form}>
+            <Txt variant="subhead">
+              Pour avoir une zone sans réseau, ouvrez-la une fois sur la carte quand vous êtes connecté. OpenStreetMap n'autorise pas le téléchargement à l'avance d'une région.
+            </Txt>
+            <Button title="Vider" icon="trash-outline" variant="secondary" full disabled={!tiles || tiles.count === 0} accessibilityLabel="Vider les cartes enregistrées" onPress={confirmClearTiles} />
           </View>
         </Section>
 

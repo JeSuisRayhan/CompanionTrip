@@ -11,6 +11,7 @@ import Svg, { Polyline } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 
 import { THEME, space, radius, type, shadow, themedStyles, withAlpha } from "../lib/theme";
+import { getTileCache } from "../lib/tileStore";
 import { fitBounds, visibleTiles, toScreen, viewFromAnchor, zoomBy, centerOn, MIN_ZOOM, MAX_ZOOM, TILE_USER_AGENT } from "../lib/map";
 import { IconButton } from "./ui";
 
@@ -23,6 +24,38 @@ const COPYRIGHT_URL = "https://www.openstreetmap.org/copyright";
 const WORLD = { lat: 25, lng: 10, zoom: MIN_ZOOM };
 // OSM tiles are light; a veil in the background colour keeps the map from glaring in a dark app.
 const tileVeil = () => withAlpha(THEME.bg, 0.2);
+
+// One tile: from the phone when it has been seen before, else fetched once and
+// kept (see lib/tileCache.js). If the cache itself cannot work, the tile comes
+// straight from the web, exactly as it did before the cache existed.
+function Tile({ tile, onGap }) {
+  const cache = getTileCache();
+  const [state, setState] = useState(() => ({ uri: cache.peek(tile.z, tile.x, tile.y), remote: false }));
+  useEffect(() => {
+    let alive = true;
+    const fresh = cache.peek(tile.z, tile.x, tile.y);
+    if (fresh) setState({ uri: fresh, remote: false });
+    else {
+      cache
+        .resolve(tile.z, tile.x, tile.y, tile.url, { wanted: () => alive })
+        .then(
+          (path) => {
+            if (!alive) return;
+            if (path) setState({ uri: path, remote: false });
+            else onGap(tile.key, true);
+          },
+          () => alive && setState({ uri: tile.url, remote: true })
+        );
+    }
+    return () => {
+      alive = false;
+      onGap(tile.key, false);
+    };
+  }, [tile.key, tile.url]);
+  if (!state.uri) return null;
+  const source = state.remote ? { uri: state.uri, headers: TILE_HEADERS } : { uri: state.uri };
+  return <Image source={source} style={{ position: "absolute", left: tile.left, top: tile.top, width: tile.size, height: tile.size }} />;
+}
 
 function touchesOf(e) {
   const t = e.nativeEvent.touches;
@@ -117,6 +150,15 @@ export default function TileMap({ pins, route, selectedId, onSelect, fitKey, sty
 
   const tiles = useMemo(() => visibleTiles(view, size), [view, size]);
 
+  // Tiles with no copy on the phone and no network: the map shows holes there, and says why.
+  const gapKeys = useRef(new Set());
+  const [gapCount, setGapCount] = useState(0);
+  const reportGap = useCallback((key, isGap) => {
+    const set = gapKeys.current;
+    const changed = isGap ? !set.has(key) && !!set.add(key) : set.delete(key);
+    if (changed) setGapCount(set.size);
+  }, []);
+
   const placed = useMemo(() => {
     if (!size) return [];
     return pins
@@ -139,7 +181,7 @@ export default function TileMap({ pins, route, selectedId, onSelect, fitKey, sty
     <View style={[styles.wrap, style]} onLayout={onLayout} {...responder.panHandlers}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {tiles.map((t) => (
-          <Image key={t.key} source={{ uri: t.url, headers: TILE_HEADERS }} style={{ position: "absolute", left: t.left, top: t.top, width: t.size, height: t.size }} />
+          <Tile key={t.key} tile={t} onGap={reportGap} />
         ))}
         <View style={[StyleSheet.absoluteFill, { backgroundColor: tileVeil() }]} />
       </View>
@@ -173,6 +215,13 @@ export default function TileMap({ pins, route, selectedId, onSelect, fitKey, sty
           }}
         />
       </View>
+
+      {gapCount > 0 ? (
+        <View style={styles.gapNote} accessibilityLiveRegion="polite" pointerEvents="none">
+          <Ionicons name="cloud-offline-outline" size={16} color={THEME.gold} />
+          <Text style={styles.gapText}>Carte incomplète ici : pas de réseau, et cette zone n'a jamais été consultée.</Text>
+        </View>
+      ) : null}
 
       <Pressable
         accessibilityRole="link"
@@ -235,6 +284,20 @@ const styles = themedStyles(() => ({
   dayBadgeText: { ...type.numeralSmall, fontSize: 11, lineHeight: 14, color: THEME.ink },
   controls: { position: "absolute", top: space.md, right: space.md, gap: space.sm },
   control: { boxShadow: shadow.raised },
+  gapNote: {
+    position: "absolute",
+    top: space.md,
+    left: space.md,
+    right: HIT + space.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: space.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    backgroundColor: THEME.scrim,
+    borderRadius: radius.md,
+  },
+  gapText: { ...type.caption, flex: 1, color: THEME.ink },
   attribution: {
     position: "absolute",
     left: space.sm,
