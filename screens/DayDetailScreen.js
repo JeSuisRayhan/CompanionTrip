@@ -116,6 +116,7 @@ export default function DayDetailScreen({ route, navigation }) {
     if (!b.time) return -1;
     return a.time.localeCompare(b.time);
   });
+  const hasMapPin = day.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng));
   const doneCount = day.activities.filter((a) => a.done).length;
   const firstUndoneIndex = sorted.findIndex((a) => !a.done);
   const location = (day.location || "").trim();
@@ -169,6 +170,7 @@ export default function DayDetailScreen({ route, navigation }) {
         <Txt variant="subhead" numberOfLines={1} style={styles.tripName}>
           {trip.name}
         </Txt>
+        {hasMapPin ? <IconButton icon="map-outline" label="Voir le jour sur la carte" onPress={() => navigation.navigate("TripMap", { tripId, dayId })} /> : null}
         <IconButton icon="ellipsis-horizontal" label="Type de jour" onPress={openDayTypeMenu} />
         <IconButton icon="add" label="Ajouter une étape" tone="gold" filled onPress={addStep} />
       </View>

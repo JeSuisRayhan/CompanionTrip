@@ -133,14 +133,24 @@ export default function IdeasTab({ trip, navigation, onChange }) {
             )}
           </View>
           <View style={styles.statsRow}>
-            <Txt variant="subhead">
-              {`${stats.total} idée${stats.total !== 1 ? "s" : ""}, ${stats.placed} placée${stats.placed !== 1 ? "s" : ""}`}
-            </Txt>
-            {stats.mustUnplaced > 0 && (
-              <Txt variant="caption" color="stamp">
-                {`${stats.mustUnplaced} indispensable${stats.mustUnplaced !== 1 ? "s" : ""} à placer`}
+            <View style={styles.statsText}>
+              <Txt variant="subhead">
+                {`${stats.total} idée${stats.total !== 1 ? "s" : ""}, ${stats.placed} placée${stats.placed !== 1 ? "s" : ""}`}
               </Txt>
-            )}
+              {stats.mustUnplaced > 0 && (
+                <Txt variant="caption" color="stamp">
+                  {`${stats.mustUnplaced} indispensable${stats.mustUnplaced !== 1 ? "s" : ""} à placer`}
+                </Txt>
+              )}
+            </View>
+            <Button
+              title="Carte"
+              icon="map-outline"
+              variant="secondary"
+              size="sm"
+              accessibilityLabel="Voir les idées sur la carte"
+              onPress={() => navigation.navigate("TripMap", { tripId: trip.id })}
+            />
           </View>
         </>
       )}
@@ -358,6 +368,7 @@ const styles = StyleSheet.create({
   emptyActions: { alignItems: "center", gap: space.md },
   generate: { marginTop: space.sm },
   statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginTop: space.lg },
+  statsText: { flex: 1, gap: 2 },
   chipScroll: { flexGrow: 0, marginHorizontal: -layout.gutter },
   chipScrollGap: { marginTop: space.md },
   chipRow: { paddingHorizontal: layout.gutter, gap: space.sm, alignItems: "center" },
