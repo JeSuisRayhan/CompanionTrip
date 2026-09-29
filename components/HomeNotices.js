@@ -6,8 +6,8 @@ import { Txt, Button, Surface } from "./ui";
 
 // Two things the home screen must say before anything else: the trips could
 // not be read (nothing is saved until they can), or a safe copy was used.
-// And, more calmly, that it is time to save a backup.
-export default function HomeNotices({ storage, backup, busy, onRetry, onAcknowledge, onBackup, onSnooze }) {
+// And, more calmly, that an update is ready, or that it is time to save a backup.
+export default function HomeNotices({ storage, backup, busy, updatePending, onRetry, onAcknowledge, onBackup, onSnooze, onRestart, onLater }) {
   return (
     <View>
       {storage.blocked ? (
@@ -24,6 +24,19 @@ export default function HomeNotices({ storage, backup, busy, onRetry, onAcknowle
           title="Une copie de secours a été utilisée"
           text="Les données de l'appareil étaient illisibles. Les dernières modifications ont pu être perdues : vérifiez vos voyages."
           actions={<Button title="Compris" size="sm" variant="secondary" onPress={onAcknowledge} />}
+        />
+      ) : null}
+      {updatePending ? (
+        <Notice
+          tone="gold"
+          title="Mise à jour prête"
+          text="Une nouvelle version de l'application est téléchargée. Redémarrez pour l'utiliser."
+          actions={
+            <>
+              <Button title="Redémarrer" size="sm" onPress={onRestart} />
+              <Button title="Plus tard" size="sm" variant="ghost" onPress={onLater} />
+            </>
+          }
         />
       ) : null}
       {backup.due ? (

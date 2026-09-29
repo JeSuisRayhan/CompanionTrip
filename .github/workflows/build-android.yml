@@ -40,6 +40,11 @@ jobs:
       - name: Lier le projet à votre compte Expo (si pas déjà fait)
         run: eas init --account rayhan7 --non-interactive
 
+      # Complète app.json avec l'adresse des mises à jour à distance (voir LISEZ-MOI.md).
+      # Si l'identifiant du projet manque, l'APK se compile quand même, sans mises à jour.
+      - name: Configurer les mises à jour à distance
+        run: node scripts/set-updates-url.js --optional
+
       - name: Compiler l'APK sur les serveurs EAS et attendre le résultat
         run: eas build --platform android --profile preview --non-interactive --wait --json > build-result.json
 

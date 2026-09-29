@@ -11,6 +11,7 @@ import { TRIP_TYPES } from "../lib/constants";
 import { loadTrips, storageStatus, acknowledgeRecovery } from "../lib/storage";
 import { backupReminder, snoozeBackupReminder } from "../lib/backupReminder";
 import { exportBackup } from "../lib/backup";
+import { useUpdatePending, restartApp } from "../lib/appUpdates";
 import { deleteTrip, createTrip } from "../lib/trips";
 import { tripRange, tripStatus, formatDateRange, isoDate, resolveDayDate } from "../lib/dates";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
@@ -70,6 +71,8 @@ export default function HomeScreen({ navigation }) {
   const [storage, setStorage] = useState({ blocked: false, recoveredAt: null });
   const [backup, setBackup] = useState({ due: false, days: null });
   const [backupBusy, setBackupBusy] = useState(false);
+  const updatePending = useUpdatePending();
+  const [updateLater, setUpdateLater] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -176,6 +179,9 @@ export default function HomeScreen({ navigation }) {
               storage={storage}
               backup={backup}
               busy={backupBusy}
+              updatePending={updatePending && !updateLater}
+              onRestart={() => restartApp()}
+              onLater={() => setUpdateLater(true)}
               onRetry={refresh}
               onAcknowledge={() => {
                 acknowledgeRecovery();

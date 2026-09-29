@@ -14,6 +14,7 @@ import { errorCount } from "../lib/errorLog";
 import { getTileCache } from "../lib/tileStore";
 import { formatBytes } from "../lib/tileCache";
 import { hasBuildTimeUnsplashKey } from "../lib/unsplash";
+import { updatesInfo, fetchUpdateNow, restartApp } from "../lib/appUpdates";
 import { Txt, Button, Badge, Group, Row, SectionTitle, Field } from "../components/ui";
 
 export default function SettingsScreen({ navigation }) {
@@ -24,6 +25,9 @@ export default function SettingsScreen({ navigation }) {
   const [notifPermission, setNotifPermission] = useState("default");
   const [tripCount, setTripCount] = useState(0);
   const [lastBackup, setLastBackup] = useState(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState("");
+  const updates = updatesInfo();
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupStatus, setBackupStatus] = useState("");
   const [pinEnabled, setPinEnabled] = useState(false);
@@ -130,6 +134,26 @@ export default function SettingsScreen({ navigation }) {
       setBackupStatus("Échec de l'export.");
     } finally {
       setBackupBusy(false);
+    }
+  }
+
+  async function checkForUpdate() {
+    setUpdateBusy(true);
+    setUpdateStatus("");
+    try {
+      const result = await fetchUpdateNow();
+      if (result === "downloaded") {
+        Alert.alert("Mise à jour prête", "Redémarrer l'application pour l'appliquer ?", [
+          { text: "Plus tard", style: "cancel" },
+          { text: "Redémarrer", onPress: () => restartApp() },
+        ]);
+      } else {
+        setUpdateStatus(result === "none" ? "Vous avez déjà la dernière version." : "Les mises à jour ne sont pas disponibles dans cette version.");
+      }
+    } catch (e) {
+      setUpdateStatus("Échec de la recherche : vérifiez votre connexion.");
+    } finally {
+      setUpdateBusy(false);
     }
   }
 
@@ -323,6 +347,28 @@ export default function SettingsScreen({ navigation }) {
             </Txt>
             <Button title="Vider" icon="trash-outline" variant="secondary" full disabled={!tiles || tiles.count === 0} accessibilityLabel="Vider les cartes enregistrées" onPress={confirmClearTiles} />
           </View>
+        </Section>
+
+        <Section title="Mise à jour">
+          <Group>
+            <Row
+              icon="sync-outline"
+              tone={updates.enabled ? "teal" : "neutral"}
+              title={updateBusy ? "Recherche…" : "Rechercher une mise à jour"}
+              subtitle={
+                updates.enabled
+                  ? `Version ${updates.version || "?"}${updates.updateId ? `, mise à jour ${updates.updateId} installée` : ""}.`
+                  : "Indisponible dans cette version de l'application."
+              }
+              chevron={updates.enabled}
+              onPress={updates.enabled && !updateBusy ? checkForUpdate : undefined}
+            />
+          </Group>
+          {updateStatus ? (
+            <View style={styles.form}>
+              <StatusNote text={updateStatus} failed={/^Échec/.test(updateStatus)} />
+            </View>
+          ) : null}
         </Section>
 
         <Section title="Assistance">
