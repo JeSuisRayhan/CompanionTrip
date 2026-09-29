@@ -18,6 +18,7 @@ import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, othe
 import { pickImage, addDocument, removeDocument } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
+import { exportTripFile } from "../lib/backup";
 import DonutChart from "../components/DonutChart";
 import { Txt, Button, IconButton, Badge, Group, Row, Thumb, SectionTitle, Field, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 import IdeasTab from "./IdeasTab";
@@ -265,6 +266,31 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
   const isPark = trip.tripType === "park";
   const [menuDay, setMenuDay] = useState(null); // { day, index } while the day menu sheet is open
 
+  // "Partager": as text for a message, or as a file the companion imports in their own app.
+  async function sendTripFile(withDocuments) {
+    try {
+      await exportTripFile(trip, { withDocuments });
+    } catch (e) {
+      Alert.alert("Envoi impossible", "Le fichier n'a pas pu être créé. Réessayez.");
+    }
+  }
+  function chooseDocuments() {
+    const count = (trip.documents || []).length;
+    if (!count) return sendTripFile(false);
+    Alert.alert("Joindre les documents ?", `${count} document${count > 1 ? "s" : ""} (photos de billets, réservations…). Ne les envoyez qu'à des personnes de confiance.`, [
+      { text: "Avec les documents", onPress: () => sendTripFile(true) },
+      { text: "Sans", onPress: () => sendTripFile(false) },
+      { text: "Annuler", style: "cancel" },
+    ]);
+  }
+  function shareTrip() {
+    Alert.alert(`Partager « ${trip.name} »`, "En texte pour un message, ou en fichier à importer dans l'application (budget et infos d'urgence inclus).", [
+      { text: "Texte", onPress: () => shareTripAsText(trip) },
+      { text: "Fichier", onPress: chooseDocuments },
+      { text: "Annuler", style: "cancel" },
+    ]);
+  }
+
   const q = (searchQuery || "").trim().toLowerCase();
   const today = isoToday();
   // The map has something to show once a step or an idea has a position.
@@ -274,7 +300,7 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
     <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       <View style={styles.actionRow}>
         <Button title="Décaler" icon="calendar-outline" variant="secondary" size="sm" onPress={onShiftDates} />
-        <Button title="Partager" icon="share-outline" variant="secondary" size="sm" onPress={() => shareTripAsText(trip)} />
+        <Button title="Partager" icon="share-outline" variant="secondary" size="sm" onPress={shareTrip} />
         <Button title=".ics" icon="download-outline" variant="secondary" size="sm" onPress={() => shareTripAsICS(trip)} accessibilityLabel="Exporter au format calendrier .ics" />
         <View style={{ flex: 1 }} />
         {!isPark && (

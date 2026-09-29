@@ -166,7 +166,8 @@ export default function SettingsScreen({ navigation }) {
         setBackupStatus("");
       } else {
         const keyNote = result.restoredSettings ? ` Clés restaurées : ${result.restoredSettings}.` : "";
-        setBackupStatus(`${result.imported} voyage${result.imported !== 1 ? "s" : ""} importé${result.imported !== 1 ? "s" : ""}${result.skipped ? ` (${result.skipped} déjà présents ignorés)` : ""}.${keyNote}`);
+        const copyNote = result.copied ? ` Ce voyage existait déjà avec des différences : il est ajouté en copie, le vôtre est intact.` : "";
+        setBackupStatus(`${result.imported} voyage${result.imported !== 1 ? "s" : ""} importé${result.imported !== 1 ? "s" : ""}${result.skipped ? ` (${result.skipped} déjà présents ignorés)` : ""}.${copyNote}${keyNote}`);
         await refreshTripCount();
         const key = await getSetting("anthropicApiKey");
         if (key) setApiKey(key);
