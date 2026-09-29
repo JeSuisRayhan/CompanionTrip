@@ -284,7 +284,7 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
     ]);
   }
   function shareTrip() {
-    Alert.alert(`Partager « ${trip.name} »`, "En texte pour un message, ou en fichier à importer dans l'application (budget et infos d'urgence inclus).", [
+    Alert.alert(`Partager « ${trip.name} »`, "En texte pour un message, ou en fichier à importer dans l'application (budget inclus, sans la fiche d'urgence).", [
       { text: "Texte", onPress: () => shareTripAsText(trip) },
       { text: "Fichier", onPress: chooseDocuments },
       { text: "Annuler", style: "cancel" },

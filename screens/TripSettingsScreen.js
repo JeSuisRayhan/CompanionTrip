@@ -7,6 +7,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { CURRENCY_PRESETS, suggestRate, BUDGET_TYPES } from "../lib/constants";
 import { getTrip, updateTripSettings } from "../lib/trips";
+import { fetchRate } from "../lib/rates";
+import { formatShortDate } from "../lib/dates";
 import { scheduleDailySummaries, scheduleDepartureReminder } from "../lib/notifications";
 import { requestGeofencingPermissions, scheduleHotelProximityAlerts, stopHotelProximityAlerts, isHotelProximityActiveForTrip } from "../lib/geofencing";
 import { Txt, Button, Group, Row, SectionTitle, Field, ModalHeader, Sheet } from "../components/ui";
@@ -20,6 +22,8 @@ export default function TripSettingsScreen({ route, navigation }) {
   const [currency, setCurrency] = useState("EUR");
   const [homeCurrency, setHomeCurrency] = useState("EUR");
   const [rate, setRate] = useState("1");
+  const [rateBusy, setRateBusy] = useState(false);
+  const [rateNote, setRateNote] = useState("");
   const [targets, setTargets] = useState({ transport: "", hotel: "", repas: "" });
   const [defaultLocation, setDefaultLocation] = useState("");
   const [emergency, setEmergency] = useState({ bloodType: "", allergies: "", contactName: "", contactPhone: "", embassy: "", notes: "" });
@@ -64,9 +68,25 @@ export default function TripSettingsScreen({ route, navigation }) {
     }, [tripId])
   );
 
-  function applySuggestedRate(local, home) {
-    const suggested = suggestRate(local, home);
-    if (suggested) setRate(String(Math.round(suggested * 10000) / 10000));
+  // The rate of the day when online; otherwise the approximate built-in one, said so.
+  async function applyRateOfTheDay() {
+    setRateBusy(true);
+    setRateNote("");
+    try {
+      const { rate: live, date } = await fetchRate(currency, homeCurrency);
+      setRate(String(live));
+      setRateNote(date ? `Taux du ${formatShortDate(date)}.` : "Taux du jour.");
+    } catch (e) {
+      const approx = suggestRate(currency, homeCurrency);
+      if (approx) {
+        setRate(String(Math.round(approx * 10000) / 10000));
+        setRateNote("Pas de connexion : taux approximatif, à ajuster.");
+      } else {
+        setRateNote(e.message || "Impossible de récupérer le taux.");
+      }
+    } finally {
+      setRateBusy(false);
+    }
   }
 
   async function scheduleReminders() {
@@ -199,11 +219,16 @@ export default function TripSettingsScreen({ route, navigation }) {
               inputStyle={styles.numericInput}
               style={styles.rateField}
             />
-            <Button title="Suggérer" variant="secondary" onPress={() => applySuggestedRate(currency, homeCurrency)} />
+            <Button title="Taux du jour" variant="secondary" loading={rateBusy} disabled={rateBusy} onPress={applyRateOfTheDay} />
           </View>
           <Txt variant="caption" color="inkFaint" style={styles.note}>
-            1 {currency} = taux × 1 {homeCurrency}. Le taux suggéré est approximatif — ajustez-le librement.
+            1 {currency} = taux × 1 {homeCurrency}. Ajustez-le librement.
           </Txt>
+          {rateNote ? (
+            <Txt variant="caption" color={/^(Pas de connexion|Impossible|Ce taux|Devise|Le service)/.test(rateNote) ? "stamp" : "teal"} accessibilityLiveRegion="polite" style={styles.note}>
+              {rateNote}
+            </Txt>
+          ) : null}
         </Section>
 
         <Section title="Objectifs de budget (optionnel)">
