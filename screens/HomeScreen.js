@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl, ImageBackground, Animated } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl, ImageBackground, Animated, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,11 +8,14 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, space, layout, radius, type, themedStyles, withAlpha } from "../lib/theme";
 import { TRIP_TYPES } from "../lib/constants";
-import { loadTrips } from "../lib/storage";
+import { loadTrips, storageStatus, acknowledgeRecovery } from "../lib/storage";
+import { backupReminder, snoozeBackupReminder } from "../lib/backupReminder";
+import { exportBackup } from "../lib/backup";
 import { deleteTrip, createTrip } from "../lib/trips";
 import { tripRange, tripStatus, formatDateRange, isoDate, resolveDayDate } from "../lib/dates";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import UndoToast from "../components/UndoToast";
+import HomeNotices from "../components/HomeNotices";
 import { Txt, Badge, Group, Row, Thumb, SectionTitle, EmptyState, IconButton, Fab, round } from "../components/ui";
 
 function todayISO() {
@@ -64,6 +67,9 @@ export default function HomeScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: "", undoTrip: null });
+  const [storage, setStorage] = useState({ blocked: false, recoveredAt: null });
+  const [backup, setBackup] = useState({ due: false, days: null });
+  const [backupBusy, setBackupBusy] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -76,6 +82,8 @@ export default function HomeScreen({ navigation }) {
   const refresh = useCallback(async () => {
     const t = await loadTrips();
     setTrips(t);
+    setStorage(storageStatus());
+    setBackup(await backupReminder(t.length));
     setLoading(false);
   }, []);
 
@@ -104,6 +112,23 @@ export default function HomeScreen({ navigation }) {
       await createTrip(trip);
       await refresh();
     }
+  }
+
+  async function saveBackupNow() {
+    setBackupBusy(true);
+    try {
+      await exportBackup();
+    } catch (e) {
+      Alert.alert("Sauvegarde impossible", "L'export a échoué. Réessayez depuis Réglages.");
+    } finally {
+      setBackupBusy(false);
+      await refresh();
+    }
+  }
+
+  async function snoozeBackup() {
+    await snoozeBackupReminder();
+    await refresh();
   }
 
   function handleToastDismiss() {
@@ -147,6 +172,18 @@ export default function HomeScreen({ navigation }) {
           <View style={[styles.skeleton, round("xl")]} />
         ) : (
           <Animated.View style={{ opacity: fadeAnim }}>
+            <HomeNotices
+              storage={storage}
+              backup={backup}
+              busy={backupBusy}
+              onRetry={refresh}
+              onAcknowledge={() => {
+                acknowledgeRecovery();
+                setStorage(storageStatus());
+              }}
+              onBackup={saveBackupNow}
+              onSnooze={snoozeBackup}
+            />
             {trips.length === 0 && (
               <EmptyState
                 icon="airplane-outline"

@@ -6,6 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { space, layout, radius, THEME, PALETTES, PALETTE_IDS, currentPalette, themedStyles } from "../lib/theme";
 import { choosePalette } from "../lib/appearance";
 import { getSetting, setSetting, removeSetting, loadTrips } from "../lib/storage";
+import { lastBackupAt, backupLabel } from "../lib/backupReminder";
 import { requestNotificationPermission, getNotificationPermission } from "../lib/notifications";
 import { exportBackup, importBackupFromPicker } from "../lib/backup";
 import { hasPin, setPin, clearPin } from "../lib/pin";
@@ -22,6 +23,7 @@ export default function SettingsScreen({ navigation }) {
   const [saved, setSaved] = useState(false);
   const [notifPermission, setNotifPermission] = useState("default");
   const [tripCount, setTripCount] = useState(0);
+  const [lastBackup, setLastBackup] = useState(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupStatus, setBackupStatus] = useState("");
   const [pinEnabled, setPinEnabled] = useState(false);
@@ -62,6 +64,7 @@ export default function SettingsScreen({ navigation }) {
       setNotifPermission(perm);
       const trips = await loadTrips();
       setTripCount(trips.length);
+      setLastBackup(await lastBackupAt());
       setPinEnabled(await hasPin());
     })();
   }, []);
@@ -121,6 +124,7 @@ export default function SettingsScreen({ navigation }) {
     setBackupStatus("");
     try {
       await exportBackup();
+      setLastBackup(await lastBackupAt());
       setBackupStatus("Sauvegarde créée.");
     } catch (e) {
       setBackupStatus("Échec de l'export.");
@@ -289,7 +293,7 @@ export default function SettingsScreen({ navigation }) {
             <Row
               icon="cloud-download-outline"
               title={`${tripCount} voyage${tripCount !== 1 ? "s" : ""} enregistré${tripCount !== 1 ? "s" : ""}`}
-              subtitle="Uniquement sur cet appareil."
+              subtitle={`Uniquement sur cet appareil. Dernière sauvegarde : ${backupLabel(lastBackup)}.`}
             />
           </Group>
           <View style={styles.form}>
