@@ -1,24 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-  Linking,
-} from "react-native";
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, CARD_SHADOW } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, TONES, space, layout, type } from "../lib/theme";
 import { getTrip } from "../lib/trips";
 import { resolveDayDate, formatDateLabel } from "../lib/dates";
 import {
@@ -38,6 +24,28 @@ import {
 } from "../lib/ideas";
 import { searchPlacesWithFallback, centroidOf } from "../lib/geocode";
 import DayPickerModal from "../components/DayPickerModal";
+import { Txt, Button, IconButton, Chip, Badge, Surface, Group, Row, Field, ModalHeader } from "../components/ui";
+
+// A category stores its colour; the tone with the same foreground gives the
+// tinted pair that Chip expects.
+function toneOfCategory(cat) {
+  return Object.keys(TONES).find((k) => TONES[k].fg === cat.color) || "neutral";
+}
+
+// Priority chips take the same colours as the dots in the idea list.
+const PRIORITY_TONE = { must: "stamp", want: "gold", maybe: "neutral" };
+
+// A labelled row of selectable chips (same label style as Field).
+function Choices({ label, children }) {
+  return (
+    <View style={styles.choices}>
+      <Txt variant="caption" style={styles.choicesLabel}>
+        {label}
+      </Txt>
+      <View style={styles.chipWrap}>{children}</View>
+    </View>
+  );
+}
 
 export default function IdeaEditorScreen({ route, navigation }) {
   const { tripId, ideaId, categoryId: initialCategoryId } = route.params;
@@ -61,6 +69,7 @@ export default function IdeaEditorScreen({ route, navigation }) {
   const [candidates, setCandidates] = useState(null); // null = never searched
   const [searchError, setSearchError] = useState("");
   const [error, setError] = useState("");
+  const scrollRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -207,6 +216,8 @@ export default function IdeaEditorScreen({ route, navigation }) {
   async function persist() {
     if (!name.trim()) {
       setError("Donnez un nom à cette idée.");
+      // The name field is at the top; the save button is at the bottom, so bring the error into view.
+      if (scrollRef.current && scrollRef.current.scrollTo) scrollRef.current.scrollTo({ y: 0, animated: true });
       return null;
     }
     setError("");
@@ -284,251 +295,163 @@ export default function IdeaEditorScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-            <Text style={styles.headerButtonText}>Annuler</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{isEditing ? "Modifier l'idée" : "Nouvelle idée"}</Text>
-          <TouchableOpacity onPress={save} style={styles.headerButton} disabled={saving}>
-            <Text style={[styles.headerButtonText, styles.headerSaveText]}>Enregistrer</Text>
-          </TouchableOpacity>
-        </View>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ModalHeader
+          title={isEditing ? "Modifier l'idée" : "Nouvelle idée"}
+          left={{ label: "Annuler", onPress: () => navigation.goBack() }}
+          right={{ label: "Enregistrer", onPress: save, disabled: saving }}
+        />
 
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <Text style={styles.label}>Nom du lieu</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="Restaurant chez Moktar"
-            placeholderTextColor={THEME.inkFaint}
-          />
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <Field label="Nom du lieu" value={name} onChangeText={setName} placeholder="Restaurant chez Moktar" error={error} />
 
-          <Text style={styles.label}>Catégorie</Text>
-          <View style={styles.chipWrap}>
-            {categories.map((c) => {
-              const active = c.id === categoryId;
-              return (
-                <TouchableOpacity key={c.id} style={[styles.chip, active && { borderColor: c.color, backgroundColor: c.dim }]} onPress={() => pickCategory(c)}>
-                  <Ionicons name={c.icon} size={14} color={active ? c.color : THEME.inkMuted} />
-                  <Text style={[styles.chipText, active && { color: c.color }]}>{c.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <Choices label="Catégorie">
+            {categories.map((c) => (
+              <Chip key={c.id} label={c.label} icon={c.icon} tone={toneOfCategory(c)} selected={c.id === categoryId} onPress={() => pickCategory(c)} />
+            ))}
+          </Choices>
 
-          <Text style={styles.label}>Adresse</Text>
-          <TextInput
-            style={styles.input}
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Rue, quartier… (optionnel)"
-            placeholderTextColor={THEME.inkFaint}
-          />
-          <Text style={styles.label}>Ville</Text>
-          <TextInput
-            style={styles.input}
-            value={city}
-            onChangeText={setCity}
-            placeholder={trip.defaultLocation || "Midoun"}
-            placeholderTextColor={THEME.inkFaint}
-          />
+          <Field label="Adresse" value={address} onChangeText={setAddress} placeholder="Rue, quartier… (optionnel)" />
+          <Field label="Ville" value={city} onChangeText={setCity} placeholder={trip.defaultLocation || "Midoun"} />
 
-          <TouchableOpacity style={styles.findButton} onPress={findPlace} disabled={searching} activeOpacity={0.85}>
-            {searching ? <ActivityIndicator size="small" color={THEME.teal} /> : <Ionicons name="search" size={15} color={THEME.teal} />}
-            <Text style={styles.findButtonText}>{searching ? "Recherche…" : "Trouver sur la carte"}</Text>
-          </TouchableOpacity>
+          <View style={styles.findBlock}>
+            <Button title="Trouver sur la carte" icon="search" variant="secondary" full loading={searching} onPress={findPlace} />
 
-          {!!searchError && <Text style={styles.errorText}>{searchError}</Text>}
+            {!!searchError && (
+              <Txt variant="caption" color="stamp" style={styles.note}>
+                {searchError}
+              </Txt>
+            )}
 
-          {candidates && candidates.length === 0 && (
-            <Text style={styles.hintText}>Aucun résultat. Précisez la ville, ou gardez l'adresse saisie à la main (l'idée sera « sans position »).</Text>
-          )}
-          {candidates && candidates.length > 0 && (
-            <View style={styles.candidateBox}>
-              <Text style={styles.candidateTitle}>Touchez le bon lieu</Text>
-              {candidates.map((r, i) => (
-                <TouchableOpacity key={`${r.osmRef || i}`} style={styles.candidateRow} onPress={() => applyCandidate(r)} activeOpacity={0.8}>
-                  <Ionicons name="location" size={16} color={THEME.teal} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.candidateName} numberOfLines={1}>
-                      {r.name}
-                    </Text>
-                    <Text style={styles.candidateAddress} numberOfLines={2}>
-                      {r.address}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-              <Text style={styles.attribution}>© contributeurs OpenStreetMap</Text>
-            </View>
-          )}
-
-          {position && (
-            <View style={styles.positionBadge}>
-              <Ionicons name="checkmark-circle" size={15} color={THEME.teal} />
-              <Text style={styles.positionText}>
-                Position enregistrée · {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
-              </Text>
-              <TouchableOpacity onPress={clearPosition} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={16} color={THEME.inkFaint} />
-              </TouchableOpacity>
-            </View>
-          )}
-          {!!openingHours && <Text style={styles.hintText}>Horaires (OpenStreetMap) : {openingHours}</Text>}
-
-          <Text style={styles.label}>Priorité</Text>
-          <View style={styles.chipWrap}>
-            {IDEA_PRIORITIES.map((p) => {
-              const active = priority === p.key;
-              return (
-                <TouchableOpacity key={p.key} style={[styles.chip, active && { borderColor: p.color }]} onPress={() => setPriority(p.key)}>
-                  <View style={[styles.dot, { backgroundColor: p.color }]} />
-                  <Text style={[styles.chipText, active && { color: THEME.ink }]}>{p.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {!isHotel && (
-            <>
-              <Text style={styles.label}>Durée sur place</Text>
-              <View style={styles.chipWrap}>
-                {DURATION_CHOICES.map((d) => {
-                  const active = durationMin === d;
-                  return (
-                    <TouchableOpacity
-                      key={d}
-                      style={[styles.chip, active && { borderColor: THEME.gold, backgroundColor: THEME.goldDim }]}
-                      onPress={() => {
-                        setDurationMin(d);
-                        setDurationTouched(true);
-                      }}
-                    >
-                      <Text style={[styles.chipText, active && { color: THEME.gold }]}>{formatIdeaDuration(d)}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+            {candidates && candidates.length === 0 && (
+              <Txt variant="caption" style={styles.note}>
+                Aucun résultat. Précisez la ville, ou gardez l'adresse saisie à la main (l'idée sera « sans position »).
+              </Txt>
+            )}
+            {candidates && candidates.length > 0 && (
+              <View style={styles.candidates}>
+                <Txt variant="subhead" style={styles.candidatesTitle}>
+                  Touchez le bon lieu
+                </Txt>
+                <Group>
+                  {candidates.map((r, i) => (
+                    <Row key={`${r.osmRef || i}`} icon="location-outline" title={r.name} subtitle={r.address} onPress={() => applyCandidate(r)} />
+                  ))}
+                </Group>
+                <Txt variant="caption" color="inkFaint" style={styles.attribution}>
+                  © contributeurs OpenStreetMap
+                </Txt>
               </View>
-            </>
-          )}
+            )}
 
-          {isMeal && (
-            <>
-              <Text style={styles.label}>Repas</Text>
-              <View style={styles.chipWrap}>
-                {MEAL_SLOTS.map((m) => {
-                  const active = mealSlot === m.key;
-                  return (
-                    <TouchableOpacity key={m.key} style={[styles.chip, active && { borderColor: THEME.gold, backgroundColor: THEME.goldDim }]} onPress={() => setMealSlot(m.key)}>
-                      <Text style={[styles.chipText, active && { color: THEME.gold }]}>{m.label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+            {position && (
+              <View style={styles.positionRow}>
+                <Badge label="Position enregistrée" icon="checkmark-circle" tone="teal" style={styles.selfCenter} />
+                <Text style={[type.numeralSmall, styles.flex]} numberOfLines={1}>
+                  {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
+                </Text>
+                <IconButton icon="close" label="Effacer la position" size={18} onPress={clearPosition} style={styles.positionClear} />
               </View>
-            </>
-          )}
-
-          {!isHotel && (
-            <>
-              <Text style={styles.label}>Prix estimé ({trip.currency}) — optionnel</Text>
-              <TextInput style={styles.input} value={price} onChangeText={setPrice} placeholder="0" placeholderTextColor={THEME.inkFaint} keyboardType="decimal-pad" />
-            </>
-          )}
-
-          <Text style={styles.label}>Lien source (TikTok, YouTube, site…)</Text>
-          <View style={styles.linkRow}>
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              value={sourceUrl}
-              onChangeText={setSourceUrl}
-              placeholder="https://…"
-              placeholderTextColor={THEME.inkFaint}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-            />
-            <TouchableOpacity style={styles.linkButton} onPress={pasteLink}>
-              <Ionicons name="clipboard-outline" size={18} color={THEME.inkMuted} />
-            </TouchableOpacity>
-            {!!sourceUrl.trim() && (
-              <TouchableOpacity style={styles.linkButton} onPress={openLink}>
-                <Ionicons name="open-outline" size={18} color={THEME.inkMuted} />
-              </TouchableOpacity>
+            )}
+            {!!openingHours && (
+              <Txt variant="caption" style={styles.note}>
+                Horaires (OpenStreetMap) : {openingHours}
+              </Txt>
             )}
           </View>
 
-          <Text style={styles.label}>Note</Text>
-          <TextInput
-            style={[styles.input, styles.noteInput]}
-            value={note}
-            onChangeText={setNote}
-            placeholder="Réserver, à tester, plat à goûter…"
-            placeholderTextColor={THEME.inkFaint}
-            multiline
-            textAlignVertical="top"
+          <Choices label="Priorité">
+            {IDEA_PRIORITIES.map((p) => (
+              <Chip key={p.key} label={p.label} tone={PRIORITY_TONE[p.key]} selected={priority === p.key} onPress={() => setPriority(p.key)} />
+            ))}
+          </Choices>
+
+          {!isHotel && (
+            <Choices label="Durée sur place">
+              {DURATION_CHOICES.map((d) => (
+                <Chip
+                  key={d}
+                  label={formatIdeaDuration(d)}
+                  selected={durationMin === d}
+                  onPress={() => {
+                    setDurationMin(d);
+                    setDurationTouched(true);
+                  }}
+                />
+              ))}
+            </Choices>
+          )}
+
+          {isMeal && (
+            <Choices label="Repas">
+              {MEAL_SLOTS.map((m) => (
+                <Chip key={m.key} label={m.label} selected={mealSlot === m.key} onPress={() => setMealSlot(m.key)} />
+              ))}
+            </Choices>
+          )}
+
+          {!isHotel && (
+            <Field label={`Prix estimé (${trip.currency}) — optionnel`} value={price} onChangeText={setPrice} placeholder="0" keyboardType="decimal-pad" inputStyle={type.numeral} />
+          )}
+
+          <Field
+            label="Lien source (TikTok, YouTube, site…)"
+            value={sourceUrl}
+            onChangeText={setSourceUrl}
+            placeholder="https://…"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            right={
+              <View style={styles.linkActions}>
+                <IconButton icon="clipboard-outline" label="Coller le lien" size={20} onPress={pasteLink} />
+                {!!sourceUrl.trim() && <IconButton icon="open-outline" label="Ouvrir le lien" size={20} onPress={openLink} />}
+              </View>
+            }
           />
 
-          {!!error && <Text style={styles.errorText}>{error}</Text>}
+          <Field label="Note" value={note} onChangeText={setNote} placeholder="Réserver, à tester, plat à goûter…" multiline />
 
           {isEditing && (
-            <View style={styles.placeBox}>
+            <Surface pad="lg" style={styles.placeBox}>
               {isHotel ? (
                 placement ? (
                   <>
-                    <Text style={styles.placeTitle}>Séjour créé</Text>
-                    <Text style={styles.placeSub}>Cet hôtel est dans vos séjours réservés, à partir du jour {placement.dayIndex + 1}.</Text>
-                    <TouchableOpacity style={styles.placeAction} onPress={() => navigation.navigate("Hotels", { tripId })}>
-                      <Ionicons name="bed-outline" size={16} color={THEME.teal} />
-                      <Text style={styles.placeActionText}>Ouvrir les hôtels</Text>
-                    </TouchableOpacity>
+                    <Txt variant="label">Séjour créé</Txt>
+                    <Txt variant="subhead" style={styles.placeSub}>
+                      Cet hôtel est dans vos séjours réservés, à partir du jour {placement.dayIndex + 1}.
+                    </Txt>
+                    <Button title="Ouvrir les hôtels" icon="bed-outline" variant="secondary" full style={styles.placeAction} onPress={() => navigation.navigate("Hotels", { tripId })} />
                   </>
                 ) : (
                   <>
-                    <Text style={styles.placeTitle}>Pas encore réservé ?</Text>
-                    <Text style={styles.placeSub}>Créez le séjour (dates, prix) : les nuits comptent alors dans le budget.</Text>
-                    <TouchableOpacity style={styles.placeAction} onPress={bookHotel}>
-                      <Ionicons name="bed-outline" size={16} color={THEME.teal} />
-                      <Text style={styles.placeActionText}>Créer le séjour</Text>
-                    </TouchableOpacity>
+                    <Txt variant="label">Pas encore réservé ?</Txt>
+                    <Txt variant="subhead" style={styles.placeSub}>
+                      Créez le séjour (dates, prix) : les nuits comptent alors dans le budget.
+                    </Txt>
+                    <Button title="Créer le séjour" icon="bed-outline" tone="gold" full style={styles.placeAction} onPress={bookHotel} />
                   </>
                 )
               ) : placement ? (
                 <>
-                  <Text style={styles.placeTitle}>
-                    Placée au jour {placement.dayIndex + 1}
-                    {placementDate ? ` · ${formatDateLabel(placementDate)}` : ""}
-                  </Text>
-                  <View style={styles.placeButtons}>
-                    <TouchableOpacity style={[styles.placeAction, { flex: 1 }]} onPress={() => setPickerOpen(true)}>
-                      <Ionicons name="swap-horizontal" size={16} color={THEME.teal} />
-                      <Text style={styles.placeActionText}>Changer de jour</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.placeAction, { flex: 1, borderColor: THEME.stamp }]} onPress={removeFromProgramme}>
-                      <Ionicons name="remove-circle-outline" size={16} color={THEME.stamp} />
-                      <Text style={[styles.placeActionText, { color: THEME.stamp }]}>Retirer</Text>
-                    </TouchableOpacity>
+                  <Txt variant="label">
+                    {`Placée au jour ${placement.dayIndex + 1}${placementDate ? ` · ${formatDateLabel(placementDate)}` : ""}`}
+                  </Txt>
+                  <View style={[styles.placeButtons, styles.placeAction]}>
+                    <Button title="Changer de jour" icon="swap-horizontal" variant="secondary" size="sm" style={styles.flex} onPress={() => setPickerOpen(true)} />
+                    <Button title="Retirer" icon="remove-circle-outline" variant="danger" size="sm" style={styles.flex} onPress={removeFromProgramme} />
                   </View>
                 </>
               ) : (
                 <>
-                  <Text style={styles.placeTitle}>Pas encore dans le programme</Text>
-                  <TouchableOpacity style={styles.placeAction} onPress={() => setPickerOpen(true)}>
-                    <Ionicons name="calendar-outline" size={16} color={THEME.gold} />
-                    <Text style={[styles.placeActionText, { color: THEME.gold }]}>Placer sur un jour</Text>
-                  </TouchableOpacity>
+                  <Txt variant="label">Pas encore dans le programme</Txt>
+                  <Button title="Placer sur un jour" icon="calendar-outline" tone="gold" full style={styles.placeAction} onPress={() => setPickerOpen(true)} />
                 </>
               )}
-            </View>
+            </Surface>
           )}
 
-          {isEditing && (
-            <TouchableOpacity style={styles.deleteButton} onPress={confirmDelete}>
-              <Ionicons name="trash-outline" size={16} color={THEME.stamp} />
-              <Text style={styles.deleteButtonText}>Supprimer cette idée</Text>
-            </TouchableOpacity>
-          )}
+          {isEditing && <Button title="Supprimer cette idée" icon="trash-outline" variant="danger" full style={styles.deleteButton} onPress={confirmDelete} />}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -546,120 +469,25 @@ export default function IdeaEditorScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.border,
-  },
-  headerButton: { padding: 4 },
-  headerButtonText: { color: THEME.inkMuted, fontSize: 15, fontFamily: FONTS.body },
-  headerSaveText: { color: THEME.gold, fontFamily: FONTS.bodySemiBold },
-  headerTitle: { color: THEME.ink, fontSize: 15.5, fontFamily: FONTS.headingSemiBold },
-  scrollContent: { padding: 20, paddingBottom: 50 },
-  label: { fontSize: 12.5, color: THEME.inkMuted, marginBottom: 6, marginTop: 16, fontFamily: FONTS.bodyMedium },
-  input: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: THEME.ink,
-    fontSize: 15,
-    fontFamily: FONTS.body,
-  },
-  noteInput: { minHeight: 80 },
-  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  chipText: { color: THEME.inkMuted, fontSize: 13, fontFamily: FONTS.bodyMedium },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  findButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderColor: THEME.teal,
-    borderRadius: 10,
-    paddingVertical: 12,
-    marginTop: 14,
-  },
-  findButtonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
-  candidateBox: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 12,
-    padding: 8,
-    marginTop: 12,
-    ...CARD_SHADOW,
-  },
-  candidateTitle: { color: THEME.inkMuted, fontSize: 12, padding: 8, paddingBottom: 4, fontFamily: FONTS.bodyMedium },
-  candidateRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 10, borderRadius: 8 },
-  candidateName: { color: THEME.ink, fontSize: 14, fontFamily: FONTS.bodyMedium },
-  candidateAddress: { color: THEME.inkFaint, fontSize: 11.5, marginTop: 2, fontFamily: FONTS.body },
-  attribution: { color: THEME.inkFaint, fontSize: 10.5, textAlign: "center", paddingTop: 6, paddingBottom: 4, fontFamily: FONTS.body },
-  positionBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: THEME.tealDim,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    marginTop: 12,
-  },
-  positionText: { color: THEME.teal, fontSize: 12, fontFamily: FONTS.mono, flex: 1 },
-  hintText: { color: THEME.inkFaint, fontSize: 12, lineHeight: 17, marginTop: 10, fontFamily: FONTS.body },
-  linkRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  linkButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  errorText: { color: THEME.stamp, fontSize: 12.5, marginTop: 14, fontFamily: FONTS.body },
-  placeBox: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 15,
-    marginTop: 26,
-  },
-  placeTitle: { color: THEME.ink, fontSize: 14.5, fontFamily: FONTS.headingSemiBold },
-  placeSub: { color: THEME.inkMuted, fontSize: 12.5, lineHeight: 18, marginTop: 5, fontFamily: FONTS.body },
-  placeButtons: { flexDirection: "row", gap: 10 },
-  placeAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderColor: THEME.teal,
-    borderRadius: 10,
-    paddingVertical: 11,
-    marginTop: 12,
-  },
-  placeActionText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
-  deleteButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 26, paddingVertical: 12 },
-  deleteButtonText: { color: THEME.stamp, fontSize: 14, fontFamily: FONTS.body },
+  scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
+  choices: { marginBottom: space.lg },
+  choicesLabel: { marginBottom: space.sm - 2 },
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  findBlock: { marginBottom: space.lg },
+  note: { marginTop: space.md },
+  candidates: { marginTop: space.md },
+  candidatesTitle: { marginBottom: space.sm },
+  attribution: { textAlign: "center", marginTop: space.sm },
+  positionRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md },
+  selfCenter: { alignSelf: "center" },
+  positionClear: { marginRight: -space.sm },
+  linkActions: { flexDirection: "row", marginRight: -space.sm },
+  placeBox: { marginTop: space.md },
+  placeSub: { marginTop: space.xs },
+  placeAction: { marginTop: space.md },
+  placeButtons: { flexDirection: "row", gap: space.sm },
+  deleteButton: { marginTop: space.xl },
 });

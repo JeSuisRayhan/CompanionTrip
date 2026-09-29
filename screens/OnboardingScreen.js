@@ -1,34 +1,40 @@
 import React, { useState, useMemo } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
+import { View, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, CARD_SHADOW } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, space, layout, radius, type } from "../lib/theme";
 import { TRIP_TYPES } from "../lib/constants";
 import { buildNewTrip, buildEmptyDays, daysFromScript, createTrip, setCoverImage, MAX_PLANNED_DAYS } from "../lib/trips";
-import { parseDateInput, addDaysISO, diffDaysISO, formatDateLabel } from "../lib/dates";
+import { parseDateInput, addDaysISO, diffDaysISO, formatDateRange } from "../lib/dates";
 import { runScriptCorrection } from "../lib/script";
 import { getSetting } from "../lib/storage";
 import { searchDestinationPhoto, trackUnsplashDownload } from "../lib/unsplash";
 import VoiceInputButton from "../components/VoiceInputButton";
-import AnimatedPressable from "../components/AnimatedPressable";
-
+import { Txt, Button, IconButton, Group, Row, Field } from "../components/ui";
 
 const MODE_CHOICES = [
   {
     key: "build",
     icon: "bulb",
     label: "Construire mon voyage",
-    text: "Je note mes envies (lieux, restos, activités…), puis l'app m'aide à en faire un planning jour par jour.",
+    text: "Je note mes envies, l'app m'aide à les organiser jour par jour.",
   },
   {
     key: "script",
     icon: "document-text",
     label: "J'ai déjà mon programme",
-    text: "Je colle mon programme, ou je remplis chaque journée moi-même.",
+    text: "Je colle mon programme, ou je remplis chaque journée.",
   },
 ];
+
+// One line of context per trip type, and the tone it wears everywhere else
+// in the app (same mapping as the trip list on the home screen).
+const TYPE_META = {
+  long: { tone: "gold", text: "Plusieurs jours, plusieurs villes ou étapes." },
+  short: { tone: "teal", text: "Une escapade de quelques jours au même endroit." },
+  park: { tone: "pink", text: "Une ou deux journées à enchaîner les attractions." },
+};
 
 export default function OnboardingScreen({ navigation }) {
   const [step, setStep] = useState(1);
@@ -123,6 +129,12 @@ export default function OnboardingScreen({ navigation }) {
   const dayCount = mode === "build" ? resolvedDayCount() : null;
   const canContinue = current !== "info" || (!!name.trim() && !problem);
 
+  // Which field owns the message above (same order as infoProblem), so it can
+  // be shown right under that field.
+  const startBad = !!problem && !!startDate.trim() && !start;
+  const endBad = !!problem && !startBad && ((!!endDate.trim() && !end) || (!!start && !!end && end < start));
+  const nbBad = !!problem && !startBad && !endBad;
+
   async function fixWithAI() {
     if (!script.trim() || fixing) return;
     setFixing(true);
@@ -183,197 +195,190 @@ export default function OnboardingScreen({ navigation }) {
     }
   }
 
+  // Sentence under the date fields (build mode).
+  const willCreate = dayCount
+    ? `${dayCount} jour${dayCount !== 1 ? "s" : ""} vide${dayCount !== 1 ? "s" : ""} ${dayCount !== 1 ? "seront créés" : "sera créé"}` +
+      (start ? ` (${formatDateRange(start, addDaysISO(start, Math.min(dayCount, MAX_PLANNED_DAYS) - 1))})` : "") +
+      "."
+    : null;
+
+  const fixNote = fixing ? fixStatus || "Correction…" : fixStatus;
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={goBack} style={styles.backButton}>
-            <Ionicons name="chevron-back" size={22} color={THEME.ink} />
-          </TouchableOpacity>
-          <Text style={styles.stepLabel}>Étape {Math.min(step, stepCount)} sur {stepCount}</Text>
+          <IconButton icon="chevron-back" label="Retour" tone="neutral" onPress={goBack} style={styles.back} />
+          <StepBar count={stepCount} index={Math.min(step, stepCount)} />
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           {current === "type" && (
             <>
-              <Text style={styles.title}>Quel type de voyage ?</Text>
-              {TRIP_TYPES.map((t) => (
-                <TouchableOpacity
-                  key={t.key}
-                  style={[styles.typeCard, tripType === t.key && styles.typeCardActive]}
-                  onPress={() => setTripType(t.key)}
-                  activeOpacity={0.85}
-                >
-                  <View style={[styles.typeIcon, tripType === t.key && { backgroundColor: THEME.goldDim }]}>
-                    <Ionicons name={t.icon} size={20} color={tripType === t.key ? THEME.gold : THEME.inkMuted} />
-                  </View>
-                  <Text style={[styles.typeLabel, tripType === t.key && { color: THEME.ink }]}>{t.label}</Text>
-                  {tripType === t.key && <Ionicons name="checkmark-circle" size={20} color={THEME.gold} />}
-                </TouchableOpacity>
-              ))}
+              <Txt variant="title" accessibilityRole="header" style={styles.title}>
+                Quel type de voyage ?
+              </Txt>
+              <Group>
+                {TRIP_TYPES.map((t) => {
+                  const meta = TYPE_META[t.key] || { tone: "neutral" };
+                  return (
+                    <ChoiceRow
+                      key={t.key}
+                      icon={t.icon}
+                      tone={meta.tone}
+                      title={t.label}
+                      subtitle={meta.text}
+                      selected={tripType === t.key}
+                      onPress={() => setTripType(t.key)}
+                    />
+                  );
+                })}
+              </Group>
             </>
           )}
 
           {current === "mode" && (
             <>
-              <Text style={styles.title}>Comment préparez-vous ce voyage ?</Text>
-              {MODE_CHOICES.map((m) => {
-                const active = planMode === m.key;
-                return (
-                  <TouchableOpacity
+              <Txt variant="title" accessibilityRole="header" style={styles.title}>
+                Comment préparez-vous ce voyage ?
+              </Txt>
+              <Group>
+                {MODE_CHOICES.map((m) => (
+                  <ChoiceRow
                     key={m.key}
-                    style={[styles.modeCard, active && styles.typeCardActive]}
+                    icon={m.icon}
+                    title={m.label}
+                    subtitle={m.text}
+                    selected={planMode === m.key}
                     onPress={() => setPlanMode(m.key)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={[styles.typeIcon, active && { backgroundColor: THEME.goldDim }]}>
-                      <Ionicons name={m.icon} size={20} color={active ? THEME.gold : THEME.inkMuted} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.modeTitle, active && { color: THEME.ink }]}>{m.label}</Text>
-                      <Text style={styles.modeText}>{m.text}</Text>
-                    </View>
-                    {active && <Ionicons name="checkmark-circle" size={20} color={THEME.gold} />}
-                  </TouchableOpacity>
-                );
-              })}
+                  />
+                ))}
+              </Group>
             </>
           )}
 
           {current === "info" && (
             <>
-              <Text style={styles.title}>Quelques infos</Text>
-              <Text style={styles.label}>Nom du voyage</Text>
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="Japon, septembre 2026"
-                placeholderTextColor={THEME.inkFaint}
-              />
+              <Txt variant="title" accessibilityRole="header" style={styles.title}>
+                Quelques infos
+              </Txt>
+              <Field label="Nom du voyage" value={name} onChangeText={setName} placeholder="Japon, septembre 2026" />
 
               {mode === "build" && (
-                <>
-                  <Text style={styles.label}>Destination (optionnel)</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={destination}
-                    onChangeText={setDestination}
-                    placeholder="Djerba, Tunisie"
-                    placeholderTextColor={THEME.inkFaint}
-                  />
-                  <Text style={styles.fieldHint}>Sert à la météo et à la recherche des adresses.</Text>
-                </>
+                <Field
+                  label="Destination (optionnel)"
+                  value={destination}
+                  onChangeText={setDestination}
+                  placeholder="Djerba, Tunisie"
+                  hint="Sert à la météo et à la recherche des adresses."
+                />
               )}
 
-              <Text style={styles.label}>Date de départ (optionnel — AAAA-MM-JJ)</Text>
-              <TextInput
-                style={styles.input}
+              <Field
+                label="Date de départ (optionnel)"
                 value={startDate}
                 onChangeText={mode === "build" ? onStartChange : setStartDate}
                 placeholder="2026-09-15"
-                placeholderTextColor={THEME.inkFaint}
                 autoCapitalize="none"
+                error={startBad ? problem : undefined}
+                hint="AAAA-MM-JJ ou JJ/MM/AAAA"
               />
 
               {mode === "build" && (
                 <>
-                  <View style={styles.twoCols}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.label}>Date de retour</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={endDate}
-                        onChangeText={onEndChange}
-                        placeholder="2026-09-22"
-                        placeholderTextColor={THEME.inkFaint}
-                        autoCapitalize="none"
-                      />
-                    </View>
-                    <View style={{ width: 120 }}>
-                      <Text style={styles.label}>ou nb de jours</Text>
-                      <TextInput
-                        style={styles.input}
-                        value={nbDays}
-                        onChangeText={onNbChange}
-                        placeholder="7"
-                        placeholderTextColor={THEME.inkFaint}
-                        keyboardType="number-pad"
-                        maxLength={2}
-                      />
-                    </View>
+                  <View style={[styles.twoCols, { marginBottom: problem ? space.lg : space.sm }]}>
+                    <Field
+                      label="Date de retour"
+                      value={endDate}
+                      onChangeText={onEndChange}
+                      placeholder="2026-09-22"
+                      autoCapitalize="none"
+                      error={endBad ? problem : undefined}
+                      style={styles.colEnd}
+                    />
+                    <Field
+                      label="ou nombre de jours"
+                      value={nbDays}
+                      onChangeText={onNbChange}
+                      placeholder="7"
+                      keyboardType="number-pad"
+                      maxLength={2}
+                      error={nbBad ? problem : undefined}
+                      inputStyle={styles.numericInput}
+                      style={styles.colNb}
+                    />
                   </View>
-                  {!problem && dayCount && (
-                    <Text style={styles.okText}>
-                      {dayCount} jour{dayCount !== 1 ? "s" : ""} vide{dayCount !== 1 ? "s" : ""} seront créés
-                      {start ? ` · du ${formatDateLabel(start)}${dayCount > 1 ? ` au ${formatDateLabel(addDaysISO(start, Math.min(dayCount, MAX_PLANNED_DAYS) - 1))}` : ""}` : ""}.
-                    </Text>
-                  )}
-                  {!problem && !dayCount && (
-                    <Text style={styles.fieldHint}>
-                      Facultatif : sans durée, un seul jour est créé et vous en ajoutez ensuite. Vous pouvez toujours décaler ou ajouter des jours.
-                    </Text>
-                  )}
-                  {!problem && end && !start && !nbDays.trim() && (
-                    <Text style={styles.fieldHint}>Ajoutez aussi la date de départ pour utiliser la date de retour.</Text>
+                  {!problem && (
+                    <View style={styles.notes}>
+                      {dayCount ? (
+                        <Txt variant="caption">{willCreate}</Txt>
+                      ) : (
+                        <Txt variant="caption" color="inkFaint">
+                          Facultatif : sans durée, un seul jour est créé et vous en ajoutez ensuite. Vous pouvez toujours décaler ou ajouter des jours.
+                        </Txt>
+                      )}
+                      {end && !start && !nbDays.trim() ? (
+                        <Txt variant="caption" color="inkFaint">
+                          Ajoutez aussi la date de départ pour utiliser la date de retour.
+                        </Txt>
+                      ) : null}
+                    </View>
                   )}
                 </>
               )}
-              {!!problem && <Text style={styles.warnText}>{problem}</Text>}
             </>
           )}
 
           {current === "script" && (
             <>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <Text style={styles.title}>Programme (optionnel)</Text>
+              <Txt variant="title" accessibilityRole="header" style={styles.title}>
+                Programme (optionnel)
+              </Txt>
+              <View style={styles.helpRow}>
+                <Txt variant="subhead" style={styles.helpText}>
+                  Collez votre programme, même en vrac. Une ligne « Jour N - date - titre » pour démarrer une journée, puis des lignes « HH:MM activité [type] ».
+                </Txt>
                 <VoiceInputButton onResult={(t) => setScript((prev) => (prev ? prev + "\n" : "") + t)} />
               </View>
-              <Text style={styles.helpText}>
-                Collez votre programme, même en vrac. Une ligne "Jour N - date - titre" pour démarrer une journée,
-                puis des lignes "HH:MM activité [type]".
-              </Text>
-              <TextInput
-                style={styles.textarea}
-                value={script}
-                onChangeText={(t) => { setScript(t); setFixStatus(""); setFixError(""); }}
-                placeholder={"Jour 1 - Rome\n09:00 Vol Paris - Rome [transport]"}
-                placeholderTextColor={THEME.inkFaint}
+              <Field
                 multiline
-                textAlignVertical="top"
+                value={script}
+                onChangeText={(t) => {
+                  setScript(t);
+                  setFixStatus("");
+                  setFixError("");
+                }}
+                placeholder={"Jour 1 - Rome\n09:00 Vol Paris - Rome [transport]"}
+                accessibilityLabel="Programme du voyage"
+                inputStyle={styles.scriptInput}
               />
-              <TouchableOpacity style={styles.fixButton} onPress={fixWithAI} disabled={!script.trim() || fixing}>
-                {fixing ? (
-                  <ActivityIndicator color={THEME.teal} size="small" />
-                ) : (
-                  <Ionicons name="sparkles" size={15} color={THEME.teal} />
-                )}
-                <Text style={styles.fixButtonText}>{fixing ? fixStatus || "Correction…" : "Vérifier / corriger le format"}</Text>
-              </TouchableOpacity>
-              {fixStatus && !fixing && <Text style={styles.okText}>{fixStatus}</Text>}
-              {fixError && <Text style={styles.warnText}>{fixError}</Text>}
+              <Button
+                title="Vérifier / corriger le format"
+                icon="sparkles"
+                variant="secondary"
+                full
+                loading={fixing}
+                disabled={!script.trim()}
+                onPress={fixWithAI}
+              />
+              {fixNote ? (
+                <Txt variant="caption" color={fixing ? "inkMuted" : "teal"} style={styles.note} accessibilityLiveRegion="polite">
+                  {fixNote}
+                </Txt>
+              ) : null}
+              {fixError ? (
+                <Txt variant="caption" color="stamp" style={styles.note} accessibilityLiveRegion="polite">
+                  {fixError}
+                </Txt>
+              ) : null}
             </>
           )}
         </ScrollView>
 
         <View style={styles.footer}>
-          {!isLastStep && (
-            <AnimatedPressable
-              style={[styles.primaryButton, !canContinue && styles.primaryButtonDisabled]}
-              onPress={() => setStep(step + 1)}
-              disabled={!canContinue}
-            >
-              <Text style={styles.primaryButtonText}>Continuer</Text>
-            </AnimatedPressable>
-          )}
+          {!isLastStep && <Button title="Continuer" size="lg" full disabled={!canContinue} onPress={() => setStep(step + 1)} />}
           {isLastStep && (
-            <AnimatedPressable
-              style={[styles.primaryButton, !canContinue && styles.primaryButtonDisabled]}
-              onPress={finish}
-              disabled={creating || !canContinue}
-            >
-              {creating ? <ActivityIndicator color={THEME.bg} /> : <Text style={styles.primaryButtonText}>Créer le voyage</Text>}
-            </AnimatedPressable>
+            <Button title="Créer le voyage" size="lg" full loading={creating} disabled={creating || !canContinue} onPress={finish} />
           )}
         </View>
       </KeyboardAvoidingView>
@@ -381,96 +386,69 @@ export default function OnboardingScreen({ navigation }) {
   );
 }
 
+// Progress through a real sequence: done = teal, current = gold, to come = sunk.
+function StepBar({ count, index }) {
+  return (
+    <View
+      style={styles.stepBar}
+      accessibilityRole="progressbar"
+      accessibilityLabel={`Étape ${index} sur ${count}`}
+      accessibilityValue={{ min: 1, max: count, now: index }}
+    >
+      {Array.from({ length: count }).map((_, i) => (
+        <View
+          key={i}
+          style={[styles.stepSegment, { backgroundColor: i + 1 < index ? THEME.teal : i + 1 === index ? THEME.gold : THEME.bgCardAlt }]}
+        />
+      ))}
+    </View>
+  );
+}
+
+// A big selectable row: icon tile, title, one line of context, and a
+// radio / gold check on the right. The selected row is lifted, not boxed.
+function ChoiceRow({ icon, tone, title, subtitle, selected, onPress }) {
+  return (
+    <Row
+      icon={icon}
+      tone={tone}
+      title={title}
+      subtitle={subtitle}
+      selected={selected}
+      onPress={onPress}
+      accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
+      right={
+        <Ionicons
+          name={selected ? "checkmark-circle" : "radio-button-off"}
+          size={24}
+          color={selected ? THEME.gold : THEME.inkFaint}
+        />
+      }
+      style={[styles.choiceRow, selected && styles.choiceRowOn]}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: THEME.bg },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 10 },
-  backButton: { padding: 6 },
-  stepLabel: { color: THEME.inkFaint, fontSize: 12.5, marginLeft: 6, fontFamily: FONTS.body },
-  scrollContent: { padding: 20, paddingBottom: 20 },
-  title: { fontSize: 21, color: THEME.ink, marginBottom: 20, fontFamily: FONTS.headingBold },
-  label: { fontSize: 12.5, color: THEME.inkMuted, marginBottom: 6, marginTop: 14, fontFamily: FONTS.bodyMedium },
-  input: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: THEME.ink,
-    fontSize: 15,
-    fontFamily: FONTS.body,
-  },
-  textarea: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    padding: 14,
-    color: THEME.ink,
-    fontSize: 13.5,
-    minHeight: 220,
-    fontFamily: FONTS.mono,
-  },
-  helpText: { color: THEME.inkFaint, fontSize: 12, lineHeight: 17, marginBottom: 12, fontFamily: FONTS.body },
-  warnText: { color: THEME.stamp, fontSize: 12, marginTop: 8, fontFamily: FONTS.body },
-  okText: { color: THEME.teal, fontSize: 12, marginTop: 8, fontFamily: FONTS.body },
-  fixButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderColor: THEME.teal,
-    borderRadius: 10,
-    paddingVertical: 12,
-    marginTop: 12,
-  },
-  fixButtonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodyMedium },
-  typeCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderWidth: 1.5,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 15,
-    marginBottom: 10,
-    backgroundColor: THEME.bgCard,
-    ...CARD_SHADOW,
-  },
-  typeCardActive: { borderColor: THEME.gold },
-  typeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 11,
-    backgroundColor: THEME.bgCardAlt,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  typeLabel: { flex: 1, fontSize: 15.5, color: THEME.inkMuted, fontFamily: FONTS.headingRegular },
-  modeCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderWidth: 1.5,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    backgroundColor: THEME.bgCard,
-    ...CARD_SHADOW,
-  },
-  modeTitle: { fontSize: 15.5, color: THEME.inkMuted, fontFamily: FONTS.headingSemiBold },
-  modeText: { fontSize: 12.5, lineHeight: 18, color: THEME.inkFaint, marginTop: 4, fontFamily: FONTS.body },
-  fieldHint: { color: THEME.inkFaint, fontSize: 12, lineHeight: 17, marginTop: 8, fontFamily: FONTS.body },
-  twoCols: { flexDirection: "row", gap: 10 },
-  footer: { padding: 20 },
-  primaryButton: {
-    backgroundColor: THEME.gold,
-    borderRadius: 13,
-    paddingVertical: 16,
-    alignItems: "center",
-  },
-  primaryButtonDisabled: { opacity: 0.5 },
-  primaryButtonText: { color: THEME.bg, fontSize: 15.5, fontFamily: FONTS.bodySemiBold },
+  flex: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: layout.gutter, paddingTop: space.sm },
+  back: { marginLeft: -space.sm },
+  stepBar: { flex: 1, flexDirection: "row", gap: space.xs },
+  stepSegment: { flex: 1, height: space.xs, borderRadius: radius.full },
+  scrollContent: { paddingHorizontal: layout.gutter, paddingTop: space.lg, paddingBottom: space.xl },
+  title: { marginBottom: space.xl },
+  choiceRow: { paddingVertical: space.lg },
+  choiceRowOn: { backgroundColor: THEME.bgCardAlt },
+  twoCols: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
+  colEnd: { flex: 3, marginBottom: 0 },
+  colNb: { flex: 2, marginBottom: 0 },
+  numericInput: { ...type.numeral },
+  notes: { gap: space.xs, marginBottom: space.lg },
+  // The dictation error (rare) wraps onto its own line under the help text.
+  helpRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "flex-end", columnGap: space.md, rowGap: space.sm, marginBottom: space.lg },
+  helpText: { flexGrow: 1, flexShrink: 1, flexBasis: space.xxxl * 4 },
+  scriptInput: { minHeight: space.xxxl * 4 },
+  note: { marginTop: space.md },
+  footer: { paddingHorizontal: layout.gutter, paddingTop: space.md, paddingBottom: space.lg },
 });

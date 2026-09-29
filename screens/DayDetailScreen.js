@@ -1,20 +1,19 @@
-import React, { useState, useCallback, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, TextInput, Alert } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import React, { useState, useCallback, useEffect, useContext } from "react";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { SafeAreaView, SafeAreaInsetsContext } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
-import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, CARD_SHADOW } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, space, layout, radius, type } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
-import { resolveDayDate, formatDateLabel } from "../lib/dates";
+import { resolveDayDate, formatDayLabel } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { fetchDayWeather, weatherInfo, guessDayLocation } from "../lib/weather";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
 import UndoToast from "../components/UndoToast";
+import { Txt, Button, IconButton, Chip, Badge, Surface, Field, Group, Row, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
   const [weather, setWeather] = useState(undefined); // undefined = loading, null = no data
@@ -35,9 +34,13 @@ export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
   if (weather) {
     const info = weatherInfo(weather.code);
     return (
-      <View style={styles.weatherBadge}>
+      <View
+        style={styles.weatherBadge}
+        accessible
+        accessibilityLabel={`Météo${info.label ? " : " + info.label : ""}, maximum ${weather.tempMax}°, minimum ${weather.tempMin}°`}
+      >
         <Text style={styles.weatherEmoji}>{info.emoji}</Text>
-        <Text style={styles.weatherTemps}>
+        <Text style={compact ? styles.weatherTempsSmall : styles.weatherTemps}>
           {weather.tempMax}° / {weather.tempMin}°
         </Text>
       </View>
@@ -56,7 +59,7 @@ export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
   if (daysAhead != null && (daysAhead > 15 || daysAhead < -1)) {
     return <Text style={styles.weatherUnavailable}>Prévision indisponible (trop loin dans le temps)</Text>;
   }
-  return <Text style={styles.weatherUnavailable}>Prévision indisponible pour "{location}"</Text>;
+  return <Text style={styles.weatherUnavailable}>Prévision indisponible pour « {location} »</Text>;
 }
 
 export default function DayDetailScreen({ route, navigation }) {
@@ -64,7 +67,9 @@ export default function DayDetailScreen({ route, navigation }) {
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
+  const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: "", undoActivity: null });
+  const insets = useContext(SafeAreaInsetsContext);
 
   const refresh = useCallback(async () => {
     const t = await getTrip(tripId);
@@ -94,7 +99,12 @@ export default function DayDetailScreen({ route, navigation }) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <Text style={styles.emptyText}>Jour introuvable.</Text>
+          <EmptyState
+            icon="calendar-outline"
+            title="Jour introuvable"
+            text="Ce jour n'existe plus dans le voyage."
+            action={{ label: "Retour", onPress: () => navigation.goBack() }}
+          />
         </View>
       </SafeAreaView>
     );
@@ -108,6 +118,7 @@ export default function DayDetailScreen({ route, navigation }) {
   });
   const doneCount = day.activities.filter((a) => a.done).length;
   const firstUndoneIndex = sorted.findIndex((a) => !a.done);
+  const location = (day.location || "").trim();
 
   async function onToggleDone(activityId) {
     await toggleActivityDone(tripId, dayId, activityId);
@@ -134,45 +145,95 @@ export default function DayDetailScreen({ route, navigation }) {
     setToast({ visible: false, message: "", undoActivity: null });
   }
 
+  // A bottom sheet, not Alert.alert: Android alerts show at most 3 buttons and we have 3 choices + cancel.
   function openDayTypeMenu() {
-    Alert.alert("Type de jour", "Donne un habillage et des rappels adaptés à ce jour.", [
-      { text: "Annuler", style: "cancel" },
-      { text: "Jour normal", onPress: () => setDayType(tripId, dayId, null).then(refresh) },
-      { text: "Jour de vol ✈️", onPress: () => setDayType(tripId, dayId, "flight").then(refresh) },
-      { text: "Jour parc d'attraction 🎡", onPress: () => setDayType(tripId, dayId, "park").then(refresh) },
-    ]);
+    setTypeMenuOpen(true);
   }
+
+  function chooseDayType(next) {
+    setTypeMenuOpen(false);
+    setDayType(tripId, dayId, next).then(refresh);
+  }
+
+  function addStep() {
+    navigation.navigate("ActivityEditor", { tripId, dayId, activity: null });
+  }
+
+  const plural = day.activities.length !== 1 ? "s" : "";
+  const stepLabel = `étape${plural} faite${plural}`;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={22} color={THEME.ink} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.tripNameSubtitle}>{trip.name}</Text>
-          <Text style={styles.headerTitle}>{day.title}</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            {date && <Text style={styles.headerDate}>{formatDateLabel(date)}</Text>}
-            {date && <WeatherBadge day={day} dateISO={date} fallbackLocation={trip.defaultLocation} />}
-            <TouchableOpacity onPress={() => setLocationModalOpen(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="location-outline" size={13} color={THEME.inkFaint} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={openDayTypeMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="sparkles-outline" size={13} color={THEME.inkFaint} />
-            </TouchableOpacity>
-          </View>
-        </View>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: null })}
-        >
-          <Ionicons name="add" size={22} color={THEME.gold} />
-        </TouchableOpacity>
+      <View style={styles.topBar}>
+        <IconButton icon="chevron-back" label="Retour" filled onPress={() => navigation.goBack()} />
+        <Txt variant="subhead" numberOfLines={1} style={styles.tripName}>
+          {trip.name}
+        </Txt>
+        <IconButton icon="ellipsis-horizontal" label="Type de jour" onPress={openDayTypeMenu} />
+        <IconButton icon="add" label="Ajouter une étape" tone="gold" filled onPress={addStep} />
       </View>
 
-      {day.dayType === "flight" && <FlightDayBanner day={day} dateISO={date} />}
-      {day.dayType === "park" && <ParkDayBanner day={day} />}
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: layout.tabBarClearance + (insets ? insets.bottom : 0) }]}>
+        <View style={styles.titleBlock}>
+          <Txt variant="title" numberOfLines={2} accessibilityRole="header">
+            {day.title}
+          </Txt>
+          {date ? <Txt variant="subhead">{formatDayLabel(date)}</Txt> : null}
+          <View style={styles.metaRow}>
+            {date ? <WeatherBadge day={day} dateISO={date} fallbackLocation={trip.defaultLocation} /> : null}
+            <Chip
+              icon="location-outline"
+              label={location || "Ajouter un lieu"}
+              onPress={() => setLocationModalOpen(true)}
+              accessibilityLabel={location ? `Lieu du jour : ${location}. Modifier` : "Ajouter un lieu pour ce jour"}
+              style={styles.locationChip}
+            />
+          </View>
+        </View>
+
+        {day.activities.length > 0 && day.dayType !== "park" ? (
+          <View style={styles.progressRow}>
+            <ProgressBar value={doneCount / day.activities.length} height={6} style={styles.progressBar} />
+            <Text style={type.caption}>
+              <Text style={styles.progressNumber}>
+                {doneCount}/{day.activities.length}
+              </Text>
+              {` ${stepLabel}`}
+            </Text>
+          </View>
+        ) : null}
+
+        {day.dayType === "flight" ? <FlightDayBanner day={day} dateISO={date} /> : null}
+        {day.dayType === "park" ? <ParkDayBanner day={day} /> : null}
+
+        {sorted.length === 0 ? (
+          <EmptyState
+            icon="calendar-outline"
+            title="La page est blanche"
+            text="À vous de l'écrire."
+            action={{ label: "Ajouter une étape", icon: "add", onPress: addStep }}
+          />
+        ) : (
+          <View>
+            {sorted.map((a, i) => (
+              <ActivityRow
+                key={a.id}
+                activity={a}
+                trip={trip}
+                isFirst={i === 0}
+                isLast={i === sorted.length - 1}
+                prevDone={i > 0 && !!sorted[i - 1].done}
+                isCurrent={i === firstUndoneIndex}
+                onToggleDone={() => onToggleDone(a.id)}
+                onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
+                onDeleteWithUndo={() => onDeleteWithUndo(a)}
+              />
+            ))}
+          </View>
+        )}
+
+        {sorted.length > 0 ? <Button title="Ajouter une étape" icon="add" variant="secondary" full onPress={addStep} style={styles.addStep} /> : null}
+      </ScrollView>
 
       <LocationModal
         visible={locationModalOpen}
@@ -185,102 +246,109 @@ export default function DayDetailScreen({ route, navigation }) {
         }}
       />
 
-      {day.activities.length > 0 && (
-        <Text style={styles.progressText}>
-          {doneCount}/{day.activities.length} étape{day.activities.length !== 1 ? "s" : ""} faite{doneCount !== 1 ? "s" : ""}
-        </Text>
-      )}
+      <Sheet visible={typeMenuOpen} onClose={() => setTypeMenuOpen(false)} title="Type de jour">
+        <Txt variant="subhead" style={styles.sheetHelp}>
+          Donne un habillage et des rappels adaptés à ce jour.
+        </Txt>
+        <Group style={styles.typeGroup}>
+          <Row icon="today-outline" title="Jour normal" selected={!day.dayType} right={!day.dayType ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType(null)} />
+          <Row icon="airplane-outline" title="Jour de vol" selected={day.dayType === "flight"} right={day.dayType === "flight" ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("flight")} />
+          <Row icon="happy-outline" title="Jour parc d'attractions" selected={day.dayType === "park"} right={day.dayType === "park" ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("park")} />
+        </Group>
+      </Sheet>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {sorted.length === 0 && (
-          <View style={styles.emptyBox}>
-            <Ionicons name="calendar-outline" size={30} color={THEME.inkFaint} />
-            <Text style={styles.emptyText}>La page est blanche — à vous de l'écrire.</Text>
-          </View>
-        )}
-        {sorted.map((a, i) => (
-          <ActivityRow
-            key={a.id}
-            activity={a}
-            trip={trip}
-            isLast={i === sorted.length - 1}
-            isCurrent={i === firstUndoneIndex}
-            onToggleDone={() => onToggleDone(a.id)}
-            onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
-            onDeleteWithUndo={() => onDeleteWithUndo(a)}
-          />
-        ))}
-        <TouchableOpacity
-          style={styles.bigAddButton}
-          onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: null })}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={18} color={THEME.gold} />
-          <Text style={styles.bigAddButtonText}>Ajouter une étape</Text>
-        </TouchableOpacity>
-      </ScrollView>
       <UndoToast visible={toast.visible} message={toast.message} onUndo={onUndoDelete} onDismiss={onToastDismiss} />
     </SafeAreaView>
   );
 }
 
-function ActivityRow({ activity, trip, isLast, isCurrent, onToggleDone, onPress, onDeleteWithUndo }) {
+// One step of the day: time column, rail with a node, content without a box.
+// Done = teal node with a check; next (first undone) = gold node and gold time.
+function ActivityRow({ activity, trip, isFirst, isLast, prevDone, isCurrent, onToggleDone, onPress, onDeleteWithUndo }) {
   const t = TYPES[activity.type] || TYPES.activite;
   const done = !!activity.done;
-  const dotSize = isCurrent ? 16 : 11;
+  const hasPrice = activity.price != null;
+  const nodeBg = done ? THEME.teal : isCurrent ? THEME.gold : t.dim;
+  const timeColor = done ? THEME.inkFaint : isCurrent ? THEME.gold : THEME.ink;
+  const label = `${activity.title}${activity.time ? ", " + activity.time : ""}${done ? ", fait" : isCurrent ? ", à suivre" : ""}`;
 
   return (
-    <View style={styles.rowWrap}>
-      <View style={styles.timeline}>
-        <TouchableOpacity onPress={onToggleDone} style={styles.dotTouch} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <View
-            style={[
-              styles.dot,
-              { width: dotSize, height: dotSize, borderRadius: dotSize / 2, backgroundColor: done ? THEME.teal : isCurrent ? THEME.gold : t.color },
-            ]}
-          />
-        </TouchableOpacity>
-        {!isLast && <View style={[styles.line, { backgroundColor: done ? THEME.teal : THEME.border }]} />}
+    <View style={styles.stepRow}>
+      <Text style={[styles.stepTime, { color: timeColor }]} accessibilityLabel={activity.time || "Heure libre"}>
+        {activity.time || "--:--"}
+      </Text>
+
+      <View style={styles.rail}>
+        <View style={[styles.railLine, styles.railLineTop, prevDone && { backgroundColor: THEME.teal }, isFirst && styles.railLineHidden]} />
+        <Pressable
+          onPress={onToggleDone}
+          hitSlop={space.sm}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: done }}
+          accessibilityLabel={`Fait : ${activity.title}`}
+          style={({ pressed }) => [styles.node, { backgroundColor: nodeBg }, pressed && { opacity: 0.7 }]}
+        >
+          {done ? (
+            <Ionicons name="checkmark" size={16} color={THEME.onGold} />
+          ) : (
+            <Ionicons name={t.icon} size={14} color={isCurrent ? THEME.onGold : t.color} />
+          )}
+        </Pressable>
+        <View style={[styles.railLine, styles.railLineBottom, done && { backgroundColor: THEME.teal }, isLast && styles.railLineHidden]} />
       </View>
-      <Swipeable
-        containerStyle={{ flex: 1 }}
-        renderRightActions={() => (
-          <TouchableOpacity style={styles.rowDeleteAction} onPress={onDeleteWithUndo}>
-            <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-        )}
-        overshootRight={false}
-      >
-      <TouchableOpacity style={[styles.rowCard, { opacity: done ? 0.6 : 1 }]} onPress={onPress} activeOpacity={0.85}>
-        <View style={styles.rowTop}>
-          <View style={[styles.iconBadge, { backgroundColor: t.dim }]}>
-            <Ionicons name={t.icon} size={15} color={t.color} />
-          </View>
-          <View style={styles.rowInfo}>
-            <Text style={[styles.rowTitle, done && styles.rowTitleDone]}>{activity.title}</Text>
-            <Text style={styles.rowTime}>{activity.time || "Heure libre"}</Text>
-          </View>
-        </View>
-        {activity.note ? <Text style={styles.rowNote}>{activity.note}</Text> : null}
-        {activity.address ? (
-          <View style={styles.rowMetaLine}>
-            <Ionicons name="location-outline" size={12} color={THEME.inkFaint} />
-            <Text style={styles.rowMetaText}>{activity.address}</Text>
-          </View>
-        ) : null}
-        {activity.confirmationCode ? (
-          <View style={styles.rowMetaLine}>
-            <Ionicons name="key-outline" size={12} color={THEME.inkFaint} />
-            <Text style={styles.rowMetaText}>{activity.confirmationCode}</Text>
-          </View>
-        ) : null}
-        {activity.price != null && <Text style={styles.rowPrice}>{formatMoney(activity.price, trip.currency)}</Text>}
-      </TouchableOpacity>
-      </Swipeable>
+
+      <View style={styles.swipeWrap}>
+        <Swipeable
+          containerStyle={styles.swipeContainer}
+          renderRightActions={() => (
+            <Pressable style={styles.deleteAction} onPress={onDeleteWithUndo} accessibilityRole="button" accessibilityLabel={`Supprimer ${activity.title}`}>
+              <Ionicons name="trash-outline" size={20} color={THEME.bg} />
+            </Pressable>
+          )}
+          overshootRight={false}
+        >
+          <Pressable
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            style={({ pressed }) => [styles.stepContent, { backgroundColor: pressed ? THEME.surfaceSunk : THEME.bg }]}
+          >
+            <View style={styles.stepTitleRow}>
+              <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{activity.title}</Text>
+              {hasPrice ? <Text style={[styles.stepPrice, done && { color: THEME.inkFaint }]}>{formatMoney(activity.price, trip.currency)}</Text> : null}
+            </View>
+            {activity.note ? <Text style={[type.subhead, done && { color: THEME.inkFaint }]}>{activity.note}</Text> : null}
+            {activity.address ? (
+              <View style={styles.metaLine}>
+                <Ionicons name="location-outline" size={14} color={THEME.inkFaint} />
+                <Text style={[type.caption, styles.metaText, done && { color: THEME.inkFaint }]}>{activity.address}</Text>
+              </View>
+            ) : null}
+            {activity.confirmationCode ? (
+              <View style={styles.metaLine}>
+                <Ionicons name="key-outline" size={14} color={THEME.inkFaint} />
+                <Text style={[type.numeralSmall, styles.metaText, { color: done ? THEME.inkFaint : THEME.ink }]}>{activity.confirmationCode}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        </Swipeable>
+      </View>
     </View>
   );
 }
 
+// A row of little dashes, like the tear-off line of a ticket.
+function Dashes() {
+  return (
+    <View style={styles.dashes}>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <View key={i} style={styles.dash} />
+      ))}
+    </View>
+  );
+}
+
+// The flight day's "ticket": route in numerals, then flight and seat, then live status.
 function FlightDayBanner({ day, dateISO }) {
   const info = day.flightInfo;
   const [liveStatus, setLiveStatus] = useState(undefined); // undefined = not tried/loading, null = unavailable
@@ -303,46 +371,72 @@ function FlightDayBanner({ day, dateISO }) {
     return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   }
 
+  const hasRoute = !!(info && (info.origin || info.destination));
+  const hasDetails = hasRoute || !!(info && (info.flightNumber || info.seat));
+  const departureGate = liveStatus?.departure?.gate;
+  const arrivalGate = liveStatus?.arrival?.gate;
+
   return (
-    <LinearGradient colors={[THEME.blueDim, THEME.bgCard]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.flightBanner}>
-      {info ? (
+    <Surface pad="lg" style={styles.panel}>
+      {hasDetails ? (
         <>
-          <View style={styles.flightRoute}>
-            <View style={styles.flightAirport}>
-              <Text style={styles.flightAirportCode}>{info.origin}</Text>
-              {liveStatus?.departure?.gate && <Text style={styles.flightGateText}>Porte {liveStatus.departure.gate}</Text>}
+          {hasRoute ? (
+            <View style={styles.flightRoute}>
+              <View style={styles.flightAirport}>
+                <Text style={styles.flightCode}>{info.origin || "?"}</Text>
+                {departureGate ? <Text style={styles.flightGate}>Porte {departureGate}</Text> : null}
+              </View>
+              <View style={styles.flightPath}>
+                <Dashes />
+                <Ionicons name="airplane" size={18} color={THEME.blue} />
+                <Dashes />
+              </View>
+              <View style={[styles.flightAirport, { alignItems: "flex-end" }]}>
+                <Text style={styles.flightCode}>{info.destination || "?"}</Text>
+                {arrivalGate ? <Text style={styles.flightGate}>Porte {arrivalGate}</Text> : null}
+              </View>
             </View>
-            <View style={styles.flightRouteLine}>
-              <View style={styles.flightDotsLine} />
-              <Ionicons name="airplane" size={18} color={THEME.blue} style={{ transform: [{ rotate: "90deg" }] }} />
+          ) : null}
+
+          {info.flightNumber || info.seat ? (
+            <View style={[styles.flightFacts, hasRoute && styles.flightFactsRuled]}>
+              {info.flightNumber ? (
+                <View>
+                  <Text style={type.caption}>Vol</Text>
+                  <Text style={type.numeral}>{info.flightNumber}</Text>
+                </View>
+              ) : null}
+              {info.seat ? (
+                <View>
+                  <Text style={type.caption}>Siège</Text>
+                  <Text style={type.numeral}>{info.seat}</Text>
+                </View>
+              ) : null}
             </View>
-            <View style={styles.flightAirport}>
-              <Text style={styles.flightAirportCode}>{info.destination}</Text>
-              {liveStatus?.arrival?.gate && <Text style={styles.flightGateText}>Porte {liveStatus.arrival.gate}</Text>}
+          ) : null}
+
+          {liveStatus?.departure?.estimated ? (
+            <View style={styles.flightLive}>
+              <Text style={[type.caption, { color: THEME.teal }]}>
+                Départ estimé <Text style={styles.flightLiveTime}>{formatTime(liveStatus.departure.estimated)}</Text>
+                {liveStatus.departure.terminal ? ` · Terminal ${liveStatus.departure.terminal}` : ""}
+              </Text>
+              {liveStatus.status === "cancelled" ? <Badge label="Vol annulé" tone="stamp" icon="close-circle" /> : null}
             </View>
-          </View>
-          <View style={styles.flightDetailsRow}>
-            {info.flightNumber && <Text style={styles.flightDetailText}>Vol {info.flightNumber}</Text>}
-            {info.seat && <Text style={styles.flightDetailText}>Siège {info.seat}</Text>}
-          </View>
-          {liveStatus?.departure?.estimated && (
-            <Text style={styles.flightLiveText}>
-              Départ estimé {formatTime(liveStatus.departure.estimated)}
-              {liveStatus.status === "cancelled" ? " · Vol annulé" : ""}
-              {liveStatus.departure.terminal ? ` · Terminal ${liveStatus.departure.terminal}` : ""}
-            </Text>
-          )}
-          {liveStatus === null && hasFlightStatusKey() && (
-            <Text style={styles.flightLiveTextMuted}>Statut en temps réel indisponible pour ce vol.</Text>
-          )}
+          ) : null}
+          {liveStatus === null && hasFlightStatusKey() ? (
+            <Text style={[type.caption, styles.flightNote]}>Statut en temps réel indisponible pour ce vol.</Text>
+          ) : null}
         </>
       ) : (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Ionicons name="airplane" size={20} color={THEME.blue} />
-          <Text style={styles.flightPlaceholderText}>Jour de vol — scannez votre carte d'embarquement dans Documents pour remplir automatiquement le vol.</Text>
+        <View style={styles.panelRow}>
+          <Ionicons name="airplane" size={22} color={THEME.blue} />
+          <Txt variant="subhead" style={styles.panelText}>
+            Jour de vol — scannez votre carte d'embarquement dans Documents pour remplir automatiquement le vol.
+          </Txt>
         </View>
       )}
-    </LinearGradient>
+    </Surface>
   );
 }
 
@@ -350,12 +444,15 @@ function ParkDayBanner({ day }) {
   const done = day.activities.filter((a) => a.done).length;
   const total = day.activities.length;
   return (
-    <LinearGradient colors={[THEME.pinkDim, THEME.bgCard]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.parkBanner}>
-      <Ionicons name="sparkles" size={20} color={THEME.pink} />
-      <Text style={styles.parkBannerText}>
-        {total > 0 ? `${done}/${total} attraction${total !== 1 ? "s" : ""} faite${done !== 1 ? "s" : ""} — bonne journée parc !` : "Jour parc d'attraction — ajoutez vos attractions !"}
-      </Text>
-    </LinearGradient>
+    <Surface pad="lg" style={styles.panel}>
+      <View style={styles.panelRow}>
+        <Ionicons name="sparkles" size={22} color={THEME.pink} />
+        <Txt variant="subhead" style={styles.panelText}>
+          {total > 0 ? `${done}/${total} attraction${total !== 1 ? "s" : ""} faite${total !== 1 ? "s" : ""} — bonne journée parc !` : "Jour parc d'attraction — ajoutez vos attractions !"}
+        </Txt>
+      </View>
+      {total > 0 ? <ProgressBar value={done / total} height={6} style={styles.parkBar} /> : null}
+    </Surface>
   );
 }
 
@@ -367,145 +464,99 @@ function LocationModal({ visible, initial, onClose, onSave }) {
   }, [visible, initial]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Lieu de ce jour</Text>
-          <Text style={styles.modalHelp}>Utilisé pour trouver la météo — ex : "Kyoto", "Rome", "Paris".</Text>
-          <TextInput
-            style={styles.modalInput}
-            value={value}
-            onChangeText={setValue}
-            placeholder="Nom de la ville"
-            placeholderTextColor={THEME.inkFaint}
-          />
-          <View style={styles.modalButtonRow}>
-            <TouchableOpacity style={styles.modalButton} onPress={onClose}>
-              <Text style={styles.modalButtonText}>Annuler</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalButton} onPress={() => onSave(value)}>
-              <Text style={styles.modalButtonText}>Enregistrer</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+    <Sheet visible={visible} onClose={onClose} title="Lieu de ce jour">
+      <Txt variant="subhead" style={styles.sheetHelp}>
+        Utilisé pour trouver la météo — ex : « Kyoto », « Rome », « Paris ».
+      </Txt>
+      <Field value={value} onChangeText={setValue} placeholder="Nom de la ville" accessibilityLabel="Nom de la ville" />
+      <View style={styles.sheetButtons}>
+        <Button title="Annuler" variant="secondary" style={styles.sheetButton} onPress={onClose} />
+        <Button title="Enregistrer" style={styles.sheetButton} onPress={() => onSave(value)} />
       </View>
-    </Modal>
+    </Sheet>
   );
 }
 
+// Local one-off: diameter of the rail node (a 28pt circle holds the type icon or the check).
+const NODE = 28;
+
 const styles = StyleSheet.create({
-  flightBanner: {
-    marginHorizontal: 20,
-    marginTop: 14,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: THEME.blue,
-  },
-  flightRoute: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
-  flightAirport: { alignItems: "center" },
-  flightAirportCode: { fontSize: 24, color: THEME.ink, fontFamily: FONTS.headingBold, letterSpacing: 1 },
-  flightRouteLine: { flex: 1, alignItems: "center", justifyContent: "center" },
-  flightDotsLine: { position: "absolute", height: 1.5, borderStyle: "dashed", borderWidth: 1, borderColor: THEME.blue, width: "100%" },
-  flightDetailsRow: { flexDirection: "row", justifyContent: "center", gap: 18, marginTop: 12 },
-  flightDetailText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.mono },
-  flightGateText: { color: THEME.blue, fontSize: 11, fontFamily: FONTS.monoMedium, marginTop: 3 },
-  flightLiveText: { color: THEME.teal, fontSize: 11.5, fontFamily: FONTS.body, textAlign: "center", marginTop: 10 },
-  flightLiveTextMuted: { color: THEME.inkFaint, fontSize: 11, fontFamily: FONTS.body, textAlign: "center", marginTop: 10 },
-  flightPlaceholderText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.body, flex: 1, lineHeight: 17 },
-  parkBanner: {
-    marginHorizontal: 20,
-    marginTop: 14,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: THEME.pink,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  parkBannerText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.bodyMedium, flex: 1 },
   safe: { flex: 1, backgroundColor: THEME.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 40 },
-  emptyBox: { alignItems: "center", justifyContent: "center", paddingVertical: 50, gap: 10 },
-  emptyText: { color: THEME.inkFaint, fontSize: 13.5, fontFamily: FONTS.body },
-  tripNameSubtitle: { fontSize: 11, color: THEME.inkFaint, letterSpacing: 0.4, fontFamily: FONTS.bodyMedium },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 8, paddingTop: 6 },
-  backButton: { padding: 8 },
-  addButton: { padding: 8 },
-  headerTitle: { fontSize: 20, color: THEME.ink, fontFamily: FONTS.headingBold },
-  headerDate: { fontSize: 12.5, color: THEME.inkMuted, textTransform: "capitalize", marginTop: 2, fontFamily: FONTS.body },
-  weatherBadge: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
-  weatherEmoji: { fontSize: 13 },
-  weatherTemps: { fontSize: 11.5, color: THEME.inkMuted, fontFamily: FONTS.mono },
-  weatherUnavailable: { fontSize: 10.5, color: THEME.inkFaint, fontFamily: FONTS.body },
-  progressText: { fontSize: 11.5, color: THEME.teal, marginLeft: 44, marginTop: 2, fontFamily: FONTS.bodyMedium },
-  scrollContent: { padding: 20, paddingTop: 16 },
-  rowWrap: { flexDirection: "row" },
-  timeline: { alignItems: "center", width: 20 },
-  dotTouch: { marginTop: 4, alignItems: "center", justifyContent: "center" },
-  dot: {},
-  line: { flex: 1, width: 2, marginTop: 4 },
-  rowContent: { flex: 1, paddingLeft: 12, paddingBottom: 22 },
-  rowCard: {
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+
+  topBar: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: layout.gutter, paddingTop: space.xs, paddingBottom: space.xs },
+  tripName: { flex: 1 },
+  scrollContent: { paddingHorizontal: layout.gutter },
+  titleBlock: { gap: space.xs, paddingTop: space.sm, paddingBottom: space.lg },
+  metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: space.md, rowGap: space.sm, marginTop: space.xs },
+  locationChip: { maxWidth: "100%" },
+
+  weatherBadge: { flexDirection: "row", alignItems: "center", gap: space.xs + 2 },
+  weatherEmoji: { ...type.subhead },
+  weatherTemps: { ...type.numeral, color: THEME.inkMuted },
+  weatherTempsSmall: { ...type.numeralSmall },
+  weatherUnavailable: { ...type.caption, color: THEME.inkFaint, flexShrink: 1 },
+
+  progressRow: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.lg },
+  progressBar: { flex: 1 },
+  progressNumber: { ...type.numeral },
+
+  panel: { marginBottom: space.lg },
+  panelRow: { flexDirection: "row", alignItems: "center", gap: space.md },
+  panelText: { flex: 1 },
+  parkBar: { marginTop: space.md },
+
+  flightRoute: { flexDirection: "row", alignItems: "center", gap: space.md },
+  flightAirport: { alignItems: "flex-start", gap: space.xs },
+  flightCode: { ...type.numeralLarge },
+  flightGate: { ...type.caption, color: THEME.blue },
+  flightPath: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.sm },
+  dashes: { flex: 1, flexDirection: "row", justifyContent: "space-between" },
+  dash: { width: 4, height: 2, borderRadius: 1, backgroundColor: THEME.hairStrong },
+  flightFacts: { flexDirection: "row", gap: space.xxl },
+  flightFactsRuled: { marginTop: space.lg, paddingTop: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: THEME.hairStrong },
+  flightLive: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: space.sm, marginTop: space.md },
+  flightLiveTime: { ...type.numeralSmall, color: THEME.teal },
+  flightNote: { color: THEME.inkFaint, marginTop: space.md },
+
+  stepRow: { flexDirection: "row", gap: space.sm },
+  stepTime: { ...type.numeral, minWidth: 48, paddingTop: space.sm + (NODE - type.numeral.lineHeight) / 2 },
+  rail: { width: NODE, alignItems: "center" },
+  railLine: { width: 2, backgroundColor: THEME.hairStrong },
+  railLineTop: { height: space.sm },
+  railLineBottom: { flex: 1 },
+  railLineHidden: { backgroundColor: "transparent" },
+  node: { width: NODE, height: NODE, borderRadius: NODE / 2, alignItems: "center", justifyContent: "center" },
+
+  // The pressed / swiped area bleeds 8pt into the screen margin so the price lines up with the gutter.
+  swipeWrap: { flex: 1, minWidth: 0, marginRight: -space.sm },
+  swipeContainer: { flex: 1 },
+  stepContent: {
     flex: 1,
-    marginLeft: 12,
-    marginBottom: 14,
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 13,
-    ...CARD_SHADOW,
+    gap: space.xs,
+    paddingTop: space.sm + (NODE - type.label.lineHeight) / 2,
+    paddingBottom: space.md,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.md,
   },
-  rowTop: { flexDirection: "row", alignItems: "center", gap: 10 },
-  iconBadge: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  rowInfo: { flex: 1 },
-  rowTitle: { fontSize: 15, color: THEME.ink, fontFamily: FONTS.headingSemiBold },
-  rowTitleDone: { textDecorationLine: "line-through" },
-  rowTime: { fontSize: 11, color: THEME.inkFaint, marginTop: 2, fontFamily: FONTS.mono },
-  rowNote: { fontSize: 12, color: THEME.inkMuted, marginTop: 6, marginLeft: 44, fontFamily: FONTS.body },
-  rowMetaLine: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 5, marginLeft: 44 },
-  rowMetaText: { fontSize: 11.5, color: THEME.inkFaint, fontFamily: FONTS.body },
-  rowPrice: { fontSize: 13.5, color: THEME.gold, marginTop: 6, marginLeft: 44, fontFamily: FONTS.monoMedium },
-  rowDeleteAction: {
+  stepTitleRow: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
+  stepTitle: { ...type.name, flex: 1, minWidth: 0 },
+  stepPrice: { ...type.numeral, color: THEME.inkMuted, flexShrink: 0 },
+  metaLine: { flexDirection: "row", alignItems: "flex-start", gap: space.xs + 2 },
+  metaText: { flex: 1, minWidth: 0 },
+  deleteAction: {
+    width: 72,
+    marginLeft: space.sm,
+    marginVertical: space.xs,
+    borderRadius: radius.md,
     backgroundColor: THEME.stamp,
-    justifyContent: "center",
-    alignItems: "center",
-    width: 60,
-    borderRadius: 14,
-    marginLeft: 8,
-  },
-  bigAddButton: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    borderWidth: 1.5,
-    borderColor: THEME.gold,
-    borderStyle: "dashed",
-    borderRadius: 14,
-    paddingVertical: 15,
-    marginLeft: 32,
-    marginTop: 4,
   },
-  bigAddButtonText: { color: THEME.gold, fontSize: 14, fontFamily: FONTS.bodySemiBold },
-  modalOverlay: { flex: 1, backgroundColor: "#00000099", alignItems: "center", justifyContent: "center", padding: 24 },
-  modalCard: { backgroundColor: THEME.bgCard, borderRadius: 18, padding: 20, width: "100%", borderWidth: 1, borderColor: THEME.border, ...CARD_SHADOW },
-  modalTitle: { fontSize: 15.5, color: THEME.ink, fontFamily: FONTS.headingSemiBold },
-  modalHelp: { fontSize: 12, color: THEME.inkFaint, marginTop: 6, marginBottom: 12, fontFamily: FONTS.body },
-  modalInput: {
-    backgroundColor: THEME.bgCardAlt,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: THEME.ink,
-    fontSize: 14,
-    fontFamily: FONTS.body,
-  },
-  modalButtonRow: { flexDirection: "row", gap: 10, marginTop: 14 },
-  modalButton: { flex: 1, borderWidth: 1, borderColor: THEME.teal, borderRadius: 10, paddingVertical: 11, alignItems: "center" },
-  modalButtonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
+  addStep: { marginTop: space.xl },
+
+  sheetHelp: { marginBottom: space.lg },
+  typeGroup: { marginBottom: space.md },
+  sheetButtons: { flexDirection: "row", gap: space.md },
+  sheetButton: { flex: 1 },
 });

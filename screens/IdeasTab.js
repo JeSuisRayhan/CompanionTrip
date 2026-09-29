@@ -1,9 +1,8 @@
 import React, { useState, useMemo } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, TextInput, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, CARD_SHADOW } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, TONES, space, layout, radius, type } from "../lib/theme";
 import { formatMoney } from "../lib/budget";
 import {
   getIdeaCategories,
@@ -21,6 +20,27 @@ import {
   CUSTOM_CATEGORY_ICONS,
 } from "../lib/ideas";
 import DayPickerModal from "../components/DayPickerModal";
+import { Txt, Button, IconButton, Chip, Badge, Group, Row, Field, EmptyState, Sheet } from "../components/ui";
+
+// A category stores its colour; the tone with the same foreground gives the
+// tinted pair that Chip and Row expect.
+function toneOfCategory(cat) {
+  return Object.keys(TONES).find((k) => TONES[k].fg === cat.color) || "neutral";
+}
+
+// Spoken names for the icon choices (the ids themselves are English).
+const ICON_LABELS = {
+  star: "étoile",
+  heart: "cœur",
+  camera: "appareil photo",
+  wine: "verre de vin",
+  cafe: "café",
+  "musical-notes": "musique",
+  ticket: "billet",
+  walk: "marche",
+  boat: "bateau",
+  business: "immeuble",
+};
 
 // The "Idées" tab of a "Construire mon voyage" trip: a notebook of places
 // grouped by category. Each idea is either still loose or placed on a day.
@@ -65,99 +85,116 @@ export default function IdeasTab({ trip, navigation, onChange }) {
     ]);
   }
 
+  // Also shown under the empty state, where it is the only other way out.
+  const hotelsButton = (
+    <Button
+      title={`Hôtels${staysCount ? ` (${staysCount})` : ""}`}
+      icon="bed-outline"
+      variant="secondary"
+      size="sm"
+      style={ideas.length === 0 ? styles.selfCenter : null}
+      onPress={() => navigation.navigate("Hotels", { tripId: trip.id })}
+    />
+  );
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-      <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.addButton} onPress={() => openEditor(undefined)} activeOpacity={0.85}>
-          <Ionicons name="add" size={18} color={THEME.bg} />
-          <Text style={styles.addButtonText}>Ajouter une idée</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.hotelsButton} onPress={() => navigation.navigate("Hotels", { tripId: trip.id })} activeOpacity={0.85}>
-          <Ionicons name="bed-outline" size={16} color={THEME.inkMuted} />
-          <Text style={styles.hotelsButtonText}>Hôtels{staysCount ? ` (${staysCount})` : ""}</Text>
-        </TouchableOpacity>
-      </View>
-
       {ideas.length > 0 && (
-        <View style={styles.statsRow}>
-          <Text style={styles.statsText}>
-            {stats.total} idée{stats.total !== 1 ? "s" : ""} · {stats.placed} placée{stats.placed !== 1 ? "s" : ""}
-          </Text>
-          {stats.mustUnplaced > 0 && (
-            <Text style={styles.statsWarn}>
-              {stats.mustUnplaced} indispensable{stats.mustUnplaced !== 1 ? "s" : ""} à placer
-            </Text>
-          )}
-        </View>
+        <>
+          <View style={styles.actionRow}>
+            <Button title="Ajouter une idée" icon="add" onPress={() => openEditor(undefined)} style={styles.flex} />
+            {hotelsButton}
+          </View>
+          <View style={styles.statsRow}>
+            <Txt variant="subhead">
+              {`${stats.total} idée${stats.total !== 1 ? "s" : ""}, ${stats.placed} placée${stats.placed !== 1 ? "s" : ""}`}
+            </Txt>
+            {stats.mustUnplaced > 0 && (
+              <Txt variant="caption" color="stamp">
+                {`${stats.mustUnplaced} indispensable${stats.mustUnplaced !== 1 ? "s" : ""} à placer`}
+              </Txt>
+            )}
+          </View>
+        </>
       )}
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipRow}>
-        <TouchableOpacity style={[styles.chip, filter === "all" && styles.chipActive]} onPress={() => setFilter("all")}>
-          <Text style={[styles.chipText, filter === "all" && styles.chipTextActive]}>Tout ({ideas.length})</Text>
-        </TouchableOpacity>
-        {categories.map((c) => {
-          const active = filter === c.id;
-          return (
-            <TouchableOpacity
-              key={c.id}
-              style={[styles.chip, active && { borderColor: c.color, backgroundColor: c.dim }]}
-              onPress={() => setFilter(c.id)}
-              onLongPress={() => confirmDeleteCategory(c)}
-              delayLongPress={450}
-            >
-              <Ionicons name={c.icon} size={13} color={active ? c.color : THEME.inkMuted} />
-              <Text style={[styles.chipText, active && { color: c.color }]}>
-                {c.label} ({countFor(c.id)})
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-        <TouchableOpacity style={styles.chipAdd} onPress={() => setCatModalOpen(true)} hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}>
-          <Ionicons name="add" size={16} color={THEME.inkMuted} />
-        </TouchableOpacity>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[styles.chipScroll, ideas.length > 0 && styles.chipScrollGap]}
+        contentContainerStyle={styles.chipRow}
+      >
+        <Chip label="Tout" count={ideas.length} selected={filter === "all"} tone="gold" accessibilityLabel={`Tout, ${ideas.length}`} onPress={() => setFilter("all")} />
+        {categories.map((c) => (
+          <Chip
+            key={c.id}
+            label={c.label}
+            icon={c.icon}
+            count={countFor(c.id)}
+            selected={filter === c.id}
+            tone={toneOfCategory(c)}
+            accessibilityLabel={`${c.label}, ${countFor(c.id)}`}
+            onPress={() => setFilter(c.id)}
+            onLongPress={() => confirmDeleteCategory(c)}
+          />
+        ))}
+        <Chip label="Catégorie" icon="add" accessibilityLabel="Ajouter une catégorie" style={styles.chipAdd} onPress={() => setCatModalOpen(true)} />
       </ScrollView>
 
       {ideas.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Ionicons name="bulb-outline" size={30} color={THEME.gold} />
-          <Text style={styles.emptyTitle}>Votre carnet d'idées est vide</Text>
-          <Text style={styles.emptyText}>
-            Notez les lieux qui vous font envie : restos, activités, endroits vus sur TikTok… Chaque idée a un lieu, une
-            priorité et une durée. Vous les posez ensuite sur vos jours.
-          </Text>
-        </View>
+        <>
+          <EmptyState
+            icon="bulb-outline"
+            tone="gold"
+            title="Votre carnet d'idées est vide"
+            text="Notez les lieux qui vous font envie : restos, activités, endroits vus sur TikTok… Chaque idée a un lieu, une priorité et une durée. Vous les posez ensuite sur vos jours."
+            action={{ label: "Ajouter une idée", icon: "add", onPress: () => openEditor(undefined) }}
+          />
+          {hotelsButton}
+        </>
       ) : (
         visibleCategories.map((cat) => {
           const list = sortIdeas(ideas.filter((i) => getIdeaCategory(trip, i.categoryId).id === cat.id));
           if (filter === "all" && list.length === 0) return null;
+          const tone = toneOfCategory(cat);
           return (
             <View key={cat.id} style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name={cat.icon} size={14} color={cat.color} />
-                <Text style={[styles.sectionTitle, { color: cat.color }]}>{cat.label}</Text>
+              <View style={styles.sectionTitle}>
+                <Ionicons name={cat.icon} size={18} color={TONES[tone].fg} />
+                <View style={styles.sectionTitleText}>
+                  <Text style={type.heading} accessibilityRole="header">
+                    {cat.label}
+                  </Text>
+                  <Text style={[type.numeralSmall, { color: THEME.inkFaint }]}>{list.length}</Text>
+                </View>
               </View>
               {list.length === 0 ? (
-                <Text style={styles.sectionEmpty}>Rien ici pour l'instant.</Text>
+                <Txt variant="subhead">Rien ici pour l'instant.</Txt>
               ) : (
-                list.map((idea) => (
-                  <IdeaCard
-                    key={idea.id}
-                    idea={idea}
-                    cat={cat}
-                    trip={trip}
-                    placement={placed.get(idea.id)}
-                    onOpen={() => openEditor(idea.id)}
-                    onPlace={() => setPickerIdea(idea)}
-                    onBook={() => bookHotel(idea)}
-                  />
-                ))
+                <Group>
+                  {list.map((idea) => (
+                    <IdeaRow
+                      key={idea.id}
+                      idea={idea}
+                      cat={cat}
+                      tone={tone}
+                      trip={trip}
+                      placement={placed.get(idea.id)}
+                      onOpen={() => openEditor(idea.id)}
+                      onPlace={() => setPickerIdea(idea)}
+                      onBook={() => bookHotel(idea)}
+                    />
+                  ))}
+                </Group>
               )}
             </View>
           );
         })
       )}
 
-      <Text style={styles.attribution}>Recherche d'adresses © contributeurs OpenStreetMap</Text>
+      <Txt variant="caption" color="inkFaint" style={styles.attribution}>
+        Recherche d'adresses © contributeurs OpenStreetMap
+      </Txt>
 
       <DayPickerModal
         visible={!!pickerIdea}
@@ -186,62 +223,59 @@ export default function IdeasTab({ trip, navigation, onChange }) {
   );
 }
 
-function IdeaCard({ idea, cat, trip, placement, onOpen, onPlace, onBook }) {
+// One idea: category tile, name, address, then priority / duration / price.
+// The trailing slot is either the next action (place, book) or where it went.
+function IdeaRow({ idea, cat, tone, trip, placement, onOpen, onPlace, onBook }) {
   const pr = priorityMeta(idea.priority);
   const isHotel = cat.activityType === "hotel";
   const line = ideaAddressLine(idea);
   const duration = isHotel ? null : formatIdeaDuration(idea.durationMin);
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onOpen} activeOpacity={0.85}>
-      <View style={[styles.badge, { backgroundColor: cat.dim }]}>
-        <Ionicons name={cat.icon} size={18} color={cat.color} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.cardTitle} numberOfLines={2}>
+    <Row
+      icon={cat.icon}
+      tone={tone}
+      title={
+        <Text style={styles.ideaName} numberOfLines={2}>
           {idea.name}
         </Text>
-        {!!line && (
-          <Text style={styles.cardSub} numberOfLines={1}>
-            {line}
-          </Text>
-        )}
-        <View style={styles.pillRow}>
-          <View style={styles.pill}>
-            <View style={[styles.dot, { backgroundColor: pr.color }]} />
-            <Text style={styles.pillText}>{pr.label}</Text>
-          </View>
-          {!!duration && (
-            <View style={styles.pill}>
-              <Ionicons name="time-outline" size={11} color={THEME.inkFaint} />
-              <Text style={styles.pillText}>{duration}</Text>
-            </View>
-          )}
-          {idea.price != null && (
-            <View style={styles.pill}>
-              <Text style={styles.pillText}>{formatMoney(idea.price, trip.currency)}</Text>
-            </View>
-          )}
-          {!hasPosition(idea) && (
-            <View style={styles.pill}>
-              <Ionicons name="location-outline" size={11} color={THEME.inkFaint} />
-              <Text style={styles.pillText}>Sans position</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {placement ? (
-        <View style={styles.placedPill}>
-          <Ionicons name={isHotel ? "bed" : "checkmark"} size={12} color={THEME.teal} />
-          <Text style={styles.placedText}>{isHotel ? "Séjour" : `J${placement.dayIndex + 1}`}</Text>
-        </View>
-      ) : (
-        <TouchableOpacity style={styles.placeButton} onPress={isHotel ? onBook : onPlace} hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}>
-          <Text style={styles.placeButtonText}>{isHotel ? "Réserver" : "Placer"}</Text>
-        </TouchableOpacity>
+      }
+      accessibilityLabel={`${idea.name}, ${cat.label}, ${pr.label}`}
+      onPress={onOpen}
+      right={
+        placement ? (
+          <Badge label={isHotel ? "Séjour" : `J${placement.dayIndex + 1}`} icon={isHotel ? "bed" : "checkmark"} tone="teal" />
+        ) : (
+          <Button
+            title={isHotel ? "Réserver" : "Placer"}
+            accessibilityLabel={`${isHotel ? "Réserver" : "Placer"} ${idea.name}`}
+            size="sm"
+            tone="gold"
+            onPress={isHotel ? onBook : onPlace}
+          />
+        )
+      }
+    >
+      {!!line && (
+        <Text style={type.subhead} numberOfLines={1}>
+          {line}
+        </Text>
       )}
-    </TouchableOpacity>
+      <View style={styles.metaRow}>
+        <View style={styles.metaItem}>
+          <View style={[styles.dot, { backgroundColor: pr.color }]} />
+          <Text style={type.caption}>{pr.label}</Text>
+        </View>
+        {!!duration && <Text style={type.numeralSmall}>{duration}</Text>}
+        {idea.price != null && <Text style={type.numeralSmall}>{formatMoney(idea.price, trip.currency)}</Text>}
+        {!hasPosition(idea) && (
+          <View style={styles.metaItem}>
+            <Ionicons name="location-outline" size={12} color={THEME.inkFaint} />
+            <Text style={[type.caption, { color: THEME.inkFaint }]}>Sans position</Text>
+          </View>
+        )}
+      </View>
+    </Row>
   );
 }
 
@@ -257,180 +291,55 @@ function CategoryModal({ visible, onClose, onSave }) {
   }, [visible]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>Nouvelle catégorie</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="Musées, bars, points de vue…"
-            placeholderTextColor={THEME.inkFaint}
-            autoFocus
-            maxLength={24}
+    <Sheet visible={visible} onClose={onClose} title="Nouvelle catégorie">
+      <Field label="Nom" value={name} onChangeText={setName} placeholder="Musées, bars, points de vue…" autoFocus maxLength={24} />
+      <Txt variant="caption" style={styles.iconLabel}>
+        Icône
+      </Txt>
+      <View style={styles.iconRow}>
+        {CUSTOM_CATEGORY_ICONS.map((ic) => (
+          <IconButton
+            key={ic}
+            icon={ic}
+            label={`Icône ${ICON_LABELS[ic] || ic}${icon === ic ? ", sélectionnée" : ""}`}
+            filled
+            size={20}
+            tone={icon === ic ? "gold" : undefined}
+            onPress={() => setIcon(ic)}
           />
-          <View style={styles.iconRow}>
-            {CUSTOM_CATEGORY_ICONS.map((ic) => (
-              <TouchableOpacity key={ic} style={[styles.iconChoice, icon === ic && styles.iconChoiceActive]} onPress={() => setIcon(ic)}>
-                <Ionicons name={ic} size={18} color={icon === ic ? THEME.gold : THEME.inkMuted} />
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.modalButtons}>
-            <TouchableOpacity style={styles.modalButton} onPress={onClose}>
-              <Text style={styles.modalButtonText}>Annuler</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalButton, !name.trim() && { opacity: 0.4 }]}
-              disabled={!name.trim()}
-              onPress={() => onSave({ name, icon })}
-            >
-              <Text style={styles.modalButtonText}>Créer</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.modalHint}>Astuce : un appui long sur une catégorie perso la supprime.</Text>
-        </View>
+        ))}
       </View>
-    </Modal>
+      <View style={styles.sheetButtons}>
+        <Button title="Annuler" variant="secondary" style={styles.flex} onPress={onClose} />
+        <Button title="Créer" disabled={!name.trim()} style={styles.flex} onPress={() => onSave({ name, icon })} />
+      </View>
+      <Txt variant="caption" style={styles.hint}>
+        Astuce : un appui long sur une catégorie perso la supprime.
+      </Txt>
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { padding: 20, paddingBottom: 40 },
-  actionRow: { flexDirection: "row", gap: 10 },
-  addButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: THEME.gold,
-    borderRadius: 12,
-    paddingVertical: 13,
-  },
-  addButtonText: { color: THEME.bg, fontSize: 14.5, fontFamily: FONTS.bodySemiBold },
-  hotelsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-  },
-  hotelsButtonText: { color: THEME.inkMuted, fontSize: 13.5, fontFamily: FONTS.bodyMedium },
-  statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 14 },
-  statsText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.body },
-  statsWarn: { color: THEME.stamp, fontSize: 12, fontFamily: FONTS.bodyMedium },
-  chipScroll: { flexGrow: 0, marginTop: 14, marginHorizontal: -20 },
-  chipRow: { paddingHorizontal: 20, gap: 8, alignItems: "center" },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  chipActive: { borderColor: THEME.ink, backgroundColor: THEME.bgRaised },
-  chipText: { color: THEME.inkMuted, fontSize: 12.5, fontFamily: FONTS.bodyMedium },
-  chipTextActive: { color: THEME.ink },
-  chipAdd: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: THEME.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  emptyBox: { alignItems: "center", paddingVertical: 40, paddingHorizontal: 12, gap: 10 },
-  emptyTitle: { color: THEME.ink, fontSize: 16, fontFamily: FONTS.headingSemiBold },
-  emptyText: { color: THEME.inkMuted, fontSize: 13.5, lineHeight: 19, textAlign: "center", fontFamily: FONTS.body },
-  section: { marginTop: 22 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 10 },
-  sectionTitle: { fontSize: 13, letterSpacing: 0.4, textTransform: "uppercase", fontFamily: FONTS.bodySemiBold },
-  sectionEmpty: { color: THEME.inkFaint, fontSize: 12.5, fontFamily: FONTS.body },
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 14,
-    padding: 13,
-    marginBottom: 10,
-    ...CARD_SHADOW,
-  },
-  badge: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  cardTitle: { color: THEME.ink, fontSize: 15, fontFamily: FONTS.headingSemiBold },
-  cardSub: { color: THEME.inkFaint, fontSize: 12, marginTop: 2, fontFamily: FONTS.body },
-  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
-  pill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: THEME.bgCardAlt,
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  pillText: { color: THEME.inkMuted, fontSize: 11, fontFamily: FONTS.body },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  placedPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: THEME.tealDim,
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-  },
-  placedText: { color: THEME.teal, fontSize: 12, fontFamily: FONTS.bodySemiBold },
-  placeButton: { borderWidth: 1, borderColor: THEME.gold, borderRadius: 8, paddingHorizontal: 11, paddingVertical: 6 },
-  placeButtonText: { color: THEME.gold, fontSize: 12, fontFamily: FONTS.bodySemiBold },
-  attribution: { color: THEME.inkFaint, fontSize: 10.5, textAlign: "center", marginTop: 26, fontFamily: FONTS.body },
-  modalOverlay: { flex: 1, backgroundColor: "#00000099", alignItems: "center", justifyContent: "center", padding: 24 },
-  modalCard: {
-    backgroundColor: THEME.bgCard,
-    borderRadius: 18,
-    padding: 20,
-    width: "100%",
-    borderWidth: 1,
-    borderColor: THEME.border,
-    ...CARD_SHADOW,
-  },
-  modalTitle: { color: THEME.ink, fontSize: 16, fontFamily: FONTS.headingSemiBold, marginBottom: 14 },
-  input: {
-    backgroundColor: THEME.bgCardAlt,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    color: THEME.ink,
-    fontSize: 14,
-    fontFamily: FONTS.body,
-  },
-  iconRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
-  iconChoice: {
-    width: 40,
-    height: 40,
-    borderRadius: 11,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  iconChoiceActive: { borderColor: THEME.gold, backgroundColor: THEME.goldDim },
-  modalButtons: { flexDirection: "row", gap: 10, marginTop: 18 },
-  modalButton: { flex: 1, borderWidth: 1, borderColor: THEME.teal, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
-  modalButtonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
-  modalHint: { color: THEME.inkFaint, fontSize: 11, textAlign: "center", marginTop: 12, fontFamily: FONTS.body },
+  flex: { flex: 1 },
+  scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
+  actionRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  selfCenter: { alignSelf: "center" },
+  statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginTop: space.lg },
+  chipScroll: { flexGrow: 0, marginHorizontal: -layout.gutter },
+  chipScrollGap: { marginTop: space.md },
+  chipRow: { paddingHorizontal: layout.gutter, gap: space.sm, alignItems: "center" },
+  chipAdd: { backgroundColor: "transparent", borderColor: THEME.hairStrong, borderStyle: "dashed" },
+  section: { marginTop: space.xl },
+  sectionTitle: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.md },
+  sectionTitleText: { flexDirection: "row", alignItems: "baseline", gap: space.sm },
+  ideaName: { ...type.name },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.md, rowGap: 2, marginTop: space.xs },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: space.xs + 2 },
+  dot: { width: space.sm, height: space.sm, borderRadius: radius.full },
+  attribution: { textAlign: "center", marginTop: space.xl },
+  iconLabel: { marginBottom: space.sm },
+  iconRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginBottom: space.xl },
+  sheetButtons: { flexDirection: "row", gap: space.md },
+  hint: { textAlign: "center", marginTop: space.lg },
 });

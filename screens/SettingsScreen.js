@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Linking, Alert } from "react-native";
+import { View, ScrollView, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, CARD_SHADOW } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { space, layout, THEME } from "../lib/theme";
 import { getSetting, setSetting, removeSetting, loadTrips } from "../lib/storage";
 import { requestNotificationPermission, getNotificationPermission } from "../lib/notifications";
 import { exportBackup, importBackupFromPicker } from "../lib/backup";
 import { hasPin, setPin, clearPin } from "../lib/pin";
 import { hasBuildTimeUnsplashKey } from "../lib/unsplash";
+import { Txt, Button, Badge, Group, Row, SectionTitle, Field } from "../components/ui";
 
 export default function SettingsScreen() {
   const [apiKey, setApiKey] = useState("");
@@ -124,176 +123,170 @@ export default function SettingsScreen() {
     }
   }
 
+  const notifGranted = notifPermission === "granted";
+  // Status lines are plain strings set by the handlers; these pick out the failures.
+  const pinFailed = /^Le code doit/.test(pinStatus);
+  const backupFailed = /^(Échec|Ce fichier)/.test(backupStatus);
+
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="sparkles" size={18} color={THEME.pink} />
-            <Text style={styles.cardTitle}>Clé API (recommandé)</Text>
-          </View>
-          <Text style={styles.cardText}>
-            Utilisée uniquement en dernier recours pour "Corriger le format" quand le texte est vraiment en vrac —
-            le reste du temps, la correction se fait sans aucune IA. Reste sur cet appareil, envoyée uniquement à
-            l'API Anthropic. Créez-en une sur console.anthropic.com.
-          </Text>
-          <TextInput
-            style={styles.input}
-            value={apiKey}
-            onChangeText={setApiKey}
-            placeholder="sk-ant-..."
-            placeholderTextColor={THEME.inkFaint}
-            autoCapitalize="none"
-            secureTextEntry
-          />
-          <TouchableOpacity style={styles.button} onPress={saveKey}>
-            <Text style={styles.buttonText}>{saved ? "Enregistrée" : "Enregistrer la clé"}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="image-outline" size={18} color={THEME.blue} />
-            <Text style={styles.cardTitle}>Photos de couverture (Unsplash)</Text>
-          </View>
-          {hasBuildTimeUnsplashKey() ? (
-            <Text style={styles.cardText}>
-              Déjà activé pour cette version de l'app — rien à faire ici. Le champ ci-dessous ne sert que si cette
-              clé intégrée venait à manquer.
-            </Text>
-          ) : (
-            <Text style={styles.cardText}>
-              Ajoute automatiquement une photo de destination à chaque nouveau voyage. Créez une clé gratuite sur
-              unsplash.com/developers (compte "Demo", aucune carte bancaire requise).
-            </Text>
+    <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        <Section title="Notifications" first>
+          <Group>
+            <Row
+              icon="notifications-outline"
+              tone={notifGranted ? "teal" : "neutral"}
+              title="Rappels de voyage"
+              subtitle={notifGranted ? "Autorisés sur cet appareil." : "Autorisez-les pour être prévenu à temps."}
+              right={<Badge label={notifGranted ? "Activées" : "Désactivées"} tone={notifGranted ? "teal" : "neutral"} style={styles.badge} />}
+            />
+          </Group>
+          {!notifGranted && (
+            <View style={styles.form}>
+              <Button title="Activer les notifications" full onPress={enableNotifications} />
+            </View>
           )}
-          <TextInput
-            style={styles.input}
-            value={unsplashKey}
-            onChangeText={setUnsplashKey}
-            placeholder="Access Key Unsplash"
-            placeholderTextColor={THEME.inkFaint}
-            autoCapitalize="none"
-            secureTextEntry
-          />
-          <TouchableOpacity style={styles.button} onPress={saveUnsplashKey}>
-            <Text style={styles.buttonText}>{unsplashSaved ? "Enregistrée" : "Enregistrer la clé"}</Text>
-          </TouchableOpacity>
-        </View>
+        </Section>
 
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="notifications" size={18} color={THEME.gold} />
-            <Text style={styles.cardTitle}>Notifications</Text>
+        <Section title="Verrouillage par code">
+          <Group>
+            <Row
+              icon="lock-closed-outline"
+              tone={pinEnabled ? "teal" : "neutral"}
+              title="Code à 4 chiffres"
+              right={<Badge label={pinEnabled ? "Activé" : "Aucun code"} tone={pinEnabled ? "teal" : "neutral"} style={styles.badge} />}
+            />
+          </Group>
+          <View style={styles.form}>
+            <Txt variant="subhead">
+              {pinEnabled
+                ? "Un code à 4 chiffres est demandé à chaque ouverture de l'app."
+                : "Demande un code à 4 chiffres à chaque ouverture de l'app. Le code reste uniquement sur cet appareil."}
+            </Txt>
+            {pinEnabled ? (
+              <Button title="Désactiver le code" variant="secondary" full onPress={onDisablePin} />
+            ) : (
+              <>
+                <Field
+                  value={pinInput}
+                  onChangeText={(t) => setPinInput(t.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="4 chiffres"
+                  keyboardType="number-pad"
+                  secureTextEntry
+                  accessibilityLabel="Code à 4 chiffres"
+                  style={styles.fieldTight}
+                />
+                <Button title="Activer le code" variant="secondary" full onPress={onSavePin} />
+              </>
+            )}
+            {pinStatus ? <StatusNote text={pinStatus} failed={pinFailed} /> : null}
           </View>
-          <Text style={styles.cardText}>
-            {notifPermission === "granted"
-              ? "Activées — vous recevrez les rappels de voyage."
-              : "Autorisez les notifications pour recevoir les rappels de voyage."}
-          </Text>
-          {notifPermission !== "granted" && (
-            <TouchableOpacity style={styles.button} onPress={enableNotifications}>
-              <Text style={styles.buttonText}>Activer les notifications</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        </Section>
 
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="lock-closed-outline" size={18} color={THEME.stamp} />
-            <Text style={styles.cardTitle}>Verrouillage par code</Text>
+        <Section title="Clé API (recommandé)">
+          <View style={styles.formFirst}>
+            <Txt variant="subhead">
+              Utilisée uniquement en dernier recours pour « Corriger le format » quand le texte est vraiment en vrac — le reste du temps, la correction se fait sans aucune IA. Reste sur cet appareil, envoyée uniquement à l'API Anthropic. Créez-en une sur console.anthropic.com.
+            </Txt>
+            <Field
+              value={apiKey}
+              onChangeText={setApiKey}
+              placeholder="sk-ant-..."
+              autoCapitalize="none"
+              secureTextEntry
+              accessibilityLabel="Clé API Anthropic"
+              style={styles.fieldTight}
+            />
+            <Button
+              title={saved ? "Enregistrée" : "Enregistrer la clé"}
+              icon={saved ? "checkmark" : undefined}
+              tone={saved ? "teal" : undefined}
+              variant="secondary"
+              full
+              onPress={saveKey}
+            />
           </View>
-          <Text style={styles.cardText}>
-            {pinEnabled
-              ? "Un code à 4 chiffres est demandé à chaque ouverture de l'app."
-              : "Demande un code à 4 chiffres à chaque ouverture de l'app. Le code reste uniquement sur cet appareil."}
-          </Text>
-          {pinEnabled ? (
-            <TouchableOpacity style={styles.button} onPress={onDisablePin}>
-              <Text style={styles.buttonText}>Désactiver</Text>
-            </TouchableOpacity>
-          ) : (
-            <>
-              <TextInput
-                style={styles.input}
-                value={pinInput}
-                onChangeText={(t) => setPinInput(t.replace(/\D/g, "").slice(0, 4))}
-                placeholder="4 chiffres"
-                placeholderTextColor={THEME.inkFaint}
-                keyboardType="number-pad"
-                secureTextEntry
-              />
-              <TouchableOpacity style={styles.button} onPress={onSavePin}>
-                <Text style={styles.buttonText}>Activer</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          {pinStatus && <Text style={styles.statusText}>{pinStatus}</Text>}
-        </View>
+        </Section>
 
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="cloud-download-outline" size={18} color={THEME.teal} />
-            <Text style={styles.cardTitle}>Sauvegarde</Text>
+        <Section title="Photos de couverture (Unsplash)">
+          <View style={styles.formFirst}>
+            <Txt variant="subhead">
+              {hasBuildTimeUnsplashKey()
+                ? "Déjà activé pour cette version de l'app — rien à faire ici. Le champ ci-dessous ne sert que si cette clé intégrée venait à manquer."
+                : "Ajoute automatiquement une photo de destination à chaque nouveau voyage. Créez une clé gratuite sur unsplash.com/developers (compte « Demo », aucune carte bancaire requise)."}
+            </Txt>
+            <Field
+              value={unsplashKey}
+              onChangeText={setUnsplashKey}
+              placeholder="Access Key Unsplash"
+              autoCapitalize="none"
+              secureTextEntry
+              accessibilityLabel="Clé d'accès Unsplash"
+              style={styles.fieldTight}
+            />
+            <Button
+              title={unsplashSaved ? "Enregistrée" : "Enregistrer la clé"}
+              icon={unsplashSaved ? "checkmark" : undefined}
+              tone={unsplashSaved ? "teal" : undefined}
+              variant="secondary"
+              full
+              onPress={saveUnsplashKey}
+            />
           </View>
-          <Text style={styles.cardText}>
-            {tripCount} voyage{tripCount !== 1 ? "s" : ""} enregistré{tripCount !== 1 ? "s" : ""} sur cet appareil,
-            uniquement en local. Exportez régulièrement une sauvegarde pour ne rien perdre — vos clés API ci-dessus
-            sont incluses, donc pas besoin de les retaper après une réinstallation.
-          </Text>
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={[styles.button, styles.buttonHalf]} onPress={onExportBackup} disabled={backupBusy}>
-              <Text style={styles.buttonText}>Exporter</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.button, styles.buttonHalf]} onPress={onImportBackup} disabled={backupBusy}>
-              <Text style={styles.buttonText}>Importer</Text>
-            </TouchableOpacity>
+        </Section>
+
+        <Section title="Sauvegarde">
+          <Group>
+            <Row
+              icon="cloud-download-outline"
+              title={`${tripCount} voyage${tripCount !== 1 ? "s" : ""} enregistré${tripCount !== 1 ? "s" : ""}`}
+              subtitle="Uniquement sur cet appareil."
+            />
+          </Group>
+          <View style={styles.form}>
+            <Txt variant="subhead">
+              Exportez régulièrement une sauvegarde pour ne rien perdre — vos clés API ci-dessus sont incluses, donc pas besoin de les retaper après une réinstallation.
+            </Txt>
+            <View style={styles.buttonRow}>
+              <Button title="Exporter" icon="share-outline" variant="secondary" disabled={backupBusy} onPress={onExportBackup} style={styles.flex} />
+              <Button title="Importer" icon="download-outline" variant="secondary" disabled={backupBusy} onPress={onImportBackup} style={styles.flex} />
+            </View>
+            {backupStatus ? <StatusNote text={backupStatus} failed={backupFailed} /> : null}
           </View>
-          {backupStatus && <Text style={styles.statusText}>{backupStatus}</Text>}
-        </View>
+        </Section>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// A titled block: section title, then its group.
+function Section({ title, first, children }) {
+  return (
+    <View style={first ? null : styles.section}>
+      <SectionTitle title={title} />
+      {children}
+    </View>
+  );
+}
+
+// Result of the last action: teal when it worked, stamp when it failed.
+function StatusNote({ text, failed }) {
+  return (
+    <Txt variant="caption" color={failed ? "stamp" : "teal"} accessibilityLiveRegion="polite">
+      {text}
+    </Txt>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: THEME.bg },
-  scrollContent: { padding: 20 },
-  pageTitle: { fontSize: 24, color: THEME.ink, marginBottom: 22, fontFamily: FONTS.headingBold },
-  card: {
-    backgroundColor: THEME.bgCard,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 16,
-    padding: 17,
-    marginBottom: 16,
-    ...CARD_SHADOW,
-  },
-  cardHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  cardTitle: { fontSize: 15, color: THEME.ink, fontFamily: FONTS.headingSemiBold },
-  cardText: { fontSize: 12.5, color: THEME.inkMuted, lineHeight: 18, marginBottom: 12, fontFamily: FONTS.body },
-  input: {
-    backgroundColor: THEME.bgCardAlt,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: THEME.ink,
-    fontSize: 13.5,
-    fontFamily: FONTS.mono,
-    marginBottom: 12,
-  },
-  button: {
-    borderWidth: 1,
-    borderColor: THEME.teal,
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  buttonText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
-  buttonRow: { flexDirection: "row", gap: 10 },
-  buttonHalf: { flex: 1 },
-  statusText: { color: THEME.inkMuted, fontSize: 12, marginTop: 10, textAlign: "center", fontFamily: FONTS.body },
+  scrollContent: { paddingHorizontal: layout.gutter, paddingTop: space.lg, paddingBottom: space.xxl },
+  section: { marginTop: space.xxl },
+  badge: { alignSelf: "center" },
+  // Explanation + controls under a section title (or under its status row).
+  form: { gap: space.md, marginTop: space.md },
+  formFirst: { gap: space.md },
+  fieldTight: { marginBottom: 0 },
+  buttonRow: { flexDirection: "row", gap: space.md },
+  flex: { flex: 1 },
 });

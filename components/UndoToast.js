@@ -1,7 +1,8 @@
-import React, { useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from "react-native";
-import { THEME } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import React, { useContext, useEffect, useRef } from "react";
+import { Text, Pressable, StyleSheet, Animated } from "react-native";
+import { SafeAreaInsetsContext } from "react-native-safe-area-context";
+import { THEME, space, layout, type, shadow } from "../lib/theme";
+import { round } from "./ui";
 
 const AUTO_DISMISS_MS = 5000;
 
@@ -9,9 +10,12 @@ const AUTO_DISMISS_MS = 5000;
 // do on `onUndo` / when it times out (`onDismiss`). The parent is
 // responsible for actually performing the delete right away and undoing it
 // if the user taps "Annuler" before the timer runs out.
+// It floats above the home indicator; screens leave `layout.tabBarClearance`
+// of empty space under their content so it never hides anything.
 export default function UndoToast({ visible, message, onUndo, onDismiss }) {
   const translateY = useRef(new Animated.Value(80)).current;
   const timerRef = useRef(null);
+  const insets = useContext(SafeAreaInsetsContext);
 
   useEffect(() => {
     if (visible) {
@@ -30,19 +34,25 @@ export default function UndoToast({ visible, message, onUndo, onDismiss }) {
   if (!visible) return null;
 
   return (
-    <Animated.View style={[styles.wrap, { transform: [{ translateY }] }]}>
-      <Text style={styles.message} numberOfLines={1}>
+    <Animated.View
+      accessibilityLiveRegion="polite"
+      style={[styles.wrap, round("md"), { bottom: space.xl + (insets ? insets.bottom : 0), transform: [{ translateY }] }]}
+    >
+      <Text style={styles.message} numberOfLines={2}>
         {message}
       </Text>
-      <TouchableOpacity
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Annuler la suppression"
         onPress={() => {
           if (timerRef.current) clearTimeout(timerRef.current);
           onUndo && onUndo();
         }}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        hitSlop={space.sm}
+        style={({ pressed }) => [styles.action, pressed && { opacity: 0.6 }]}
       >
         <Text style={styles.undoText}>Annuler</Text>
-      </TouchableOpacity>
+      </Pressable>
     </Animated.View>
   );
 }
@@ -50,22 +60,19 @@ export default function UndoToast({ visible, message, onUndo, onDismiss }) {
 const styles = StyleSheet.create({
   wrap: {
     position: "absolute",
-    left: 16,
-    right: 16,
-    bottom: 24,
+    left: layout.gutter,
+    right: layout.gutter,
+    minHeight: 56,
+    paddingLeft: space.lg,
+    paddingRight: space.sm,
     backgroundColor: THEME.bgRaised,
-    borderRadius: 12,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    gap: space.sm,
+    boxShadow: shadow.overlay,
   },
-  message: { color: THEME.ink, fontSize: 13.5, fontFamily: FONTS.body, flex: 1, marginRight: 12 },
-  undoText: { color: THEME.teal, fontSize: 13.5, fontFamily: FONTS.bodySemiBold },
+  message: { ...type.subhead, color: THEME.ink, flex: 1, paddingVertical: space.sm },
+  action: { minHeight: layout.minTouch, paddingHorizontal: space.md, justifyContent: "center" },
+  undoText: { ...type.label, color: THEME.gold },
 });

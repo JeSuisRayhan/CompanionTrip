@@ -1,10 +1,12 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { THEME } from "../lib/theme";
-import { FONTS } from "../lib/fonts";
+import { THEME, space, radius, type } from "../lib/theme";
 import { checkPin } from "../lib/pin";
+import { Txt } from "../components/ui";
+
+const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 export default function LockScreen({ onUnlock }) {
   const [digits, setDigits] = useState("");
@@ -33,41 +35,62 @@ export default function LockScreen({ onUnlock }) {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.center}>
-        <Ionicons name="lock-closed" size={28} color={THEME.gold} style={{ marginBottom: 16 }} />
-        <Text style={styles.title}>Code de verrouillage</Text>
-        <View style={styles.dots}>
+        <View style={styles.head}>
+          <Ionicons name="lock-closed" size={28} color={THEME.inkMuted} />
+          <Txt variant="title" style={styles.title} accessibilityRole="header">
+            Code de verrouillage
+          </Txt>
+          <Txt variant="subhead" color={error ? "stamp" : "inkMuted"} style={styles.title} accessibilityLiveRegion="polite">
+            {error ? "Code incorrect. Réessayez." : "Saisissez votre code à 4 chiffres."}
+          </Txt>
+        </View>
+
+        <View style={styles.dots} accessible accessibilityLabel={`${digits.length} chiffre${digits.length > 1 ? "s" : ""} saisi${digits.length > 1 ? "s" : ""} sur 4`}>
           {[0, 1, 2, 3].map((i) => (
             <View key={i} style={[styles.dot, digits.length > i && styles.dotFilled, error && styles.dotError]} />
           ))}
         </View>
+
         <View style={styles.keypad}>
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-            <TouchableOpacity key={d} style={styles.key} onPress={() => press(d)}>
-              <Text style={styles.keyText}>{d}</Text>
-            </TouchableOpacity>
+          {DIGITS.map((d) => (
+            <Key key={d} label={d} onPress={() => press(d)} />
           ))}
           <View style={styles.key} />
-          <TouchableOpacity style={styles.key} onPress={() => press("0")}>
-            <Text style={styles.keyText}>0</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.key} onPress={backspace}>
-            <Ionicons name="backspace-outline" size={20} color={THEME.inkMuted} />
-          </TouchableOpacity>
+          <Key label="0" onPress={() => press("0")} />
+          <Key icon="backspace-outline" label="Effacer" onPress={backspace} bare />
         </View>
       </View>
     </SafeAreaView>
   );
 }
 
+// One round key of the pad: a digit, or an icon for the erase key (`bare` = no fill).
+function Key({ label, icon, bare, onPress }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.key, !bare && styles.keyFilled, pressed && { backgroundColor: THEME.bgRaised }]}
+    >
+      {icon ? <Ionicons name={icon} size={24} color={THEME.inkMuted} /> : <Text style={type.title}>{label}</Text>}
+    </Pressable>
+  );
+}
+
+// Key diameter and pad width come from the spacing scale (48 + 24 = 72).
+const KEY = space.xxxl + space.xl;
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: THEME.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  title: { color: THEME.ink, fontSize: 16.5, marginBottom: 26, fontFamily: FONTS.headingSemiBold },
-  dots: { flexDirection: "row", gap: 14, marginBottom: 40 },
-  dot: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: THEME.border },
-  dotFilled: { backgroundColor: THEME.gold, borderColor: THEME.gold },
-  dotError: { backgroundColor: THEME.stamp, borderColor: THEME.stamp },
-  keypad: { flexDirection: "row", flexWrap: "wrap", width: 260, justifyContent: "center" },
-  key: { width: 78, height: 68, alignItems: "center", justifyContent: "center" },
-  keyText: { fontSize: 26, color: THEME.ink, fontFamily: FONTS.headingRegular },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: space.xl },
+  head: { alignItems: "center", gap: space.sm, marginBottom: space.xl },
+  title: { textAlign: "center" },
+  dots: { flexDirection: "row", gap: space.lg, marginBottom: space.xxl },
+  dot: { width: space.lg, height: space.lg, borderRadius: radius.full, backgroundColor: THEME.bgRaised },
+  dotFilled: { backgroundColor: THEME.gold },
+  dotError: { backgroundColor: THEME.stamp },
+  keypad: { flexDirection: "row", flexWrap: "wrap", gap: space.lg, width: KEY * 3 + space.lg * 2 },
+  key: { width: KEY, height: KEY, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
+  keyFilled: { backgroundColor: THEME.bgCard },
 });
