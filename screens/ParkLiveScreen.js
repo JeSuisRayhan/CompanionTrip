@@ -6,10 +6,10 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, TONES, space, layout, type } from "../lib/theme";
 import { getTrip, toggleActivityDone, editActivity } from "../lib/trips";
-import { resolveDayDate, formatDayLabel } from "../lib/dates";
+import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { fetchQueueTimes, liveByRideId, latestUpdate, ageLabel, waitTone, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
 import { waitOf } from "../lib/parkPlanner";
-import { dayStops, isMeal, currentWait, isClosed, estimatedEnd, postponedTime, shortQueues, doNow, timeBefore } from "../lib/parkLive";
+import { dayStops, isMeal, currentWait, isClosed, endLabel, postponedTime, shortQueues, doNow, timeBefore } from "../lib/parkLive";
 import WaitBadge from "../components/WaitBadge";
 import { Txt, Button, IconButton, Surface, Group, Row, ProgressBar, EmptyState, BackHeader } from "../components/ui";
 
@@ -132,7 +132,7 @@ export default function ParkLiveScreen({ route, navigation }) {
   const next = todo[0] || null;
   const later = todo.slice(1);
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const endsAt = estimatedEnd(todo, nowMin);
+  const endsAt = endLabel(todo, { date, today: isoDate(now), nowMin });
   const updated = data ? ageLabel(latestUpdate(data.rides)) : null;
 
   const nextWait = next ? currentWait(next) : 0;
@@ -163,7 +163,7 @@ export default function ParkLiveScreen({ route, navigation }) {
         <Surface tone="card" r="lg" pad="lg">
           <View style={styles.progressHead}>
             <Txt variant="label">{`${ridesDone} sur ${plural(rides.length, "attraction")} faite${ridesDone > 1 ? "s" : ""}`}</Txt>
-            {endsAt ? <Txt variant="caption">{`Fin vers ${endsAt}`}</Txt> : null}
+            {endsAt ? <Txt variant="caption">{endsAt}</Txt> : null}
           </View>
           <ProgressBar value={rides.length ? ridesDone / rides.length : 0} height={6} style={styles.bar} />
           <View style={styles.liveRow}>
