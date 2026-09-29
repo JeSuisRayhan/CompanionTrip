@@ -9,6 +9,7 @@ import { Badge } from "./ui";
 // else the usual one written by hand ("~30 min"), else nothing.
 export default function WaitBadge({ ride, idea }) {
   if (ride && !ride.open) return <Badge label="Fermée" tone="stamp" />;
+  if (idea && (idea.categoryId === "spectacle" || idea.showTime)) return null; // a show starts at its hour: no queue
   if (ride && ride.wait != null) return <Badge label={`${ride.wait} min`} icon="time-outline" tone={waitTone(ride.wait)} />;
   if (idea && idea.waitMin != null && idea.categoryId !== "repas") return <Text style={type.numeralSmall}>{`~${idea.waitMin} min`}</Text>;
   return null;

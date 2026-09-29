@@ -236,7 +236,7 @@ export default function ParkLiveScreen({ route, navigation }) {
               Pendant que la file baisse
             </Text>
             <Txt variant="caption" color="inkFaint" style={styles.note}>
-              Ouvertes, moins de 20 minutes d'attente, pas encore faites.
+              Ouvertes, 20 minutes d'attente ou moins, pas encore faites.
             </Txt>
             <Group>
               {suggestions.map((s) => (

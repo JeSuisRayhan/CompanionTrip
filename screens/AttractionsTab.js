@@ -192,7 +192,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
 
       {newRides > 0 ? (
         <Button
-          title={ideas.length ? `Ajouter les ${newRides} nouvelles du parc` : `Charger les ${newRides} attractions`}
+          title={ideas.length ? (newRides === 1 ? "Ajouter 1 nouvelle attraction du parc" : `Ajouter les ${newRides} nouvelles attractions du parc`) : `Charger les ${newRides} attractions`}
           icon="download-outline"
           tone={ideas.length ? "teal" : "gold"}
           full
