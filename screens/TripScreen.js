@@ -12,15 +12,17 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 import { THEME, CARD_SHADOW } from "../lib/theme";
 import { FONTS } from "../lib/fonts";
 import { TYPES } from "../lib/constants";
-import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType } from "../lib/trips";
-import { resolveDayDate, formatDateLabel, tripRange, tripStatus } from "../lib/dates";
+import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
+import { resolveDayDate, formatDateLabel, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
 import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, formatMoney, convertAmount } from "../lib/budget";
 import { pickImage, addDocument, removeDocument } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
 import DonutChart from "../components/DonutChart";
+import IdeasTab from "./IdeasTab";
 
+const IDEAS_TAB = { key: "ideas", label: "Idées" };
 const TABS = [
   { key: "days", label: "Jours" },
   { key: "budget", label: "Budget" },
@@ -38,7 +40,7 @@ export default function TripScreen({ route, navigation }) {
   const { tripId } = route.params;
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("days");
+  const [tab, setTab] = useState(route.params?.initialTab || "days");
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [gridView, setGridView] = useState(false);
@@ -90,6 +92,8 @@ export default function TripScreen({ route, navigation }) {
 
   const { start, end } = tripRange(trip);
   const status = tripStatus(trip, isoToday());
+  const isBuildMode = trip.planMode === "build" && trip.tripType !== "park";
+  const tabList = isBuildMode ? [TABS[0], IDEAS_TAB, ...TABS.slice(1)] : TABS;
 
   return (
     <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
@@ -117,7 +121,7 @@ export default function TripScreen({ route, navigation }) {
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabBarScroll} contentContainerStyle={styles.tabBar}>
-        {TABS.map((t) => (
+        {tabList.map((t) => (
           <TouchableOpacity key={t.key} style={[styles.tab, tab === t.key && styles.tabActive]} onPress={() => setTab(t.key)}>
             <Text style={[styles.tabText, tab === t.key && styles.tabTextActive]}>{t.label}</Text>
           </TouchableOpacity>
@@ -137,12 +141,19 @@ export default function TripScreen({ route, navigation }) {
             await moveDay(trip.id, dayId, direction);
             refresh();
           }}
+          onAddDay={async () => {
+            const lastIndex = trip.days.length - 1;
+            const lastDate = lastIndex >= 0 ? resolveDayDate(trip, trip.days[lastIndex], lastIndex) : null;
+            await addDay(trip.id, { title: `Jour ${trip.days.length + 1}`, date: lastDate ? addDaysISO(lastDate, 1) : null });
+            refresh();
+          }}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           gridView={gridView}
           onToggleGrid={() => setGridView((v) => !v)}
         />
       )}
+      {tab === "ideas" && isBuildMode && <IdeasTab trip={trip} navigation={navigation} onChange={refresh} />}
       {tab === "budget" && <BudgetTab trip={trip} />}
       {tab === "checklists" && <ChecklistsTab trip={trip} onChange={refresh} />}
       {tab === "documents" && (
@@ -169,7 +180,7 @@ export default function TripScreen({ route, navigation }) {
   );
 }
 
-function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, searchQuery, gridView, onSearchChange, onToggleGrid }) {
+function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, onAddDay, searchQuery, gridView, onSearchChange, onToggleGrid }) {
   const isPark = trip.tripType === "park";
 
   const flatEntries = [];
@@ -331,6 +342,13 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, se
             </View>
           );
         })()
+      )}
+
+      {!isPark && !(searchQuery || "").trim() && (
+        <TouchableOpacity style={styles.addDayButton} onPress={onAddDay} activeOpacity={0.85}>
+          <Ionicons name="add" size={16} color={THEME.inkMuted} />
+          <Text style={styles.shiftDatesButtonText}>Ajouter un jour</Text>
+        </TouchableOpacity>
       )}
     </ScrollView>
   );
@@ -1066,4 +1084,16 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   weatherReorgButtonText: { color: THEME.gold, fontSize: 13, fontFamily: FONTS.bodyMedium },
+  addDayButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: THEME.border,
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginTop: 2,
+  },
 });

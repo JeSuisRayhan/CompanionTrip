@@ -30,6 +30,16 @@ export default function HotelsScreen({ route, navigation }) {
     }, [refresh])
   );
 
+  // Arriving from an idea ("Construire mon voyage"): open the form pre-filled
+  // with the idea's name/address. Consumed once so going back doesn't reopen it.
+  React.useEffect(() => {
+    const prefill = route.params?.prefill;
+    if (prefill) {
+      setEditing({ name: prefill.name, address: prefill.address, ideaId: prefill.ideaId, lat: prefill.lat, lng: prefill.lng });
+      navigation.setParams({ prefill: undefined });
+    }
+  }, [route.params?.prefill]);
+
   function confirmDelete(stay) {
     Alert.alert("Supprimer cet hôtel ?", `"${stay.name}" sera retiré du programme.`, [
       { text: "Annuler", style: "cancel" },
@@ -101,7 +111,7 @@ export default function HotelsScreen({ route, navigation }) {
         currency={trip.currency}
         onClose={() => setEditing(null)}
         onSave={async (values) => {
-          await upsertHotelStay(tripId, { stayId: editing?.stayId, ...values });
+          await upsertHotelStay(tripId, { stayId: editing?.stayId, ideaId: editing?.ideaId, lat: editing?.lat, lng: editing?.lng, ...values });
           setEditing(null);
           refresh();
         }}
