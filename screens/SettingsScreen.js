@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { View, ScrollView, StyleSheet, Alert } from "react-native";
+import { View, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { space, layout, THEME } from "../lib/theme";
+import { space, layout, radius, THEME, PALETTES, PALETTE_IDS, currentPalette, themedStyles } from "../lib/theme";
+import { choosePalette } from "../lib/appearance";
 import { getSetting, setSetting, removeSetting, loadTrips } from "../lib/storage";
 import { requestNotificationPermission, getNotificationPermission } from "../lib/notifications";
 import { exportBackup, importBackupFromPicker } from "../lib/backup";
@@ -131,7 +132,27 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        <Section title="Notifications" first>
+        <Section title="Apparence" first>
+          <Group>
+            {PALETTE_IDS.map((id) => {
+              const chosen = currentPalette() === id;
+              return (
+                <Row
+                  key={id}
+                  lead={<Swatch tokens={PALETTES[id].tokens} />}
+                  title={PALETTES[id].label}
+                  subtitle={PALETTES[id].hint}
+                  selected={chosen}
+                  accessibilityLabel={`Couleur ${PALETTES[id].label}, ${PALETTES[id].hint}${chosen ? ", choisie" : ""}`}
+                  right={chosen ? <Badge label="Choisie" icon="checkmark" tone="teal" style={styles.badge} /> : null}
+                  onPress={() => choosePalette(id)}
+                />
+              );
+            })}
+          </Group>
+        </Section>
+
+        <Section title="Notifications">
           <Group>
             <Row
               icon="notifications-outline"
@@ -259,6 +280,16 @@ export default function SettingsScreen() {
   );
 }
 
+// A small preview of a palette: its background, a card on it, and the gold accent.
+function Swatch({ tokens }) {
+  return (
+    <View style={[styles.swatch, { backgroundColor: tokens.bg, borderColor: tokens.border }]}>
+      <View style={[styles.swatchDot, { backgroundColor: THEME.gold }]} />
+      <View style={[styles.swatchCard, { backgroundColor: tokens.bgCard }]} />
+    </View>
+  );
+}
+
 // A titled block: section title, then its group.
 function Section({ title, first, children }) {
   return (
@@ -278,15 +309,18 @@ function StatusNote({ text, failed }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   scrollContent: { paddingHorizontal: layout.gutter, paddingTop: space.lg, paddingBottom: space.xxl },
   section: { marginTop: space.xxl },
   badge: { alignSelf: "center" },
+  swatch: { width: 44, height: 44, borderRadius: radius.sm, borderWidth: 1, overflow: "hidden" },
+  swatchDot: { position: "absolute", top: 8, left: 8, width: 8, height: 8, borderRadius: 4 },
+  swatchCard: { position: "absolute", left: 6, right: 6, bottom: 6, height: 16, borderRadius: 5 },
   // Explanation + controls under a section title (or under its status row).
   form: { gap: space.md, marginTop: space.md },
   formFirst: { gap: space.md },
   fieldTight: { marginBottom: 0 },
   buttonRow: { flexDirection: "row", gap: space.md },
   flex: { flex: 1 },
-});
+}));

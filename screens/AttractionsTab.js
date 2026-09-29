@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, Linking, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, TONES, space, layout, radius, type } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { PARK_PRIORITIES, getIdeaCategory, placementIndex, priorityMeta } from "../lib/ideas";
 import { setPark, setMinHeight, tooTall, groupByLand, attractionInputs, importParkAttractions } from "../lib/park";
 import { fetchParks, searchParks, fetchQueueTimes, liveByRideId, liveSummary, latestUpdate, ageLabel, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
@@ -409,7 +409,7 @@ function HeightSheet({ visible, value, onClose, onSave }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   flex: { flex: 1 },
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
   parkHead: { flexDirection: "row", alignItems: "center", gap: space.md },
@@ -435,4 +435,4 @@ const styles = StyleSheet.create({
   results: { marginTop: space.md, backgroundColor: THEME.bgCardAlt },
   sheetCancel: { marginTop: space.md },
   sheetButtons: { flexDirection: "row", gap: space.md },
-});
+}));

@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 
-import { THEME, TONES, space, layout, type } from "../lib/theme";
+import { THEME, TONES, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip } from "../lib/trips";
 import { getSetting } from "../lib/storage";
 import { DEFAULT_IDEA_CATEGORIES } from "../lib/ideas";
@@ -255,7 +255,7 @@ export default function ImportIdeasScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: layout.gutter },
@@ -274,4 +274,4 @@ const styles = StyleSheet.create({
   skip: { marginTop: space.xl },
   footer: { paddingHorizontal: layout.gutter, paddingTop: space.md, paddingBottom: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: THEME.hairStrong, backgroundColor: THEME.bg },
   footerGhost: { marginTop: space.xs },
-});
+}));

@@ -10,7 +10,7 @@ import { View, Text, Image, Pressable, PanResponder, Linking, StyleSheet } from 
 import Svg, { Polyline } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, space, radius, type, shadow } from "../lib/theme";
+import { THEME, space, radius, type, shadow, themedStyles, withAlpha } from "../lib/theme";
 import { fitBounds, visibleTiles, toScreen, viewFromAnchor, zoomBy, centerOn, MIN_ZOOM, MAX_ZOOM, TILE_USER_AGENT } from "../lib/map";
 import { IconButton } from "./ui";
 
@@ -21,8 +21,8 @@ const OFFSCREEN = 48; // pins this far outside the viewport are not drawn
 const TILE_HEADERS = { "User-Agent": TILE_USER_AGENT };
 const COPYRIGHT_URL = "https://www.openstreetmap.org/copyright";
 const WORLD = { lat: 25, lng: 10, zoom: MIN_ZOOM };
-// OSM tiles are light; a plum veil keeps the map from glaring in a dark app.
-const TILE_VEIL = "rgba(23, 15, 31, 0.2)";
+// OSM tiles are light; a veil in the background colour keeps the map from glaring in a dark app.
+const tileVeil = () => withAlpha(THEME.bg, 0.2);
 
 function touchesOf(e) {
   const t = e.nativeEvent.touches;
@@ -141,7 +141,7 @@ export default function TileMap({ pins, route, selectedId, onSelect, fitKey, sty
         {tiles.map((t) => (
           <Image key={t.key} source={{ uri: t.url, headers: TILE_HEADERS }} style={{ position: "absolute", left: t.left, top: t.top, width: t.size, height: t.size }} />
         ))}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: TILE_VEIL }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: tileVeil() }]} />
       </View>
 
       <Pressable style={StyleSheet.absoluteFill} onPress={() => onSelect && onSelect(null)} accessible={false} />
@@ -217,7 +217,7 @@ function Pin({ pin, x, y, numbered, selected, onPress }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   wrap: { flex: 1, overflow: "hidden", backgroundColor: THEME.surfaceSunk },
   pinHit: { position: "absolute", width: HIT, height: HIT, alignItems: "center", justifyContent: "center" },
   pin: { alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: THEME.bg, boxShadow: shadow.raised },
@@ -245,4 +245,4 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   attributionText: { ...type.caption, fontSize: 11, lineHeight: 14, color: THEME.ink },
-});
+}));

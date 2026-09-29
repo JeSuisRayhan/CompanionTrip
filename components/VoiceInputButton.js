@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { Text, View, StyleSheet } from "react-native";
+import { Text, View } from "react-native";
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
-import { THEME, space, type } from "../lib/theme";
+import { THEME, space, type, themedStyles } from "../lib/theme";
 import { IconButton } from "./ui";
 
 // Press to dictate; stops automatically at the end of speech (or press again
@@ -72,7 +72,7 @@ export default function VoiceInputButton({ onResult }) {
 // The error sits to the left of the button so the button keeps its place. The
 // wrapper may shrink, so a long message wraps inside it (a parent with
 // flexWrap moves it to its own line).
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   wrap: { flexDirection: "row", alignItems: "center", gap: space.sm, flexShrink: 1 },
   errorText: { color: THEME.stamp, flexShrink: 1, textAlign: "right" },
-});
+}));

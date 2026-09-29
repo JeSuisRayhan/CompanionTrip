@@ -1,9 +1,9 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, type } from "../lib/theme";
+import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip, listHotelStays, upsertHotelStay, removeHotelStay } from "../lib/trips";
 import { addDaysISO, formatDateRange } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
@@ -207,7 +207,7 @@ function HotelFormModal({ visible, initial, currency, onClose, onSave }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
@@ -218,4 +218,4 @@ const styles = StyleSheet.create({
   dateRow: { flexDirection: "row", gap: space.md },
   error: { marginBottom: space.md },
   sheetButtons: { flexDirection: "row", gap: space.md, marginTop: space.xs },
-});
+}));

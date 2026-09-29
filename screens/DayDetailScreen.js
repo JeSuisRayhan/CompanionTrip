@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, radius, type } from "../lib/theme";
+import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDayLabel } from "../lib/dates";
@@ -486,7 +486,7 @@ function LocationModal({ visible, initial, onClose, onSave }) {
 // Local one-off: diameter of the rail node (a 28pt circle holds the type icon or the check).
 const NODE = 28;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
@@ -566,4 +566,4 @@ const styles = StyleSheet.create({
   typeGroup: { marginBottom: space.md },
   sheetButtons: { flexDirection: "row", gap: space.md },
   sheetButton: { flex: 1 },
-});
+}));

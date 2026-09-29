@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
+import { View, Text, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, TONES, space, layout, radius, type } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { formatMoney } from "../lib/budget";
 import {
   getIdeaCategories,
@@ -360,7 +360,7 @@ function CategoryModal({ visible, onClose, onSave }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   flex: { flex: 1 },
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
   actionRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
@@ -385,4 +385,4 @@ const styles = StyleSheet.create({
   iconRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginBottom: space.xl },
   sheetButtons: { flexDirection: "row", gap: space.md },
   hint: { textAlign: "center", marginTop: space.lg },
-});
+}));

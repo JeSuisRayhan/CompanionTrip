@@ -9,7 +9,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-import { THEME, TONES, space, layout, radius, type } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
@@ -187,7 +187,7 @@ function TripHeader({ trip, start, end, status, onBack, onSettings }) {
   if (cover?.url) {
     return (
       <ImageBackground source={{ uri: cover.url }} style={styles.headerPhoto} imageStyle={{ resizeMode: "cover" }}>
-        <LinearGradient colors={["rgba(23,15,31,0.25)", "rgba(23,15,31,0.75)", THEME.bg]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={[withAlpha(THEME.bg, 0.25), withAlpha(THEME.bg, 0.75), THEME.bg]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
         {body}
       </ImageBackground>
     );
@@ -1009,7 +1009,7 @@ function ShiftDatesModal({ visible, onClose, onConfirm }) {
 
 const NODE = 30;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
@@ -1086,4 +1086,4 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: layout.gutter,
   },
-});
+}));

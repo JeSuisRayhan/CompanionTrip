@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { View, Text, ScrollView, Pressable, Linking, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, Linking, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, TONES, space, layout, type } from "../lib/theme";
+import { THEME, TONES, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip, toggleActivityDone, editActivity } from "../lib/trips";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { fetchQueueTimes, liveByRideId, latestUpdate, ageLabel, waitTone, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
@@ -312,7 +312,7 @@ export default function ParkLiveScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: layout.gutter },
@@ -334,4 +334,4 @@ const styles = StyleSheet.create({
   list: { marginTop: space.md },
   time: { width: 48, alignSelf: "flex-start", paddingTop: 2 },
   rowRight: { flexDirection: "row", alignItems: "center", gap: space.sm },
-});
+}));

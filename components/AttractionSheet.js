@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Alert } from "react-native";
+import { View, Alert } from "react-native";
 
-import { space } from "../lib/theme";
+import { space, themedStyles } from "../lib/theme";
 import { PARK_PRIORITIES, PARK_IDEA_CATEGORIES, addIdea, editIdea, deleteIdea } from "../lib/ideas";
 import { Txt, Button, Chip, Field, Sheet } from "./ui";
 
@@ -133,7 +133,7 @@ export default function AttractionSheet({ visible, trip, idea, onClose, onSaved 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   flex: { flex: 1 },
   choices: { marginBottom: space.lg },
   choicesLabel: { marginBottom: space.sm },
@@ -142,4 +142,4 @@ const styles = StyleSheet.create({
   half: { flex: 1 },
   buttons: { flexDirection: "row", gap: space.md, marginTop: space.sm },
   delete: { marginTop: space.md },
-});
+}));

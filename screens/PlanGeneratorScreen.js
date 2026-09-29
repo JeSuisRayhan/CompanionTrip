@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, TONES, space, layout, radius, type } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { getTrip } from "../lib/trips";
 import { formatDayLabel } from "../lib/dates";
 import { formatIdeaDuration, ideaAddressLine, hasPosition } from "../lib/ideas";
@@ -299,7 +299,7 @@ function StepRow({ item, trip, onPress }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: layout.gutter },
   undo: { marginTop: space.md },
@@ -320,4 +320,4 @@ const styles = StyleSheet.create({
   metaItem: { flexDirection: "row", alignItems: "center", gap: space.xs + 2 },
   dot: { width: space.sm, height: space.sm, borderRadius: radius.full },
   footer: { paddingHorizontal: layout.gutter, paddingTop: space.md, paddingBottom: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: THEME.hairStrong, backgroundColor: THEME.bg },
-});
+}));

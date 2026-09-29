@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, radius, type } from "../lib/theme";
+import { THEME, space, layout, radius, type, themedStyles, withAlpha } from "../lib/theme";
 import { TRIP_TYPES } from "../lib/constants";
 import { loadTrips } from "../lib/storage";
 import { deleteTrip, createTrip } from "../lib/trips";
@@ -276,7 +276,7 @@ function TripTicket({ mode, trip, today, onPress, onPressToday }) {
   const top = (
     <>
       {!cover?.url && <Ionicons name={meta.icon} size={120} color={THEME[tone]} style={styles.ticketWatermark} />}
-      <LinearGradient colors={["transparent", "rgba(23,15,31,0.86)"]} style={styles.ticketScrim} />
+      <LinearGradient colors={["transparent", withAlpha(THEME.bg, 0.86)]} style={styles.ticketScrim} />
       <View style={styles.ticketBadgeRow}>
         {isCurrent ? <Badge label="En cours" tone="teal" solid icon="radio-button-on" /> : <Badge label="Prochain départ" tone="gold" solid />}
       </View>
@@ -430,7 +430,7 @@ function PastRow({ trip, first, onPress }) {
 
 const NOTCH = 22;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   scrollContent: { paddingHorizontal: layout.gutter, paddingTop: space.sm, paddingBottom: layout.tabBarClearance },
   header: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.xl },
@@ -481,4 +481,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-});
+}));

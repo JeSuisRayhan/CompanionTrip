@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { View, Text, ScrollView, ActivityIndicator, Linking, Platform, StyleSheet } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Linking, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, TONES, space, layout, radius, type } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { getTrip } from "../lib/trips";
 import { previewTrip } from "../lib/planner";
 import { formatIdeaDuration, placeIdeaOnDay } from "../lib/ideas";
@@ -327,7 +327,7 @@ function PinCard({ pin, ride, idea, readOnly, onClose, onPlace, onBook, onOpenDa
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: layout.gutter },
   chipScroll: { flexGrow: 0, marginTop: space.sm },
@@ -346,4 +346,4 @@ const styles = StyleSheet.create({
   dot: { width: space.sm, height: space.sm, borderRadius: radius.full },
   cardActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   action: { flexGrow: 1 },
-});
+}));

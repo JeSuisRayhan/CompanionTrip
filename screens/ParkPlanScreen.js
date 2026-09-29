@@ -3,7 +3,7 @@ import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from "react-nat
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, type } from "../lib/theme";
+import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip } from "../lib/trips";
 import { resolveDayDate, formatDayLabel } from "../lib/dates";
 import { hasPosition, formatIdeaDuration } from "../lib/ideas";
@@ -251,7 +251,7 @@ export default function ParkPlanScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: layout.gutter },
   undo: { marginTop: space.md },
@@ -267,4 +267,4 @@ const styles = StyleSheet.create({
   section: { marginTop: space.xl },
   time: { width: 48, alignSelf: "flex-start", paddingTop: 2 },
   footer: { paddingHorizontal: layout.gutter, paddingTop: space.md, paddingBottom: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: THEME.hairStrong, backgroundColor: THEME.bg },
-});
+}));

@@ -1,8 +1,8 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, space, type } from "../lib/theme";
+import { THEME, space, type, themedStyles } from "../lib/theme";
 import { resolveDayDate, formatDayLabel } from "../lib/dates";
 import { Button, Group, Row, EmptyState, Sheet, round } from "./ui";
 
@@ -47,10 +47,10 @@ export default function DayPickerModal({ visible, trip, title, currentDayId, rem
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   // The sheet is bgCard, so the list sits one step up to read as its own surface.
   list: { marginBottom: space.md, backgroundColor: THEME.bgCardAlt },
   dayTile: { width: 40, height: 40, alignItems: "center", justifyContent: "center", backgroundColor: THEME.bgRaised },
   rowCurrent: { backgroundColor: THEME.tealDim },
   action: { marginTop: space.sm },
-});
+}));

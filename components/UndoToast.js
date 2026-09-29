@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useRef } from "react";
-import { Text, Pressable, StyleSheet, Animated } from "react-native";
+import { Text, Pressable, Animated } from "react-native";
 import { SafeAreaInsetsContext } from "react-native-safe-area-context";
-import { THEME, space, layout, type, shadow } from "../lib/theme";
+import { THEME, space, layout, type, shadow, themedStyles } from "../lib/theme";
 import { round } from "./ui";
 
 const AUTO_DISMISS_MS = 5000;
@@ -57,7 +57,7 @@ export default function UndoToast({ visible, message, onUndo, onDismiss }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   wrap: {
     position: "absolute",
     left: layout.gutter,
@@ -75,4 +75,4 @@ const styles = StyleSheet.create({
   message: { ...type.subhead, color: THEME.ink, flex: 1, paddingVertical: space.sm },
   action: { minHeight: layout.minTouch, paddingHorizontal: space.md, justifyContent: "center" },
   undoText: { ...type.label, color: THEME.gold },
-});
+}));

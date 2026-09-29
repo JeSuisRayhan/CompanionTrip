@@ -1,10 +1,10 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, Switch, Pressable, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, Switch, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, type } from "../lib/theme";
+import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { CURRENCY_PRESETS, suggestRate, BUDGET_TYPES } from "../lib/constants";
 import { getTrip, updateTripSettings } from "../lib/trips";
 import { scheduleDailySummaries, scheduleDepartureReminder } from "../lib/notifications";
@@ -345,7 +345,7 @@ function CurrencyPickerModal({ visible, selected, onClose, onSelect }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
   scrollContent: { paddingHorizontal: layout.gutter, paddingTop: space.lg, paddingBottom: space.xxl },
@@ -358,4 +358,4 @@ const styles = StyleSheet.create({
   rateField: { flex: 1, marginBottom: 0 },
   pressed: { opacity: 0.8 },
   currencyList: { marginBottom: space.md },
-});
+}));

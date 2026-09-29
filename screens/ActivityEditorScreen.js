@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, Switch, StyleSheet } from "react-native";
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, space, layout, type as ramp } from "../lib/theme";
+import { THEME, space, layout, type as ramp, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, addActivity, editActivity, deleteActivity } from "../lib/trips";
 import { resolveDayDate } from "../lib/dates";
@@ -234,7 +234,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   flex: { flex: 1 },
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
@@ -255,4 +255,4 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   toggleGroup: { marginBottom: space.lg },
   deleteButton: { marginTop: space.md },
-});
+}));

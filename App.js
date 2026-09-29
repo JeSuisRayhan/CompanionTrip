@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
@@ -9,7 +9,8 @@ import { SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold 
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
 
-import { THEME, type } from "./lib/theme";
+import { THEME, type, subscribeTheme, getThemeVersion } from "./lib/theme";
+import { loadPalette } from "./lib/appearance";
 import { hasPin } from "./lib/pin";
 import HomeScreen from "./screens/HomeScreen";
 import OnboardingScreen from "./screens/OnboardingScreen";
@@ -31,7 +32,7 @@ import LockScreen from "./screens/LockScreen";
 
 const Stack = createNativeStackNavigator();
 
-const navTheme = {
+const buildNavTheme = () => ({
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
@@ -41,11 +42,15 @@ const navTheme = {
     border: THEME.hairStrong,
     primary: THEME.gold,
   },
-};
+});
 
 export default function App() {
   const [checking, setChecking] = useState(true);
   const [locked, setLocked] = useState(false);
+  // A new palette rebuilds the navigator (fresh colours everywhere) and puts
+  // the person back on the screen they were on.
+  const themeVersion = useSyncExternalStore(subscribeTheme, getThemeVersion);
+  const navState = useRef(undefined);
   const [fontsLoaded] = useFonts({
     SpaceGrotesk_500Medium,
     SpaceGrotesk_600SemiBold,
@@ -59,6 +64,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
+      await loadPalette();
       const pinSet = await hasPin();
       setLocked(pinSet);
       setChecking(false);
@@ -79,7 +85,14 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <NavigationContainer theme={navTheme}>
+      <NavigationContainer
+        key={themeVersion}
+        theme={buildNavTheme()}
+        initialState={navState.current}
+        onStateChange={(state) => {
+          navState.current = state;
+        }}
+      >
         <StatusBar style="light" />
         <Stack.Navigator
           initialRouteName="Home"

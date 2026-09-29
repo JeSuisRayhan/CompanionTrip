@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from "react";
-import { View, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
+import { View, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, space, layout, radius, type } from "../lib/theme";
+import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { TRIP_TYPES } from "../lib/constants";
 import { buildNewTrip, buildEmptyDays, daysFromScript, createTrip, setCoverImage, MAX_PLANNED_DAYS } from "../lib/trips";
 import { parseDateInput, addDaysISO, diffDaysISO, formatDateRange } from "../lib/dates";
@@ -429,7 +429,7 @@ function ChoiceRow({ icon, tone, title, subtitle, selected, onPress }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   flex: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: layout.gutter, paddingTop: space.sm },
@@ -451,4 +451,4 @@ const styles = StyleSheet.create({
   scriptInput: { minHeight: space.xxxl * 4 },
   note: { marginTop: space.md },
   footer: { paddingHorizontal: layout.gutter, paddingTop: space.md, paddingBottom: space.lg },
-});
+}));
