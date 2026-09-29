@@ -206,7 +206,7 @@ export default function DayDetailScreen({ route, navigation }) {
         ) : null}
 
         {day.dayType === "flight" ? <FlightDayBanner day={day} dateISO={date} /> : null}
-        {day.dayType === "park" ? <ParkDayBanner day={day} /> : null}
+        {day.dayType === "park" ? <ParkDayBanner day={day} onPlan={() => navigation.navigate("ParkPlan", { tripId, dayId })} onLive={() => navigation.navigate("ParkLive", { tripId, dayId })} /> : null}
 
         {sorted.length === 0 ? (
           <EmptyState
@@ -442,7 +442,7 @@ function FlightDayBanner({ day, dateISO }) {
   );
 }
 
-function ParkDayBanner({ day }) {
+function ParkDayBanner({ day, onPlan, onLive }) {
   const done = day.activities.filter((a) => a.done).length;
   const total = day.activities.length;
   return (
@@ -454,6 +454,10 @@ function ParkDayBanner({ day }) {
         </Txt>
       </View>
       {total > 0 ? <ProgressBar value={done / total} height={6} style={styles.parkBar} /> : null}
+      <View style={styles.parkActions}>
+        <Button title="Parcours" icon="sparkles-outline" size="sm" tone="gold" accessibilityLabel="Préparer le parcours de ce jour" onPress={onPlan} />
+        {total > 0 ? <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel="Suivre ce jour en direct" onPress={onLive} /> : null}
+      </View>
     </Surface>
   );
 }
@@ -506,6 +510,7 @@ const styles = StyleSheet.create({
   panel: { marginBottom: space.lg },
   panelRow: { flexDirection: "row", alignItems: "center", gap: space.md },
   panelText: { flex: 1 },
+  parkActions: { flexDirection: "row", gap: space.sm, marginTop: space.md },
   parkBar: { marginTop: space.md },
 
   flightRoute: { flexDirection: "row", alignItems: "center", gap: space.md },
