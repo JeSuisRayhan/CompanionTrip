@@ -19,6 +19,7 @@ import {
   deleteIdeaCategory,
   CUSTOM_CATEGORY_ICONS,
 } from "../lib/ideas";
+import { planCandidates } from "../lib/planner";
 import DayPickerModal from "../components/DayPickerModal";
 import { Txt, Button, IconButton, Chip, Badge, Group, Row, Field, EmptyState, Sheet } from "../components/ui";
 
@@ -53,6 +54,7 @@ export default function IdeasTab({ trip, navigation, onChange }) {
   const ideas = trip.ideas || [];
   const placed = useMemo(() => placementIndex(trip), [trip]);
   const stats = ideaStats(trip);
+  const plannable = useMemo(() => planCandidates(trip).length, [trip]);
   const staysCount = trip.days.reduce((n, d) => n + d.activities.filter((a) => a.type === "hotel" && a.stayId).length, 0);
 
   const visibleCategories = filter === "all" ? categories : categories.filter((c) => c.id === filter);
@@ -105,6 +107,17 @@ export default function IdeasTab({ trip, navigation, onChange }) {
             <Button title="Ajouter une idée" icon="add" onPress={() => openEditor(undefined)} style={styles.flex} />
             {hotelsButton}
           </View>
+          {plannable > 0 && trip.days.length > 0 && (
+            <Button
+              title="Générer le planning"
+              icon="sparkles-outline"
+              tone="gold"
+              full
+              style={styles.generate}
+              accessibilityLabel={`Générer le planning avec ${plannable} idée${plannable !== 1 ? "s" : ""} à placer`}
+              onPress={() => navigation.navigate("PlanGenerator", { tripId: trip.id })}
+            />
+          )}
           <View style={styles.statsRow}>
             <Txt variant="subhead">
               {`${stats.total} idée${stats.total !== 1 ? "s" : ""}, ${stats.placed} placée${stats.placed !== 1 ? "s" : ""}`}
@@ -325,6 +338,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
   actionRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   selfCenter: { alignSelf: "center" },
+  generate: { marginTop: space.sm },
   statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginTop: space.lg },
   chipScroll: { flexGrow: 0, marginHorizontal: -layout.gutter },
   chipScrollGap: { marginTop: space.md },

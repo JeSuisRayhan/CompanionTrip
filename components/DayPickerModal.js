@@ -8,8 +8,8 @@ import { Button, Group, Row, EmptyState, Sheet, round } from "./ui";
 
 // Bottom sheet listing the trip's days, to pick the one an idea goes on.
 // `currentDayId` highlights where the idea already is; `onRemove` (optional)
-// adds a "take it out of the programme" action.
-export default function DayPickerModal({ visible, trip, title, currentDayId, onPick, onRemove, onClose }) {
+// adds a "take it out" action (`removeLabel`, "Retirer du programme" by default).
+export default function DayPickerModal({ visible, trip, title, currentDayId, removeLabel = "Retirer du programme", onPick, onRemove, onClose }) {
   if (!trip) return null;
   return (
     <Sheet visible={visible} onClose={onClose} title={title || "Choisir un jour"}>
@@ -41,7 +41,7 @@ export default function DayPickerModal({ visible, trip, title, currentDayId, onP
           })}
         </Group>
       )}
-      {onRemove && currentDayId ? <Button title="Retirer du programme" icon="remove-circle-outline" variant="danger" full onPress={onRemove} style={styles.action} /> : null}
+      {onRemove && currentDayId ? <Button title={removeLabel} icon="remove-circle-outline" variant="danger" full onPress={onRemove} style={styles.action} /> : null}
       <Button title="Annuler" variant="secondary" full onPress={onClose} style={styles.action} />
     </Sheet>
   );

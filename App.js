@@ -22,6 +22,7 @@ import WeatherReorgScreen from "./screens/WeatherReorgScreen";
 import TicketScannerScreen from "./screens/TicketScannerScreen";
 import HotelsScreen from "./screens/HotelsScreen";
 import IdeaEditorScreen from "./screens/IdeaEditorScreen";
+import PlanGeneratorScreen from "./screens/PlanGeneratorScreen";
 import LockScreen from "./screens/LockScreen";
 
 const Stack = createNativeStackNavigator();
@@ -109,6 +110,7 @@ export default function App() {
             component={IdeaEditorScreen}
             options={{ headerShown: false, presentation: "modal" }}
           />
+          <Stack.Screen name="PlanGenerator" component={PlanGeneratorScreen} options={{ headerShown: false }} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>
