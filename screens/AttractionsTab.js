@@ -236,28 +236,29 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
         </Txt>
       ) : null}
 
-      <Group style={styles.gap}>
-        <Row
+      <View style={[styles.settings, styles.gap]}>
+        <Chip
           icon="resize-outline"
           tone="blue"
-          title="Taille du plus petit du groupe"
-          subtitle={park.minHeightCm ? `${park.minHeightCm} cm` : "Non renseignée"}
-          right={tallCount > 0 ? <Badge label={`${tallCount} trop haute${tallCount !== 1 ? "s" : ""}`} tone="stamp" /> : null}
-          chevron
+          label={park.minHeightCm ? `${park.minHeightCm} cm` : "Taille du groupe"}
+          selected={!!park.minHeightCm}
           accessibilityLabel={`Taille du plus petit du groupe, ${park.minHeightCm ? park.minHeightCm + " centimètres" : "non renseignée"}`}
           onPress={() => setHeightOpen(true)}
         />
-        <Row
+        <Chip
           icon="notifications-outline"
           tone="teal"
-          title="Alerte de file courte"
-          subtitle={alerts.on ? `Sous ${alerts.maxWait} min, ${plural(watchedCount, "attraction surveillée", "attractions surveillées")}` : "Désactivée"}
-          right={alerts.on ? <Badge label="Activée" tone="teal" /> : null}
-          chevron
+          label={alerts.on ? `Alerte sous ${alerts.maxWait} min` : "Alerte de file"}
+          selected={alerts.on}
           accessibilityLabel={`Alerte de file courte, ${alerts.on ? "activée, sous " + alerts.maxWait + " minutes" : "désactivée"}`}
           onPress={() => setAlertOpen(true)}
         />
-      </Group>
+      </View>
+      {tallCount > 0 ? (
+        <Txt variant="caption" style={[styles.tallNote, { color: THEME.stamp }]}>
+          {`${plural(tallCount, "attraction trop haute", "attractions trop hautes")} pour le groupe, ${tallCount === 1 ? "écartée" : "écartées"} du parcours.`}
+        </Txt>
+      ) : null}
 
       {ideas.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipRow}>
@@ -504,6 +505,8 @@ const styles = themedStyles(() => ({
   liveText: { flex: 1, gap: 2 },
   credit: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: layout.minTouch, marginBottom: space.sm },
   gap: { marginTop: space.md },
+  settings: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  tallNote: { marginTop: space.sm },
   actionRow: { flexDirection: "row", gap: space.sm },
   notice: { textAlign: "center", marginTop: space.md },
   chipScroll: { flexGrow: 0, marginHorizontal: -layout.gutter, marginTop: space.lg },
