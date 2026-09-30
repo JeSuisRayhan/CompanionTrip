@@ -1,0 +1,61 @@
+name: Publier une mise à jour (sans nouveau build)
+
+# À lancer à la main : onglet Actions > ce workflow > Run workflow.
+#
+# Envoie le code JavaScript actuel du dépôt aux téléphones qui ont déjà
+# l'application installée, sans compiler de nouvel APK : aucun crédit de build
+# consommé. L'application la télécharge à l'ouverture et l'applique au démarrage
+# suivant (ou tout de suite depuis Réglages > Mise à jour).
+#
+# Limite : seulement pour du code JavaScript. Dès qu'on ajoute un module Expo,
+# une permission, un plugin ou une icône, il faut un nouvel APK, et changer
+# "version" dans app.json (voir LISEZ-MOI.md).
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Description de la mise à jour"
+        required: false
+        default: "Mise à jour"
+
+jobs:
+  publier:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Installer les dépendances npm
+        run: npm ci
+
+      - name: Vérifier que le code compile
+        run: npx expo export --platform android --output-dir "$RUNNER_TEMP/verification"
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"
+
+      - name: Installer et authentifier EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Lier le projet à votre compte Expo
+        run: eas init --account rayhan7 --non-interactive
+
+      - name: Configurer les mises à jour à distance
+        run: node scripts/set-updates-url.js
+
+      # --environment preview : reprend les variables EAS de l'environnement « preview »
+      # (dont les clés EXPO_PUBLIC_*, écrites dans le code à l'empaquetage), comme le build.
+      # Obligatoire depuis le SDK 55.
+      - name: Publier la mise à jour
+        run: eas update --branch preview --platform android --environment preview --message "$MESSAGE" --non-interactive
+        env:
+          MESSAGE: ${{ inputs.message }}

@@ -1,0 +1,31 @@
+name: Vérification du code
+
+# Le code compile-t-il ? Contrôlé sur chaque proposition de fusion vers main et
+# sur chaque envoi vers une autre branche. Ne lance aucun build EAS : gratuit.
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches-ignore: [ main ]
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupérer le code du dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Installer les dépendances npm
+        run: npm ci
+
+      - name: Vérifier que le code compile
+        run: npx expo export --platform android --output-dir "$RUNNER_TEMP/verification"
+        env:
+          CI: "1"
+          EXPO_NO_TELEMETRY: "1"

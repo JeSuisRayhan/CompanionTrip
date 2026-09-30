@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { THEME, space, layout, radius, type } from "../lib/theme";
+import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { formatDayLabel } from "../lib/dates";
 import { weatherInfo } from "../lib/weather";
 import { getTrip } from "../lib/trips";
@@ -122,7 +122,7 @@ export default function WeatherReorgScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.xxl, gap: space.md },
   centerText: { textAlign: "center" },
@@ -149,4 +149,4 @@ const styles = StyleSheet.create({
 
   doneNote: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: 48, backgroundColor: THEME.tealDim },
   doneText: { ...type.label, color: THEME.teal },
-});
+}));

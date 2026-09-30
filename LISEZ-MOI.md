@@ -95,3 +95,35 @@ Cette clé **ne va jamais dans le dépôt GitHub** — elle est injectée direct
 5. Enregistrez, puis relancez une compilation (**Actions → Build Android APK (EAS) → Run workflow**).
 
 Une fois fait, plus rien à taper dans l'app — le statut de vol en temps réel apparaît automatiquement sur les jours marqués "vol", si Aviationstack a l'information pour ce vol précis.
+
+
+## Mises à jour sans nouveau build
+
+Depuis le build qui inclut `expo-updates`, un changement de code JavaScript
+(écrans, textes, calculs) peut arriver sur le téléphone **sans compiler de
+nouvel APK** et sans consommer de crédits de build.
+
+**Publier :** onglet **Actions** du dépôt → **Publier une mise à jour (sans
+nouveau build)** → **Run workflow** → écrivez une courte description → **Run**.
+
+**Sur le téléphone :** l'application cherche la mise à jour à son ouverture, la
+télécharge, et l'applique au démarrage suivant. Une bannière « Mise à jour
+prête » apparaît sur l'accueil, avec un bouton **Redémarrer**. On peut aussi
+aller dans **Réglages → Mise à jour → Rechercher une mise à jour**.
+
+**Quand il faut quand même un nouvel APK :** dès qu'on ajoute un module Expo,
+une permission, un plugin ou une icône. Dans ce cas, changez aussi `"version"`
+dans `app.json` (par exemple `1.0.0` → `1.1.0`) : les mises à jour ne sont
+envoyées qu'aux APK de la même version, ce qui évite qu'un ancien APK reçoive
+du code qu'il ne sait pas exécuter.
+
+**Clés intégrées :** la mise à jour reprend les variables EAS de l'environnement
+`preview` (celles de l'étape précédente : `EXPO_PUBLIC_AVIATIONSTACK_API_KEY`,
+`EXPO_PUBLIC_UNSPLASH_ACCESS_KEY`), comme le fait le build : rien de plus à faire.
+
+## Vérification avant chaque build
+
+Le workflow de build commence par vérifier que le code compile
+(`expo export`). Si ce n'est pas le cas, il s'arrête **avant** d'appeler EAS :
+aucun crédit de build consommé. Le même contrôle tourne sur chaque proposition
+de fusion vers `main` (workflow « Vérification du code »).

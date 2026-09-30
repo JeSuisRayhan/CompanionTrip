@@ -1,0 +1,7 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.apk
+build-result.json
+apk-url.txt

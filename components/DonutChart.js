@@ -1,7 +1,7 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text } from "react-native";
 import Svg, { Circle } from "react-native-svg";
-import { THEME, type } from "../lib/theme";
+import { THEME, type, themedStyles } from "../lib/theme";
 
 const SIZE = 160;
 const STROKE = 20;
@@ -58,9 +58,9 @@ export default function DonutChart({ segments, centerLabel, centerValue }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   wrap: { width: SIZE, height: SIZE, alignItems: "center", justifyContent: "center", alignSelf: "center" },
   centerLabel: { position: "absolute", alignItems: "center" },
   centerValue: { ...type.heading },
   centerText: { ...type.caption, color: THEME.inkFaint, marginTop: 2 },
-});
+}));

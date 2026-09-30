@@ -8,7 +8,7 @@ import React, { useContext, useState } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator, Image, Modal, KeyboardAvoidingView, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaInsetsContext } from "react-native-safe-area-context";
-import { THEME, TONES, space, layout, radius, type, shadow } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, shadow, themedStyles } from "../lib/theme";
 
 // True inside surfaces that are themselves card-coloured (Group, Sheet), so a
 // Field there can step darker and stay visible.
@@ -31,12 +31,12 @@ export function Txt({ variant = "body", color, style, ...props }) {
 }
 
 // ---------- Button ----------
-const BUTTON_VARIANTS = {
+const buttonVariants = () => ({
   primary: { bg: THEME.gold, fg: THEME.onGold },
   secondary: { bg: THEME.bgCardAlt, fg: THEME.ink },
   ghost: { bg: "transparent", fg: THEME.gold },
   danger: { bg: THEME.stampDim, fg: THEME.stamp },
-};
+});
 const BUTTON_SIZES = {
   sm: { minHeight: 36, paddingHorizontal: space.md, gap: space.xs + 2, font: "caption", icon: 16 },
   md: { minHeight: 48, paddingHorizontal: space.lg, gap: space.sm, font: "label", icon: 20 },
@@ -44,7 +44,7 @@ const BUTTON_SIZES = {
 };
 
 export function Button({ title, icon, variant = "primary", tone, size = "md", loading, disabled, full, style, onPress, accessibilityLabel }) {
-  const t = tone ? { bg: toneOf(tone).bg, fg: toneOf(tone).fg } : BUTTON_VARIANTS[variant];
+  const t = tone ? { bg: toneOf(tone).bg, fg: toneOf(tone).fg } : buttonVariants()[variant];
   const s = BUTTON_SIZES[size];
   const inactive = disabled || loading;
   return (
@@ -400,7 +400,7 @@ export function Fab({ label, icon = "add", onPress }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   buttonBase: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
   iconButton: { width: layout.minTouch, height: layout.minTouch, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
   chip: {
@@ -469,4 +469,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl - 4,
     backgroundColor: THEME.gold,
   },
-});
+}));

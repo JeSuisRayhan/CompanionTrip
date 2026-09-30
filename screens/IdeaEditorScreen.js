@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Linking } from "react-native";
+import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, TONES, space, layout, type } from "../lib/theme";
+import { THEME, TONES, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip } from "../lib/trips";
 import { resolveDayDate, formatDateLabel } from "../lib/dates";
 import {
@@ -468,7 +468,7 @@ export default function IdeaEditorScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
@@ -490,4 +490,4 @@ const styles = StyleSheet.create({
   placeAction: { marginTop: space.md },
   placeButtons: { flexDirection: "row", gap: space.sm },
   deleteButton: { marginTop: space.xl },
-});
+}));

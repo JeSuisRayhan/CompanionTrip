@@ -9,7 +9,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-import { THEME, TONES, space, layout, radius, type } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
@@ -18,11 +18,14 @@ import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, othe
 import { pickImage, addDocument, removeDocument } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
+import { exportTripFile } from "../lib/backup";
 import DonutChart from "../components/DonutChart";
 import { Txt, Button, IconButton, Badge, Group, Row, Thumb, SectionTitle, Field, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 import IdeasTab from "./IdeasTab";
+import AttractionsTab from "./AttractionsTab";
 
 const IDEAS_TAB = { key: "ideas", label: "Idées" };
+const ATTRACTIONS_TAB = { key: "attractions", label: "Attractions" };
 const TABS = [
   { key: "days", label: "Jours" },
   { key: "budget", label: "Budget" },
@@ -100,7 +103,8 @@ export default function TripScreen({ route, navigation }) {
   const { start, end } = tripRange(trip);
   const status = tripStatus(trip, isoToday());
   const isBuildMode = trip.planMode === "build" && trip.tripType !== "park";
-  const tabList = isBuildMode ? [TABS[0], IDEAS_TAB, ...TABS.slice(1)] : TABS;
+  const isParkTrip = trip.tripType === "park";
+  const tabList = isBuildMode ? [TABS[0], IDEAS_TAB, ...TABS.slice(1)] : isParkTrip ? [TABS[0], ATTRACTIONS_TAB, ...TABS.slice(1)] : TABS;
 
   return (
     <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
@@ -133,6 +137,7 @@ export default function TripScreen({ route, navigation }) {
         />
       )}
       {tab === "ideas" && isBuildMode && <IdeasTab trip={trip} navigation={navigation} onChange={refresh} />}
+      {tab === "attractions" && isParkTrip && <AttractionsTab trip={trip} navigation={navigation} onChange={refresh} />}
       {tab === "budget" && <BudgetTab trip={trip} />}
       {tab === "checklists" && <ChecklistsTab trip={trip} onChange={refresh} />}
       {tab === "documents" && (
@@ -183,7 +188,7 @@ function TripHeader({ trip, start, end, status, onBack, onSettings }) {
   if (cover?.url) {
     return (
       <ImageBackground source={{ uri: cover.url }} style={styles.headerPhoto} imageStyle={{ resizeMode: "cover" }}>
-        <LinearGradient colors={["rgba(23,15,31,0.25)", "rgba(23,15,31,0.75)", THEME.bg]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={[withAlpha(THEME.bg, 0.25), withAlpha(THEME.bg, 0.75), THEME.bg]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
         {body}
       </ImageBackground>
     );
@@ -261,25 +266,41 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
   const isPark = trip.tripType === "park";
   const [menuDay, setMenuDay] = useState(null); // { day, index } while the day menu sheet is open
 
-  const flatEntries = [];
-  trip.days.forEach((day, dayIndex) => {
-    day.activities.forEach((a) => flatEntries.push({ day, dayIndex, activity: a }));
-  });
-  flatEntries.sort((x, y) => {
-    if (x.dayIndex !== y.dayIndex) return x.dayIndex - y.dayIndex;
-    if (!x.activity.time) return 1;
-    if (!y.activity.time) return -1;
-    return x.activity.time.localeCompare(y.activity.time);
-  });
+  // "Partager": as text for a message, or as a file the companion imports in their own app.
+  async function sendTripFile(withDocuments) {
+    try {
+      await exportTripFile(trip, { withDocuments });
+    } catch (e) {
+      Alert.alert("Envoi impossible", "Le fichier n'a pas pu être créé. Réessayez.");
+    }
+  }
+  function chooseDocuments() {
+    const count = (trip.documents || []).length;
+    if (!count) return sendTripFile(false);
+    Alert.alert("Joindre les documents ?", `${count} document${count > 1 ? "s" : ""} (photos de billets, réservations…). Ne les envoyez qu'à des personnes de confiance.`, [
+      { text: "Avec les documents", onPress: () => sendTripFile(true) },
+      { text: "Sans", onPress: () => sendTripFile(false) },
+      { text: "Annuler", style: "cancel" },
+    ]);
+  }
+  function shareTrip() {
+    Alert.alert(`Partager « ${trip.name} »`, "En texte pour un message, ou en fichier à importer dans l'application (budget inclus, sans la fiche d'urgence).", [
+      { text: "Texte", onPress: () => shareTripAsText(trip) },
+      { text: "Fichier", onPress: chooseDocuments },
+      { text: "Annuler", style: "cancel" },
+    ]);
+  }
 
   const q = (searchQuery || "").trim().toLowerCase();
   const today = isoToday();
+  // The map has something to show once a step or an idea has a position.
+  const hasMap = !isPark && (trip.days.some((d) => d.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng))) || (trip.ideas || []).some((i) => Number.isFinite(i.lat) && Number.isFinite(i.lng)));
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       <View style={styles.actionRow}>
         <Button title="Décaler" icon="calendar-outline" variant="secondary" size="sm" onPress={onShiftDates} />
-        <Button title="Partager" icon="share-outline" variant="secondary" size="sm" onPress={() => shareTripAsText(trip)} />
+        <Button title="Partager" icon="share-outline" variant="secondary" size="sm" onPress={shareTrip} />
         <Button title=".ics" icon="download-outline" variant="secondary" size="sm" onPress={() => shareTripAsICS(trip)} accessibilityLabel="Exporter au format calendrier .ics" />
         <View style={{ flex: 1 }} />
         {!isPark && (
@@ -325,22 +346,21 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
         </Pressable>
       )}
 
+      {hasMap && (
+        <Pressable
+          onPress={() => navigation.navigate("TripMap", { tripId: trip.id })}
+          accessibilityRole="button"
+          accessibilityLabel="Voir le voyage sur la carte"
+          style={({ pressed }) => [styles.inlineLink, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="map-outline" size={18} color={THEME.gold} />
+          <Text style={[type.label, { color: THEME.gold, flex: 1 }]}>Voir sur la carte</Text>
+          <Ionicons name="chevron-forward" size={16} color={THEME.gold} />
+        </Pressable>
+      )}
+
       {isPark ? (
-        <Group>
-          {flatEntries.map(({ day, activity }) => {
-            const t = TYPES[activity.type] || TYPES.activite;
-            return (
-              <Row
-                key={activity.id}
-                lead={<Thumb icon={t.icon} tone={typeTone(activity.type)} size={40} />}
-                title={activity.title}
-                subtitle={`${trip.days.length > 1 ? day.title + ", " : ""}${activity.time || "heure libre"}`}
-                chevron
-                onPress={() => navigation.navigate("ActivityEditor", { tripId: trip.id, dayId: day.id, activity })}
-              />
-            );
-          })}
-        </Group>
+        <ParkDays trip={trip} navigation={navigation} />
       ) : (
         (() => {
           const filtered = trip.days
@@ -510,6 +530,69 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
         )}
       </Sheet>
     </ScrollView>
+  );
+}
+
+// Park trips: every day is a block of its own with the two park actions
+// (prepare the route, follow it on the day) and its steps in time order.
+function ParkDays({ trip, navigation }) {
+  return (
+    <View>
+      {trip.days.map((day, index) => {
+        const date = resolveDayDate(trip, day, index);
+        const steps = day.activities
+          .map((activity, i) => ({ activity, i }))
+          .sort((a, b) => (a.activity.time || "99:99").localeCompare(b.activity.time || "99:99") || a.i - b.i)
+          .map((x) => x.activity);
+        const done = steps.filter((a) => a.done).length;
+        return (
+          <View key={day.id} style={styles.parkDay}>
+            <View style={styles.parkDayHead}>
+              <View style={styles.parkDayTitle}>
+                <Text style={type.heading} accessibilityRole="header" numberOfLines={1}>
+                  {day.title}
+                </Text>
+                {date ? <Txt variant="subhead">{formatDayLabel(date)}</Txt> : null}
+              </View>
+              {steps.length > 0 ? <Text style={[type.numeralSmall, { color: THEME.inkFaint }]}>{`${done}/${steps.length}`}</Text> : null}
+            </View>
+            <View style={styles.parkDayActions}>
+              <Button
+                title="Parcours"
+                icon="sparkles-outline"
+                size="sm"
+                tone="gold"
+                accessibilityLabel={`Préparer le parcours de ${day.title}`}
+                onPress={() => navigation.navigate("ParkPlan", { tripId: trip.id, dayId: day.id })}
+              />
+              {steps.length > 0 ? (
+                <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel={`Suivre ${day.title} en direct`} onPress={() => navigation.navigate("ParkLive", { tripId: trip.id, dayId: day.id })} />
+              ) : null}
+              <Button title="Détails" size="sm" variant="secondary" accessibilityLabel={`Ouvrir ${day.title}`} onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })} />
+            </View>
+            {steps.length > 0 ? (
+              <Group>
+                {steps.map((activity) => {
+                  const t = TYPES[activity.type] || TYPES.activite;
+                  return (
+                    <Row
+                      key={activity.id}
+                      lead={<Thumb icon={activity.done ? "checkmark" : t.icon} tone={activity.done ? "teal" : typeTone(activity.type)} size={40} />}
+                      title={activity.title}
+                      subtitle={activity.time || "heure libre"}
+                      chevron
+                      onPress={() => navigation.navigate("ActivityEditor", { tripId: trip.id, dayId: day.id, activity })}
+                    />
+                  );
+                })}
+              </Group>
+            ) : (
+              <Txt variant="subhead">Aucune étape pour l'instant.</Txt>
+            )}
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -952,7 +1035,7 @@ function ShiftDatesModal({ visible, onClose, onConfirm }) {
 
 const NODE = 30;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
@@ -969,6 +1052,10 @@ const styles = StyleSheet.create({
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
   actionRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.sm, marginBottom: space.md },
   gridToggle: { width: 40, height: 40, marginRight: -space.xs },
+  parkDay: { marginBottom: space.xl },
+  parkDayHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: space.md },
+  parkDayTitle: { flex: 1, flexDirection: "row", alignItems: "baseline", gap: space.md },
+  parkDayActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginVertical: space.md },
   inlineLink: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: layout.minTouch, marginBottom: space.sm },
 
   routeRow: { flexDirection: "row", alignItems: "stretch", gap: space.md, paddingRight: space.xs, borderRadius: radius.md },
@@ -1025,4 +1112,4 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: layout.gutter,
   },
-});
+}));

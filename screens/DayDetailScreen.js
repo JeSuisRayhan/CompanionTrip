@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, radius, type } from "../lib/theme";
+import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDayLabel } from "../lib/dates";
@@ -116,6 +116,7 @@ export default function DayDetailScreen({ route, navigation }) {
     if (!b.time) return -1;
     return a.time.localeCompare(b.time);
   });
+  const hasMapPin = day.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng));
   const doneCount = day.activities.filter((a) => a.done).length;
   const firstUndoneIndex = sorted.findIndex((a) => !a.done);
   const location = (day.location || "").trim();
@@ -169,6 +170,7 @@ export default function DayDetailScreen({ route, navigation }) {
         <Txt variant="subhead" numberOfLines={1} style={styles.tripName}>
           {trip.name}
         </Txt>
+        {hasMapPin ? <IconButton icon="map-outline" label="Voir le jour sur la carte" onPress={() => navigation.navigate("TripMap", { tripId, dayId })} /> : null}
         <IconButton icon="ellipsis-horizontal" label="Type de jour" onPress={openDayTypeMenu} />
         <IconButton icon="add" label="Ajouter une étape" tone="gold" filled onPress={addStep} />
       </View>
@@ -204,7 +206,7 @@ export default function DayDetailScreen({ route, navigation }) {
         ) : null}
 
         {day.dayType === "flight" ? <FlightDayBanner day={day} dateISO={date} /> : null}
-        {day.dayType === "park" ? <ParkDayBanner day={day} /> : null}
+        {day.dayType === "park" ? <ParkDayBanner day={day} onPlan={() => navigation.navigate("ParkPlan", { tripId, dayId })} onLive={() => navigation.navigate("ParkLive", { tripId, dayId })} /> : null}
 
         {sorted.length === 0 ? (
           <EmptyState
@@ -440,7 +442,7 @@ function FlightDayBanner({ day, dateISO }) {
   );
 }
 
-function ParkDayBanner({ day }) {
+function ParkDayBanner({ day, onPlan, onLive }) {
   const done = day.activities.filter((a) => a.done).length;
   const total = day.activities.length;
   return (
@@ -452,6 +454,10 @@ function ParkDayBanner({ day }) {
         </Txt>
       </View>
       {total > 0 ? <ProgressBar value={done / total} height={6} style={styles.parkBar} /> : null}
+      <View style={styles.parkActions}>
+        <Button title="Parcours" icon="sparkles-outline" size="sm" tone="gold" accessibilityLabel="Préparer le parcours de ce jour" onPress={onPlan} />
+        {total > 0 ? <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel="Suivre ce jour en direct" onPress={onLive} /> : null}
+      </View>
     </Surface>
   );
 }
@@ -480,7 +486,7 @@ function LocationModal({ visible, initial, onClose, onSave }) {
 // Local one-off: diameter of the rail node (a 28pt circle holds the type icon or the check).
 const NODE = 28;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
@@ -504,6 +510,7 @@ const styles = StyleSheet.create({
   panel: { marginBottom: space.lg },
   panelRow: { flexDirection: "row", alignItems: "center", gap: space.md },
   panelText: { flex: 1 },
+  parkActions: { flexDirection: "row", gap: space.sm, marginTop: space.md },
   parkBar: { marginTop: space.md },
 
   flightRoute: { flexDirection: "row", alignItems: "center", gap: space.md },
@@ -559,4 +566,4 @@ const styles = StyleSheet.create({
   typeGroup: { marginBottom: space.md },
   sheetButtons: { flexDirection: "row", gap: space.md },
   sheetButton: { flex: 1 },
-});
+}));

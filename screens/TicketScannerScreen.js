@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, requestCameraPermissionsAsync } from "expo-camera";
 import * as Haptics from "expo-haptics";
 
-import { THEME, space, layout, radius, type } from "../lib/theme";
+import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { IconButton, EmptyState, round } from "../components/ui";
 
 // Live camera view that watches for a barcode/QR code. As soon as one is
@@ -122,7 +122,7 @@ export default function TicketScannerScreen({ navigation, route }) {
 // Shutter button: ring + disc, sized from the spacing scale (48 + 24 = 72).
 const SHUTTER = space.xxxl + space.xl;
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: layout.gutter },
   root: { flex: 1, backgroundColor: THEME.bg },
@@ -145,4 +145,4 @@ const styles = StyleSheet.create({
     marginBottom: space.xl,
   },
   manualShutterInner: { width: SHUTTER - space.xs * 4, height: SHUTTER - space.xs * 4, borderRadius: radius.full, backgroundColor: THEME.ink },
-});
+}));

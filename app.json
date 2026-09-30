@@ -3,10 +3,17 @@
     "name": "Compagnon de voyage",
     "slug": "compagnon-de-voyage",
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#170F1F",
+    "backgroundColor": "#17120E",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.compagnondevoyage.app"
@@ -58,7 +65,8 @@
           "locationAlwaysAndWhenInUsePermission": "Autoriser Compagnon de voyage à utiliser votre position pour vous rappeler le code de réservation quand vous approchez de votre hôtel.",
           "isAndroidBackgroundLocationEnabled": true
         }
-      ]
+      ],
+      "expo-background-task"
     ]
   }
 }
