@@ -8,8 +8,9 @@ import { useFocusEffect } from "@react-navigation/native";
 import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { scopedId } from "../lib/parkDay";
+import { splitTitlePlace } from "../lib/script";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
-import { resolveDayDate, formatDayLabel } from "../lib/dates";
+import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
@@ -116,11 +117,18 @@ export default function DayDetailScreen({ route, navigation }) {
   });
   const hasMapPin = day.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng));
   const doneCount = day.activities.filter((a) => a.done).length;
-  const firstUndoneIndex = sorted.findIndex((a) => !a.done);
+  // "Next step" is only marked on a day being lived: today, or already started
+  const firstUndoneIndex = date === isoDate(new Date()) || doneCount > 0 ? sorted.findIndex((a) => !a.done) : -1;
   const location = (day.location || "").trim();
   // A park day of a normal trip has its own park and attractions: the park screens open it through a view of the trip.
   const isParkTrip = trip.tripType === "park";
   const parkTripId = isParkTrip ? tripId : scopedId(tripId, dayId);
+  // On a park day, the zone of a ride says more than its street address.
+  const parkIdeas = day.dayType === "park" ? (isParkTrip ? trip.ideas : (day.park && trip.parkLists && trip.parkLists[day.park.qtId]) || []) : [];
+  const parkLandOf = (a) => {
+    const idea = a.ideaId ? parkIdeas.find((i) => i.id === a.ideaId) : null;
+    return (idea && idea.land) || null;
+  };
 
   async function onToggleDone(activityId) {
     await toggleActivityDone(tripId, dayId, activityId);
@@ -242,9 +250,7 @@ export default function DayDetailScreen({ route, navigation }) {
                 key={a.id}
                 activity={a}
                 trip={trip}
-                isFirst={i === 0}
-                isLast={i === sorted.length - 1}
-                prevDone={i > 0 && !!sorted[i - 1].done}
+                land={parkLandOf(a)}
                 isCurrent={i === firstUndoneIndex}
                 onToggleDone={() => onToggleDone(a.id)}
                 onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
@@ -295,77 +301,83 @@ export default function DayDetailScreen({ route, navigation }) {
   );
 }
 
-// One step of the day: time column, rail with a node, content without a box.
-// Done = teal node with a check; next (first undone) = gold node and gold time.
-function ActivityRow({ activity, trip, isFirst, isLast, prevDone, isCurrent, onToggleDone, onPress, onDeleteWithUndo }) {
+// A planner writes "Attente estimée : 30 min" as the note of a ride: shown as a
+// small tag instead of a sentence repeated on every step.
+const WAIT_NOTE = /^Attente estimée : (\d+) min$/;
+
+// One step of the day, as a small ticket: a stub with the time and the kind of
+// step, then the name with what matters under it. Next (first undone) = gold
+// stub and outline; done = teal, softened. The round box on the right marks it done.
+function ActivityRow({ activity, trip, land, isCurrent, onToggleDone, onPress, onDeleteWithUndo }) {
   const t = TYPES[activity.type] || TYPES.activite;
   const done = !!activity.done;
   const hasPrice = activity.price != null;
-  const nodeBg = done ? THEME.teal : isCurrent ? THEME.gold : t.dim;
-  const timeColor = done ? THEME.inkFaint : isCurrent ? THEME.gold : THEME.ink;
+  const split = activity.address ? { title: activity.title, place: null } : splitTitlePlace(activity.title);
+  const place = land || activity.address || split.place;
+  // "Electric Railway (American Waterfront)" next to its zone "American Waterfront": the zone is said once
+  const name = land && split.title.toLowerCase().endsWith(`(${land.toLowerCase()})`) ? split.title.slice(0, -(land.length + 2)).trim() : split.title;
+  const waitMatch = activity.note ? activity.note.match(WAIT_NOTE) : null;
+  const note = waitMatch ? "" : activity.note;
+  const stubBg = done ? THEME.bgCardAlt : isCurrent ? THEME.gold : t.dim;
+  const stubInk = done ? THEME.inkFaint : isCurrent ? THEME.onGold : t.color;
+  // the usual "activité" pin says nothing: an icon only for the other kinds, or when there is no time to show
+  const showIcon = !activity.time || activity.type !== "activite";
   const label = `${activity.title}${activity.time ? ", " + activity.time : ""}${done ? ", fait" : isCurrent ? ", à suivre" : ""}`;
 
   return (
-    <View style={styles.stepRow}>
-      <Text style={[styles.stepTime, { color: timeColor }]} accessibilityLabel={activity.time || "Heure libre"}>
-        {activity.time || "--:--"}
-      </Text>
-
-      <View style={styles.rail}>
-        <View style={[styles.railLine, styles.railLineTop, prevDone && { backgroundColor: THEME.teal }, isFirst && styles.railLineHidden]} />
-        <Pressable
-          onPress={onToggleDone}
-          hitSlop={space.sm}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: done }}
-          accessibilityLabel={`Fait : ${activity.title}`}
-          style={({ pressed }) => [styles.node, { backgroundColor: nodeBg }, pressed && { opacity: 0.7 }]}
-        >
-          {done ? (
-            <Ionicons name="checkmark" size={16} color={THEME.onGold} />
-          ) : (
-            <Ionicons name={t.icon} size={14} color={isCurrent ? THEME.onGold : t.color} />
-          )}
-        </Pressable>
-        <View style={[styles.railLine, styles.railLineBottom, done && { backgroundColor: THEME.teal }, isLast && styles.railLineHidden]} />
-      </View>
-
-      <View style={styles.swipeWrap}>
-        <Swipeable
-          containerStyle={styles.swipeContainer}
-          renderRightActions={() => (
-            <Pressable style={styles.deleteAction} onPress={onDeleteWithUndo} accessibilityRole="button" accessibilityLabel={`Supprimer ${activity.title}`}>
-              <Ionicons name="trash-outline" size={20} color={THEME.bg} />
-            </Pressable>
-          )}
-          overshootRight={false}
-        >
+    <View style={styles.stepWrap}>
+      <Swipeable
+        containerStyle={styles.swipeContainer}
+        renderRightActions={() => (
+          <Pressable style={styles.deleteAction} onPress={onDeleteWithUndo} accessibilityRole="button" accessibilityLabel={`Supprimer ${activity.title}`}>
+            <Ionicons name="trash-outline" size={20} color={THEME.bg} />
+          </Pressable>
+        )}
+        overshootRight={false}
+      >
+        <View style={[styles.card, isCurrent && !done && styles.cardCurrent, done && styles.cardDone]}>
           <Pressable
             onPress={onPress}
             accessibilityRole="button"
             accessibilityLabel={label}
-            style={({ pressed }) => [styles.stepContent, { backgroundColor: pressed ? THEME.surfaceSunk : THEME.bg }]}
+            style={({ pressed }) => [styles.cardMain, pressed && { backgroundColor: THEME.pressed }]}
           >
-            <View style={styles.stepTitleRow}>
-              <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{activity.title}</Text>
-              {hasPrice ? <Text style={[styles.stepPrice, done && { color: THEME.inkFaint }]}>{formatMoney(activity.price, trip.currency)}</Text> : null}
+            <View style={[styles.stub, { backgroundColor: stubBg }]}>
+              {activity.time ? <Text style={[styles.stubTime, { color: stubInk }]}>{activity.time}</Text> : null}
+              {showIcon ? <Ionicons name={t.icon} size={activity.time ? 14 : 18} color={stubInk} /> : null}
             </View>
-            {activity.note ? <Text style={[type.subhead, done && { color: THEME.inkFaint }]}>{activity.note}</Text> : null}
-            {activity.address ? (
-              <View style={styles.metaLine}>
-                <Ionicons name="location-outline" size={14} color={THEME.inkFaint} />
-                <Text style={[type.caption, styles.metaText, done && { color: THEME.inkFaint }]}>{activity.address}</Text>
+            <View style={styles.body}>
+              <View style={styles.stepTitleRow}>
+                <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{name}</Text>
+                {hasPrice ? <Text style={[styles.stepPrice, done && { color: THEME.inkFaint }]}>{formatMoney(activity.price, trip.currency)}</Text> : null}
               </View>
-            ) : null}
-            {activity.confirmationCode ? (
-              <View style={styles.metaLine}>
-                <Ionicons name="key-outline" size={14} color={THEME.inkFaint} />
-                <Text style={[type.numeralSmall, styles.metaText, { color: done ? THEME.inkFaint : THEME.ink }]}>{activity.confirmationCode}</Text>
-              </View>
-            ) : null}
+              {place || waitMatch || activity.confirmationCode ? (
+                <View style={styles.detailLine}>
+                  {place ? (
+                    <View style={styles.metaLine}>
+                      <Ionicons name="location-outline" size={14} color={THEME.inkFaint} />
+                      <Text style={[type.caption, styles.metaText]} numberOfLines={2}>{place}</Text>
+                    </View>
+                  ) : null}
+                  {waitMatch ? <Badge label={`~${waitMatch[1]} min`} icon="hourglass-outline" tone="neutral" /> : null}
+                  {activity.confirmationCode ? <Badge label={activity.confirmationCode} icon="key-outline" tone="neutral" /> : null}
+                </View>
+              ) : null}
+              {note ? <Text style={[type.subhead, done && { color: THEME.inkFaint }]}>{note}</Text> : null}
+            </View>
           </Pressable>
-        </Swipeable>
-      </View>
+          <Pressable
+            onPress={onToggleDone}
+            hitSlop={space.sm}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: done }}
+            accessibilityLabel={`Fait : ${activity.title}`}
+            style={({ pressed }) => [styles.checkHit, pressed && { opacity: 0.7 }]}
+          >
+            <View style={[styles.check, done && styles.checkDone]}>{done ? <Ionicons name="checkmark" size={16} color={THEME.onGold} /> : null}</View>
+          </Pressable>
+        </View>
+      </Swipeable>
     </View>
   );
 }
@@ -613,9 +625,6 @@ function LocationModal({ visible, initial, onClose, onSave }) {
   );
 }
 
-// Local one-off: diameter of the rail node (a 28pt circle holds the type icon or the check).
-const NODE = 28;
-
 const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
@@ -660,35 +669,27 @@ const styles = themedStyles(() => ({
   flightLiveTime: { ...type.numeralSmall, color: THEME.teal },
   flightNote: { color: THEME.inkFaint, marginTop: space.md },
 
-  stepRow: { flexDirection: "row", gap: space.sm },
-  stepTime: { ...type.numeral, minWidth: 48, paddingTop: space.sm + (NODE - type.numeral.lineHeight) / 2 },
-  rail: { width: NODE, alignItems: "center" },
-  railLine: { width: 2, backgroundColor: THEME.hairStrong },
-  railLineTop: { height: space.sm },
-  railLineBottom: { flex: 1 },
-  railLineHidden: { backgroundColor: "transparent" },
-  node: { width: NODE, height: NODE, borderRadius: NODE / 2, alignItems: "center", justifyContent: "center" },
-
-  // The pressed / swiped area bleeds 8pt into the screen margin so the price lines up with the gutter.
-  swipeWrap: { flex: 1, minWidth: 0, marginRight: -space.sm },
-  swipeContainer: { flex: 1 },
-  stepContent: {
-    flex: 1,
-    gap: space.xs,
-    paddingTop: space.sm + (NODE - type.label.lineHeight) / 2,
-    paddingBottom: space.md,
-    paddingHorizontal: space.sm,
-    borderRadius: radius.md,
-  },
+  stepWrap: { marginBottom: space.sm },
+  swipeContainer: { borderRadius: radius.md },
+  card: { flexDirection: "row", alignItems: "stretch", overflow: "hidden", borderRadius: radius.md, borderWidth: 1, borderColor: THEME.hair, backgroundColor: THEME.bgCard },
+  cardCurrent: { borderColor: THEME.gold, borderWidth: 1.5 },
+  cardDone: { opacity: 0.65 },
+  cardMain: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "stretch" },
+  stub: { width: 64, alignItems: "center", justifyContent: "center", gap: space.xs, paddingVertical: space.md },
+  stubTime: { ...type.numeral },
+  body: { flex: 1, minWidth: 0, gap: space.xs + 2, paddingVertical: space.md, paddingLeft: space.md, paddingRight: space.xs },
   stepTitleRow: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
   stepTitle: { ...type.name, flex: 1, minWidth: 0 },
   stepPrice: { ...type.numeral, color: THEME.inkMuted, flexShrink: 0 },
-  metaLine: { flexDirection: "row", alignItems: "flex-start", gap: space.xs + 2 },
-  metaText: { flex: 1, minWidth: 0 },
+  detailLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.md, rowGap: space.xs + 2 },
+  metaLine: { flexShrink: 1, flexDirection: "row", alignItems: "flex-start", gap: space.xs + 2 },
+  metaText: { flexShrink: 1 },
+  checkHit: { width: 52, alignItems: "center", paddingTop: space.md - 2 },
+  check: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: THEME.hairStrong, alignItems: "center", justifyContent: "center" },
+  checkDone: { backgroundColor: THEME.teal, borderColor: THEME.teal },
   deleteAction: {
     width: 72,
     marginLeft: space.sm,
-    marginVertical: space.xs,
     borderRadius: radius.md,
     backgroundColor: THEME.stamp,
     alignItems: "center",
