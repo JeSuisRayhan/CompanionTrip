@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
@@ -8,7 +8,8 @@ import { getTrip } from "../lib/trips";
 import { resolveDayDate, formatDayLabel } from "../lib/dates";
 import { hasPosition, formatIdeaDuration } from "../lib/ideas";
 import { undoPlan } from "../lib/planner";
-import { generateParkDay, applyParkDay, DAY_STARTS, DAY_ENDS, DEFAULT_START, DEFAULT_END } from "../lib/parkPlanner";
+import { generateParkDay, applyParkDay, liveWaitMap, DAY_STARTS, DAY_ENDS, DEFAULT_START, DEFAULT_END } from "../lib/parkPlanner";
+import { fetchQueueTimes } from "../lib/queueTimes";
 import { Txt, Button, Chip, Badge, Group, Row, EmptyState, BackHeader } from "../components/ui";
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + "s"}`;
@@ -27,7 +28,7 @@ function stepTitle(it) {
 }
 
 function stepLine(it) {
-  if (it.kind === "ride") return `Attente ${it.wait} min${it.walk ? `, marche ${it.walk} min` : ""}`;
+  if (it.kind === "ride") return `Attente ${it.wait} min${it.waitSource === "live" ? " (du moment)" : ""}${it.walk ? `, marche ${it.walk} min` : ""}`;
   if (it.kind === "show") return "Arrivez un quart d'heure avant";
   return it.idea ? "Restaurant de votre liste" : "À choisir sur place";
 }
@@ -60,7 +61,20 @@ export default function ParkPlanScreen({ route, navigation }) {
   );
 
   const day = trip ? trip.days.find((d) => d.id === dayId) : null;
-  const plan = useMemo(() => (trip && day ? generateParkDay(trip, { start, end }) : null), [trip, day, start, end]);
+  // The queues of the moment stand in for the attractions without a usual wait; the plan just waits for them if they are slow
+  const [live, setLive] = useState(null);
+  const qtId = trip && trip.park ? trip.park.qtId : null;
+  useEffect(() => {
+    if (qtId == null) return undefined;
+    let cancelled = false;
+    fetchQueueTimes(qtId)
+      .then((data) => !cancelled && setLive(liveWaitMap(data)))
+      .catch(() => {}); // no live data: the usual or default waits
+    return () => {
+      cancelled = true;
+    };
+  }, [qtId]);
+  const plan = useMemo(() => (trip && day ? generateParkDay(trip, { start, end, live }) : null), [trip, day, start, end, live]);
 
   const back = () => navigation.goBack();
   const dayIndex = trip && day ? trip.days.indexOf(day) : -1;
@@ -167,7 +181,9 @@ export default function ParkPlanScreen({ route, navigation }) {
           ))}
         </View>
         <Txt variant="subhead" style={styles.hint}>
-          Les temps sont estimés d'après l'attente habituelle de chaque attraction, 30 min quand elle n'est pas renseignée.
+          {plan.liveCount > 0
+            ? `Temps estimés d'après l'attente habituelle de chaque attraction. Pour ${plural(plan.liveCount, "attraction")} sans attente renseignée : celle du moment, qui varie d'un jour à l'autre.`
+            : "Les temps sont estimés d'après l'attente habituelle de chaque attraction, 30 min quand elle n'est pas renseignée."}
         </Txt>
 
         <View style={styles.summary}>
