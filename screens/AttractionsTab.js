@@ -1,18 +1,20 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { View, Text, ScrollView, Pressable, Linking, ActivityIndicator, Switch, Alert } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, Switch, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { PARK_PRIORITIES, getIdeaCategory, placementIndex, priorityMeta } from "../lib/ideas";
 import { getTrip } from "../lib/trips";
 import { setPark, setMinHeight, tooTall, groupByLand, attractionInputs, importParkAttractions } from "../lib/park";
-import { fetchParks, searchParks, fetchQueueTimes, liveByRideId, liveSummary, latestUpdate, ageLabel, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
+import { fetchParks, searchParks, fetchQueueTimes, liveByRideId, liveSummary, latestUpdate, ageLabel } from "../lib/queueTimes";
 import { logError } from "../lib/errorLog";
 import { ALERT_CHOICES, alertSettings, setParkAlerts, watchedIdeas, hasAlertDays } from "../lib/parkAlerts";
 import { syncParkAlertTask, checkAlertsOnScreen, requestNotificationPermission } from "../lib/parkAlertsTask";
 import AttractionSheet from "../components/AttractionSheet";
 import WaitBadge from "../components/WaitBadge";
 import DayPickerModal from "../components/DayPickerModal";
+import TripScroll from "../components/TripScroll";
+import QueueTimesCredit from "../components/QueueTimesCredit";
 import { Txt, Button, IconButton, Chip, Badge, Surface, Group, Row, Thumb, Field, EmptyState, Sheet } from "../components/ui";
 
 const REFRESH_MS = 5 * 60 * 1000; // Queue-Times refreshes its data every 5 minutes
@@ -146,7 +148,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
 
   if (!park) {
     return (
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <TripScroll contentContainerStyle={styles.scrollContent}>
         <EmptyState
           icon="sparkles-outline"
           tone="pink"
@@ -155,12 +157,12 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
           action={{ label: "Choisir le parc", icon: "search", onPress: () => setPickerOpen(true) }}
         />
         <ParkPickerSheet visible={pickerOpen} onClose={() => setPickerOpen(false)} onPick={pickPark} />
-      </ScrollView>
+      </TripScroll>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <TripScroll contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       <Surface tone="card" r="lg" pad="lg">
         <View style={styles.parkHead}>
           <Thumb icon="sparkles" tone="pink" size={44} />
@@ -199,17 +201,12 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
         </View>
       </Surface>
 
-      <Pressable
-        onPress={() => Linking.openURL(QUEUE_TIMES_CREDIT.url)}
-        accessibilityRole="link"
-        accessibilityLabel={`${QUEUE_TIMES_CREDIT.text}, ouvrir queue-times.com`}
-        style={({ pressed }) => [styles.credit, pressed && { opacity: 0.7 }]}
-      >
-        <Ionicons name="open-outline" size={16} color={THEME.teal} />
-        <Text style={[type.label, { color: THEME.teal }]}>{QUEUE_TIMES_CREDIT.text}</Text>
-      </Pressable>
+      <QueueTimesCredit />
 
-      {ideas.length > 0 && planCount > 0 && trip.days.length > 0 ? (
+      {/* One big action at a time: load the park's list first, then prepare a day. */}
+      {ideas.length === 0 && newRides > 0 ? (
+        <Button title={`Charger les ${newRides} attractions`} icon="download-outline" tone="gold" full onPress={addFromPark} />
+      ) : ideas.length > 0 && planCount > 0 && trip.days.length > 0 ? (
         <Button
           title="Préparer ma journée"
           icon="sparkles-outline"
@@ -219,22 +216,6 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
           onPress={() => (scopeDayId ? prepareDay(scopeDayId) : trip.days.length === 1 ? prepareDay(trip.days[0].id) : setDayPickerOpen(true))}
         />
       ) : null}
-
-      {newRides > 0 ? (
-        <Button
-          title={ideas.length ? (newRides === 1 ? "Ajouter 1 nouvelle attraction du parc" : `Ajouter les ${newRides} nouvelles attractions du parc`) : `Charger les ${newRides} attractions`}
-          icon="download-outline"
-          tone={ideas.length ? "teal" : "gold"}
-          full
-          style={styles.gap}
-          onPress={addFromPark}
-        />
-      ) : null}
-
-      <View style={[styles.actionRow, styles.gap]}>
-        <Button title="Plan du parc" icon="map-outline" variant="secondary" style={styles.flex} accessibilityLabel="Voir les attractions sur le plan du parc" onPress={() => navigation.navigate("TripMap", { tripId: trip.id })} />
-        <Button title="Ajouter" icon="add" variant="secondary" style={styles.flex} accessibilityLabel="Ajouter une attraction à la main" onPress={() => setEditing(null)} />
-      </View>
 
       {notice ? (
         <Txt variant="caption" color="inkFaint" style={styles.notice}>
@@ -266,6 +247,21 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
         <Txt variant="caption" style={[styles.tallNote, { color: THEME.stamp }]}>
           {`${plural(tallCount, "attraction trop haute", "attractions trop hautes")} pour le groupe, ${tallCount === 1 ? "écartée" : "écartées"} du parcours.`}
         </Txt>
+      ) : null}
+
+      <View style={styles.listHead}>
+        <Txt variant="subhead" style={styles.listCount}>
+          {ideas.length ? plural(ideas.length, "attraction", "attractions") : ""}
+        </Txt>
+        <Button title="Plan" icon="map-outline" variant="secondary" size="sm" accessibilityLabel="Voir les attractions sur le plan du parc" onPress={() => navigation.navigate("TripMap", { tripId: trip.id })} />
+        <Button title="Ajouter" icon="add" variant="secondary" size="sm" accessibilityLabel="Ajouter une attraction à la main" onPress={() => setEditing(null)} />
+      </View>
+
+      {ideas.length > 0 && newRides > 0 ? (
+        <Pressable onPress={addFromPark} accessibilityRole="button" style={({ pressed }) => [styles.newRides, pressed && { opacity: 0.7 }]}>
+          <Ionicons name="download-outline" size={18} color={THEME.teal} />
+          <Text style={[type.label, { color: THEME.teal, flex: 1 }]}>{newRides === 1 ? "Ajouter 1 nouvelle attraction du parc" : `Ajouter les ${newRides} nouvelles attractions du parc`}</Text>
+        </Pressable>
       ) : null}
 
       {ideas.length > 0 ? (
@@ -330,7 +326,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
         }}
       />
       <DayPickerModal visible={dayPickerOpen} trip={trip} title="Préparer quel jour ?" onClose={() => setDayPickerOpen(false)} onPick={prepareDay} />
-    </ScrollView>
+    </TripScroll>
   );
 }
 
@@ -511,11 +507,12 @@ const styles = themedStyles(() => ({
   parkTitle: { flex: 1, gap: 2 },
   liveRow: { flexDirection: "row", alignItems: "center", gap: space.md, marginTop: space.lg },
   liveText: { flex: 1, gap: 2 },
-  credit: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: layout.minTouch, marginBottom: space.sm },
   gap: { marginTop: space.md },
   settings: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   tallNote: { marginTop: space.sm },
-  actionRow: { flexDirection: "row", gap: space.sm },
+  listHead: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.xl },
+  listCount: { flex: 1 },
+  newRides: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: layout.minTouch, marginTop: space.xs },
   notice: { textAlign: "center", marginTop: space.md },
   chipScroll: { flexGrow: 0, marginHorizontal: -layout.gutter, marginTop: space.lg },
   chipRow: { paddingHorizontal: layout.gutter, gap: space.sm, alignItems: "center" },

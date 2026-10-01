@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
-import { View, Text, ScrollView, Pressable, Linking, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -7,7 +7,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import { THEME, TONES, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip, toggleActivityDone, editActivity } from "../lib/trips";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
-import { fetchQueueTimes, liveByRideId, latestUpdate, ageLabel, waitTone, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
+import { fetchQueueTimes, liveByRideId, latestUpdate, ageLabel, waitTone } from "../lib/queueTimes";
+import QueueTimesCredit from "../components/QueueTimesCredit";
 import { logError } from "../lib/errorLog";
 import { checkAlertsOnScreen } from "../lib/parkAlertsTask";
 import { waitOf } from "../lib/parkPlanner";
@@ -181,17 +182,7 @@ export default function ParkLiveScreen({ route, navigation }) {
           </View>
         </Surface>
 
-        {qtId != null ? (
-          <Pressable
-            onPress={() => Linking.openURL(QUEUE_TIMES_CREDIT.url)}
-            accessibilityRole="link"
-            accessibilityLabel={`${QUEUE_TIMES_CREDIT.text}, ouvrir queue-times.com`}
-            style={({ pressed }) => [styles.credit, pressed && { opacity: 0.7 }]}
-          >
-            <Ionicons name="open-outline" size={16} color={THEME.teal} />
-            <Text style={[type.label, { color: THEME.teal }]}>{QUEUE_TIMES_CREDIT.text}</Text>
-          </Pressable>
-        ) : null}
+        {qtId != null ? <QueueTimesCredit /> : null}
 
         {next ? (
           <Surface tone="raised" r="xl" pad="xl" style={styles.next}>
@@ -327,7 +318,6 @@ const styles = themedStyles(() => ({
   bar: { marginTop: space.md },
   liveRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md },
   liveText: { flex: 1 },
-  credit: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: layout.minTouch },
   next: { marginTop: space.sm, gap: space.xs },
   nextTitle: { marginTop: space.xs },
   nextInfo: { marginTop: space.lg, gap: space.xs },

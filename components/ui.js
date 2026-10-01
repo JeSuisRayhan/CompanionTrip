@@ -5,7 +5,7 @@
 // Keep this file small: a view is promoted here only when two or more screens
 // use it and it has a nameable role.
 import React, { useContext, useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator, Image, Modal, KeyboardAvoidingView, ScrollView, StyleSheet } from "react-native";
+import { View, Text, TextInput, Pressable, ActivityIndicator, Image, Modal, KeyboardAvoidingView, ScrollView, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaInsetsContext } from "react-native-safe-area-context";
 import { THEME, TONES, space, layout, radius, type, shadow, themedStyles } from "../lib/theme";
@@ -384,6 +384,35 @@ export function Sheet({ visible, onClose, title, children }) {
         </View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+// ---------- Action sheet ----------
+// A list of actions in a bottom sheet: the way to keep occasional actions off
+// the screen. actions: [{ icon, title, subtitle, tone, onPress }] (falsy entries
+// are skipped). The sheet closes first, then the action runs: an Alert opened
+// while a Modal is still closing is lost on iOS.
+export function ActionSheet({ visible, onClose, title, actions }) {
+  const list = actions.filter(Boolean);
+  return (
+    <Sheet visible={visible} onClose={onClose} title={title}>
+      <Group style={{ marginBottom: space.md }}>
+        {list.map((a) => (
+          <Row
+            key={a.title}
+            icon={a.icon}
+            tone={a.tone}
+            title={a.title}
+            subtitle={a.subtitle}
+            onPress={() => {
+              onClose();
+              if (Platform.OS === "ios") setTimeout(a.onPress, 350);
+              else a.onPress();
+            }}
+          />
+        ))}
+      </Group>
+    </Sheet>
   );
 }
 

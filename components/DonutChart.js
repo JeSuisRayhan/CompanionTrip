@@ -50,10 +50,12 @@ export default function DonutChart({ segments, centerLabel, centerValue }) {
               );
             })}
       </Svg>
-      <View style={styles.centerLabel} pointerEvents="none">
-        <Text style={styles.centerValue}>{centerValue}</Text>
-        <Text style={styles.centerText}>{centerLabel}</Text>
-      </View>
+      {centerValue != null || centerLabel != null ? (
+        <View style={styles.centerLabel} pointerEvents="none">
+          {centerValue != null ? <Text style={styles.centerValue}>{centerValue}</Text> : null}
+          {centerLabel != null ? <Text style={styles.centerText}>{centerLabel}</Text> : null}
+        </View>
+      ) : null}
     </View>
   );
 }

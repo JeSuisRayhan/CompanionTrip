@@ -11,14 +11,13 @@ import { scopedId } from "../lib/parkDay";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDayLabel } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
-import { fetchDayWeather, weatherInfo, guessDayLocation } from "../lib/weather";
+import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
 import UndoToast from "../components/UndoToast";
 import { Txt, Button, IconButton, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
   const [weather, setWeather] = useState(undefined); // undefined = loading, null = no data
-  const location = guessDayLocation(day, fallbackLocation);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,19 +47,16 @@ export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
     );
   }
 
-  // weather === null. In the compact (list-card) context, silently show nothing —
-  // explaining why on every single day card would be noisy. The full explanation
-  // only shows in the day detail view, right next to the location-edit action.
+  // weather === null: say nothing, except where the person can do something
+  // about it. On a day card there is room for nothing; on the day itself, a place
+  // they typed that the forecast does not know deserves a word (the place chip
+  // right below already invites them to add one when there is none).
   if (compact) return null;
-
-  if (!location) {
-    return <Text style={styles.weatherUnavailable}>Ajoutez un lieu pour la météo</Text>;
-  }
+  const typed = (day.location || "").trim();
+  if (!typed) return null;
   const daysAhead = dateISO ? Math.round((new Date(dateISO + "T00:00:00") - new Date()) / 86400000) : null;
-  if (daysAhead != null && (daysAhead > 15 || daysAhead < -1)) {
-    return <Text style={styles.weatherUnavailable}>Prévision indisponible (trop loin dans le temps)</Text>;
-  }
-  return <Text style={styles.weatherUnavailable}>Prévision indisponible pour « {location} »</Text>;
+  if (daysAhead != null && (daysAhead > 15 || daysAhead < -1)) return null;
+  return <Text style={styles.weatherUnavailable}>Pas de prévision pour « {typed} »</Text>;
 }
 
 export default function DayDetailScreen({ route, navigation }) {
@@ -177,7 +173,6 @@ export default function DayDetailScreen({ route, navigation }) {
         </Txt>
         {hasMapPin ? <IconButton icon="map-outline" label="Voir le jour sur la carte" onPress={() => navigation.navigate("TripMap", { tripId, dayId })} /> : null}
         <IconButton icon="ellipsis-horizontal" label="Type de jour" onPress={openDayTypeMenu} />
-        <IconButton icon="add" label="Ajouter une étape" tone="gold" filled onPress={addStep} />
       </View>
 
       <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: layout.tabBarClearance + (insets ? insets.bottom : 0) }]}>

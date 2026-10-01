@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useContext, useRef } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal, Alert, Image, ImageBackground, LayoutAnimation, Platform, UIManager } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal, Alert, Image, ImageBackground, LayoutAnimation, Platform, UIManager, Dimensions } from "react-native";
 import { SafeAreaView, SafeAreaInsetsContext } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,7 +10,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha } from "../lib/theme";
-import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
+import { getTrip, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
 import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, formatMoney, convertAmount } from "../lib/budget";
@@ -19,7 +19,8 @@ import { WeatherBadge } from "./DayDetailScreen";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
 import { exportTripFile } from "../lib/backup";
 import DonutChart from "../components/DonutChart";
-import { Txt, Button, IconButton, Badge, Group, Row, Thumb, SectionTitle, Field, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
+import { Txt, Button, IconButton, Badge, Group, Row, Thumb, SectionTitle, Field, ProgressBar, EmptyState, Sheet, ActionSheet, round } from "../components/ui";
+import TripScroll, { TripChromeContext } from "../components/TripScroll";
 import IdeasTab from "./IdeasTab";
 import AttractionsTab from "./AttractionsTab";
 
@@ -49,9 +50,33 @@ export default function TripScreen({ route, navigation }) {
   const [incomingScan, setIncomingScan] = useState(null);
   const [incomingAction, setIncomingAction] = useState(null);
 
+  // The title block scrolls away with the content; once it is gone the tabs are
+  // pinned to the top (see components/TripScroll.js). `stuck` is true then.
+  const insets = useContext(SafeAreaInsetsContext);
+  const topInset = insets ? insets.top : 0;
+  const [headH, setHeadH] = useState(0);
+  const [stuck, setStuck] = useState(false);
+  const stuckRef = useRef(false);
+  const restoreRef = useRef(0); // where the next tab's scroll starts
+
+  function onBodyScroll(y) {
+    const s = headH > 0 && y >= headH - topInset;
+    if (s !== stuckRef.current) {
+      stuckRef.current = s;
+      setStuck(s);
+    }
+  }
+  function changeTab(key) {
+    if (key === tab) return;
+    restoreRef.current = stuckRef.current ? Math.max(0, headH - topInset) : 0;
+    stuckRef.current = false;
+    setStuck(false);
+    setTab(key);
+  }
+
   useEffect(() => {
     if (route.params?.scannedUri) {
-      setTab("documents");
+      changeTab("documents");
       setIncomingScan({ uri: route.params.scannedUri, scannedCode: route.params.scannedCode || null, dayId: route.params.dayId || null });
       navigation.setParams({ scannedUri: undefined, scannedCode: undefined, dayId: undefined });
     }
@@ -61,7 +86,7 @@ export default function TripScreen({ route, navigation }) {
   useEffect(() => {
     const { addFrom, viewDocId, dayId } = route.params || {};
     if (addFrom || viewDocId) {
-      setTab("documents");
+      changeTab("documents");
       setIncomingAction({ addFrom: addFrom || null, viewDocId: viewDocId || null, dayId: dayId || null });
       navigation.setParams({ addFrom: undefined, viewDocId: undefined, dayId: undefined });
     }
@@ -116,11 +141,26 @@ export default function TripScreen({ route, navigation }) {
   const isParkTrip = trip.tripType === "park";
   const tabList = isBuildMode ? [TABS[0], IDEAS_TAB, ...TABS.slice(1)] : isParkTrip ? [TABS[0], ATTRACTIONS_TAB, ...TABS.slice(1)] : TABS;
 
-  return (
-    <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
-      <TripHeader trip={trip} start={start} end={end} status={status} onBack={() => navigation.goBack()} onSettings={() => navigation.navigate("TripSettings", { tripId: trip.id })} />
-      <TabBar tabs={tabList} value={tab} onChange={setTab} />
+  const chrome = {
+    top: (
+      <View>
+        <View onLayout={(e) => setHeadH(e.nativeEvent.layout.height)}>
+          <TripHeader trip={trip} start={start} end={end} status={status} onBack={() => navigation.goBack()} onSettings={() => navigation.navigate("TripSettings", { tripId: trip.id })} />
+        </View>
+        <TabBar tabs={tabList} value={tab} onChange={changeTab} />
+      </View>
+    ),
+    onScroll: onBodyScroll,
+    takeRestore: () => {
+      const y = restoreRef.current;
+      restoreRef.current = 0;
+      return y;
+    },
+  };
 
+  return (
+    <TripChromeContext.Provider value={chrome}>
+    <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
       {tab === "days" && (
         <DaysTab
           trip={trip}
@@ -172,7 +212,14 @@ export default function TripScreen({ route, navigation }) {
           refresh();
         }}
       />
+
+      {stuck ? (
+        <View style={[styles.stickyTabs, { paddingTop: topInset }]}>
+          <TabBar tabs={tabList} value={tab} onChange={changeTab} />
+        </View>
+      ) : null}
     </SafeAreaView>
+    </TripChromeContext.Provider>
   );
 }
 
@@ -211,12 +258,6 @@ function TripHeader({ trip, start, end, status, onBack, onSettings }) {
 // Underlined text tabs. The active tab is ink + a gold rule; no pills.
 function TabBar({ tabs, value, onChange }) {
   const scrollRef = useRef(null);
-  const xs = useRef({});
-  // Keep the active tab in view when the bar overflows (6 tabs in build mode).
-  useEffect(() => {
-    const x = xs.current[value];
-    if (x != null && scrollRef.current) scrollRef.current.scrollTo({ x: Math.max(0, x - layout.gutter), animated: true });
-  }, [value]);
   return (
     <View style={styles.tabBarWrap}>
       <ScrollView ref={scrollRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
@@ -225,8 +266,13 @@ function TabBar({ tabs, value, onChange }) {
           return (
             <Pressable
               key={t.key}
+              // Keep the open tab in view when the bar overflows (6 tabs in build mode):
+              // the bar is built again with each tab, so this runs as it appears.
               onLayout={(e) => {
-                xs.current[t.key] = e.nativeEvent.layout.x;
+                if (!active || !scrollRef.current) return;
+                const { x, width } = e.nativeEvent.layout;
+                const hidden = x + width + layout.gutter - Dimensions.get("window").width;
+                if (hidden > 0) scrollRef.current.scrollTo({ x: hidden, animated: false });
               }}
               onPress={() => onChange(t.key)}
               accessibilityRole="tab"
@@ -277,6 +323,8 @@ function DayNode({ state, number }) {
 function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, onAddDay, searchQuery, gridView, onSearchChange, onToggleGrid }) {
   const isPark = trip.tripType === "park";
   const [menuDay, setMenuDay] = useState(null); // { day, index } while the day menu sheet is open
+  const [menuOpen, setMenuOpen] = useState(false); // the "Ce voyage" actions
+  const [searchOpen, setSearchOpen] = useState(false);
 
   // "Partager": as text for a message, or as a file the companion imports in their own app.
   async function sendTripFile(withDocuments) {
@@ -307,14 +355,27 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
   const today = isoToday();
   // The map has something to show once a step or an idea has a position.
   const hasMap = !isPark && (trip.days.some((d) => d.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng))) || (trip.ideas || []).some((i) => Number.isFinite(i.lat) && Number.isFinite(i.lng)));
+  const canSearch = !isPark && trip.days.length >= 6;
+  const showSearch = canSearch && (searchOpen || !!searchQuery);
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-      <View style={styles.actionRow}>
-        <Button title="Décaler" icon="calendar-outline" variant="secondary" size="sm" onPress={onShiftDates} />
-        <Button title="Partager" icon="share-outline" variant="secondary" size="sm" onPress={shareTrip} />
-        <Button title=".ics" icon="download-outline" variant="secondary" size="sm" onPress={() => shareTripAsICS(trip)} accessibilityLabel="Exporter au format calendrier .ics" />
-        <View style={{ flex: 1 }} />
+    <TripScroll contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <View style={styles.toolbar}>
+        <Txt variant="subhead" style={styles.toolbarCount}>
+          {trip.days.length ? `${trip.days.length} jour${trip.days.length !== 1 ? "s" : ""}` : ""}
+        </Txt>
+        {canSearch && (
+          <IconButton
+            icon={showSearch ? "close" : "search"}
+            label={showSearch ? "Fermer la recherche" : "Rechercher un jour ou une étape"}
+            filled
+            size={20}
+            onPress={() => {
+              if (showSearch) onSearchChange("");
+              setSearchOpen(!showSearch);
+            }}
+          />
+        )}
         {!isPark && (
           <IconButton
             icon={gridView ? "list-outline" : "grid-outline"}
@@ -322,18 +383,19 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
             filled
             size={20}
             onPress={onToggleGrid}
-            style={styles.gridToggle}
           />
         )}
+        <IconButton icon="ellipsis-horizontal" label="Plus d'actions pour ce voyage" filled size={20} onPress={() => setMenuOpen(true)} />
       </View>
 
-      {!isPark && trip.days.length >= 6 && (
+      {showSearch && (
         <Field
           placeholder="Rechercher un jour, une étape…"
           value={searchQuery}
           onChangeText={onSearchChange}
           style={{ marginBottom: space.md }}
           accessibilityLabel="Rechercher"
+          autoFocus
           left={<Ionicons name="search" size={18} color={THEME.inkFaint} style={{ marginRight: space.sm }} />}
           right={
             searchQuery ? (
@@ -345,31 +407,18 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
         />
       )}
 
-      {!isPark && (
-        <Pressable
-          onPress={() => navigation.navigate("WeatherReorg", { tripId: trip.id })}
-          accessibilityRole="button"
-          accessibilityLabel="Réorganiser selon la météo"
-          style={({ pressed }) => [styles.inlineLink, pressed && { opacity: 0.7 }]}
-        >
-          <Ionicons name="partly-sunny-outline" size={18} color={THEME.gold} />
-          <Text style={[type.label, { color: THEME.gold, flex: 1 }]}>Réorganiser selon la météo</Text>
-          <Ionicons name="chevron-forward" size={16} color={THEME.gold} />
-        </Pressable>
-      )}
-
-      {hasMap && (
-        <Pressable
-          onPress={() => navigation.navigate("TripMap", { tripId: trip.id })}
-          accessibilityRole="button"
-          accessibilityLabel="Voir le voyage sur la carte"
-          style={({ pressed }) => [styles.inlineLink, pressed && { opacity: 0.7 }]}
-        >
-          <Ionicons name="map-outline" size={18} color={THEME.gold} />
-          <Text style={[type.label, { color: THEME.gold, flex: 1 }]}>Voir sur la carte</Text>
-          <Ionicons name="chevron-forward" size={16} color={THEME.gold} />
-        </Pressable>
-      )}
+      <ActionSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title="Ce voyage"
+        actions={[
+          { icon: "calendar-outline", title: "Décaler les dates", subtitle: "Tout le voyage, d'un nombre de jours", onPress: onShiftDates },
+          { icon: "share-outline", title: "Partager", subtitle: "En texte, ou en fichier à importer", onPress: shareTrip },
+          { icon: "download-outline", title: "Exporter vers un calendrier", subtitle: "Fichier .ics", onPress: () => shareTripAsICS(trip) },
+          !isPark && { icon: "partly-sunny-outline", title: "Réorganiser selon la météo", subtitle: "Déplacer les sorties en extérieur", onPress: () => navigation.navigate("WeatherReorg", { tripId: trip.id }) },
+          hasMap && { icon: "map-outline", title: "Voir sur la carte", onPress: () => navigation.navigate("TripMap", { tripId: trip.id }) },
+        ]}
+      />
 
       {(() => {
         const filtered = trip.days
@@ -562,7 +611,7 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
           </Group>
         )}
       </Sheet>
-    </ScrollView>
+    </TripScroll>
   );
 }
 
@@ -585,21 +634,15 @@ function BudgetTab({ trip }) {
   };
   const categories = BUDGET_CATEGORIES.map((c) => ({ ...c, value: values[c.key], color: TONES[c.tone].fg }));
 
+  const inHome = trip.homeCurrency !== trip.currency;
+
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent}>
-      {total > 0 && (
-        <DonutChart
-          segments={categories.map((c) => ({ value: c.value, color: c.color }))}
-          centerValue={formatMoney(total, trip.currency).replace(/\s?[A-Z€$£¥]+$/, "")}
-          centerLabel={trip.currency}
-        />
-      )}
+    <TripScroll contentContainerStyle={styles.scrollContent}>
+      {total > 0 && <DonutChart segments={categories.map((c) => ({ value: c.value, color: c.color }))} />}
       <View style={styles.totalBlock}>
         <Txt variant="subhead">Total estimé</Txt>
         <Text style={styles.totalValue}>{formatMoney(total, trip.currency)}</Text>
-        {trip.homeCurrency !== trip.currency && (
-          <Text style={type.numeralSmall}>≈ {formatMoney(convertAmount(total, trip.rate), trip.homeCurrency)}</Text>
-        )}
+        {inHome && <Text style={type.numeralSmall}>≈ {formatMoney(convertAmount(total, trip.rate), trip.homeCurrency)}</Text>}
         {showConverter && <Button title="Convertisseur rapide" icon="swap-horizontal" variant="secondary" size="sm" onPress={() => setConverterOpen(true)} style={{ marginTop: space.md }} />}
       </View>
       <Group>
@@ -613,14 +656,18 @@ function BudgetTab({ trip }) {
               icon={c.icon}
               tone={c.tone}
               title={c.label}
-              right={<Text style={[type.numeral, overTarget && { color: THEME.stamp }]}>{formatMoney(c.value, trip.currency)}</Text>}
+              right={
+                <View style={styles.amountCol}>
+                  <Text style={[type.numeral, overTarget && { color: THEME.stamp }]}>{formatMoney(c.value, trip.currency)}</Text>
+                  {inHome && c.value > 0 ? <Text style={type.caption}>≈ {formatMoney(spentInHome, trip.homeCurrency)}</Text> : null}
+                </View>
+              }
             >
               {target != null && (
-                <View style={{ gap: space.xs + 2, marginTop: space.xs }}>
-                  <ProgressBar value={target > 0 ? spentInHome / target : 0} tone={overTarget ? "stamp" : c.tone} />
+                <View style={{ gap: space.sm, marginTop: space.xs }}>
+                  <ProgressBar value={target > 0 ? Math.max(spentInHome / target, c.value > 0 ? 0.02 : 0) : 0} tone={overTarget ? "stamp" : c.tone} height={6} style={{ backgroundColor: THEME.surfaceSunk }} />
                   <Text style={[type.caption, overTarget && { color: THEME.stamp }]}>
-                    Objectif : {formatMoney(target, trip.homeCurrency)}
-                    {trip.homeCurrency !== trip.currency ? ` (≈ ${formatMoney(spentInHome, trip.homeCurrency)} dépensé)` : ""}
+                    {overTarget ? `Dépassé de ${formatMoney(Math.round(spentInHome - target), trip.homeCurrency)}` : `Reste ${formatMoney(Math.round(target - spentInHome), trip.homeCurrency)} sur ${formatMoney(target, trip.homeCurrency)}`}
                   </Text>
                 </View>
               )}
@@ -629,7 +676,7 @@ function BudgetTab({ trip }) {
         })}
       </Group>
       <CurrencyConverterModal visible={converterOpen} onClose={() => setConverterOpen(false)} trip={trip} />
-    </ScrollView>
+    </TripScroll>
   );
 }
 
@@ -660,12 +707,18 @@ function CurrencyConverterModal({ visible, onClose, trip }) {
 
 function ChecklistsTab({ trip, onChange }) {
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <TripScroll contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       <ChecklistSection title="Bagages" trip={trip} listKey="packingList" onChange={onChange} />
       <ChecklistSection title="Avant le départ" trip={trip} listKey="departureChecklist" onChange={onChange} />
-    </ScrollView>
+    </TripScroll>
   );
 }
+
+// What most trips need: offered once, when a list is still empty.
+const STARTER_ITEMS = {
+  packingList: ["Pièce d'identité ou passeport", "Chargeur et câble du téléphone", "Adaptateur de prise", "Trousse de toilette", "Médicaments personnels", "Vêtements adaptés à la météo", "Carte bancaire et un peu d'espèces"],
+  departureChecklist: ["Vérifier les dates de validité des papiers", "Télécharger ou imprimer les billets", "Confirmer les réservations (hébergement, transport)", "Prévenir la banque du voyage", "Vérifier l'assurance voyage", "Mettre les appareils à charger"],
+};
 
 function ChecklistSection({ title, trip, listKey, onChange }) {
   const [newLabel, setNewLabel] = useState("");
@@ -684,9 +737,20 @@ function ChecklistSection({ title, trip, listKey, onChange }) {
     animateThenChange();
   }
 
+  async function addStarter() {
+    await addChecklistItems(trip.id, listKey, STARTER_ITEMS[listKey] || []);
+    animateThenChange();
+  }
+
   return (
     <View style={styles.checklistSection}>
       <SectionTitle title={title} count={items.length > 0 ? `${doneCount}/${items.length}` : null} />
+      {items.length === 0 && STARTER_ITEMS[listKey] && (
+        <View style={styles.starter}>
+          <Txt variant="subhead">Rien ici pour l'instant.</Txt>
+          <Button title="Ajouter les essentiels" icon="list-outline" variant="secondary" size="sm" style={{ alignSelf: "flex-start" }} onPress={addStarter} />
+        </View>
+      )}
       {items.length > 0 && (
         <Group style={{ marginBottom: space.md }}>
           {items.map((item) => (
@@ -858,7 +922,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent}>
+    <TripScroll contentContainerStyle={styles.scrollContent}>
       <Button title="Ajouter un document" icon="camera-outline" variant="secondary" full onPress={choosePhoto} style={{ marginBottom: space.lg }} />
       {error ? <Text style={[type.caption, { color: THEME.stamp, marginBottom: space.md }]}>{error}</Text> : null}
 
@@ -958,7 +1022,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
           <Button title="Enregistrer" loading={busy} style={{ flex: 1 }} onPress={confirmAdd} />
         </View>
       </Sheet>
-    </ScrollView>
+    </TripScroll>
   );
 }
 
@@ -976,7 +1040,7 @@ function PhrasesTab({ trip, onChange }) {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <TripScroll contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       {phrases.length === 0 && (
         <EmptyState icon="chatbubbles-outline" title="Aucune phrase" text="Les phrases qui sauvent : « où sont les toilettes ? », « c'est trop épicé »…" />
       )}
@@ -1007,7 +1071,7 @@ function PhrasesTab({ trip, onChange }) {
       <Field label="En français" value={phrase} onChangeText={setPhrase} placeholder="Où sont les toilettes ?" />
       <Field label="Traduction" value={translation} onChangeText={setTranslation} placeholder="Where is the toilet?" />
       <Button title="Ajouter" icon="add" disabled={!phrase.trim() || !translation.trim()} onPress={add} full />
-    </ScrollView>
+    </TripScroll>
   );
 }
 
@@ -1044,15 +1108,15 @@ const styles = themedStyles(() => ({
   headerTitleBlock: { paddingHorizontal: layout.gutter, paddingTop: space.sm, paddingBottom: space.lg, gap: space.sm },
   headerMeta: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
 
-  tabBarWrap: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: THEME.hairStrong },
+  tabBarWrap: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: THEME.hairStrong, backgroundColor: THEME.bg },
+  stickyTabs: { position: "absolute", top: 0, left: 0, right: 0, backgroundColor: THEME.bg, zIndex: 10 },
   tabBar: { paddingHorizontal: layout.gutter, gap: space.xl },
   tab: { minHeight: layout.minTouch, justifyContent: "flex-end" },
   tabRule: { height: 3, borderRadius: 2, backgroundColor: "transparent", marginTop: space.sm },
 
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
-  actionRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.sm, marginBottom: space.md },
-  gridToggle: { width: 40, height: 40, marginRight: -space.xs },
-  inlineLink: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: layout.minTouch, marginBottom: space.sm },
+  toolbar: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.md },
+  toolbarCount: { flex: 1 },
 
   routeLive: { alignSelf: "center" }, // the row stretches its children: keep the button its own height
   routeRow: { flexDirection: "row", alignItems: "stretch", gap: space.md, paddingRight: space.xs, borderRadius: radius.md },
@@ -1076,10 +1140,12 @@ const styles = themedStyles(() => ({
   tileToday: { borderColor: THEME.gold },
   tileTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
 
-  totalBlock: { alignItems: "center", gap: space.xs, paddingBottom: space.xl },
+  totalBlock: { alignItems: "center", gap: space.xs, paddingTop: space.md, paddingBottom: space.xl },
+  amountCol: { alignItems: "flex-end", gap: 2 },
   totalValue: { ...type.numeralLarge, color: THEME.gold },
 
   checklistSection: { marginBottom: space.xl },
+  starter: { gap: space.md, marginBottom: space.md },
   checkedLabel: { color: THEME.inkFaint, textDecorationLine: "line-through" },
   addItemRow: { flexDirection: "row", gap: space.sm, alignItems: "center" },
   addItemButton: { width: 50, height: 50 },

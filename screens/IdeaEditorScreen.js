@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -64,6 +65,9 @@ export default function IdeaEditorScreen({ route, navigation }) {
   const [price, setPrice] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
   const [note, setNote] = useState("");
+  // Duration, price, link and note are folded away: most ideas only need a name,
+  // a place and a priority. Open from the start when the idea already has some.
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const [searching, setSearching] = useState(false);
   const [candidates, setCandidates] = useState(null); // null = never searched
@@ -96,6 +100,7 @@ export default function IdeaEditorScreen({ route, navigation }) {
         setPrice(existing.price != null ? String(existing.price) : "");
         setSourceUrl(existing.sourceUrl || "");
         setNote(existing.note || "");
+        setMoreOpen(existing.price != null || !!existing.sourceUrl || !!existing.note);
       } else {
         const cat = getIdeaCategory(t, initialCategoryId || "activite");
         setCategoryId(cat.id);
@@ -366,22 +371,6 @@ export default function IdeaEditorScreen({ route, navigation }) {
             ))}
           </Choices>
 
-          {!isHotel && (
-            <Choices label="Durée sur place">
-              {DURATION_CHOICES.map((d) => (
-                <Chip
-                  key={d}
-                  label={formatIdeaDuration(d)}
-                  selected={durationMin === d}
-                  onPress={() => {
-                    setDurationMin(d);
-                    setDurationTouched(true);
-                  }}
-                />
-              ))}
-            </Choices>
-          )}
-
           {isMeal && (
             <Choices label="Repas">
               {MEAL_SLOTS.map((m) => (
@@ -390,27 +379,58 @@ export default function IdeaEditorScreen({ route, navigation }) {
             </Choices>
           )}
 
-          {!isHotel && (
-            <Field label={`Prix estimé (${trip.currency}) — optionnel`} value={price} onChangeText={setPrice} placeholder="0" keyboardType="decimal-pad" inputStyle={type.numeral} />
+          <Group style={styles.moreGroup}>
+            <Row
+              icon="options-outline"
+              title="Plus d'options"
+              subtitle={moreOpen ? undefined : isHotel ? "Lien, note" : "Durée, prix, lien, note"}
+              accessibilityLabel={`Plus d'options, ${moreOpen ? "ouvertes" : "fermées"}`}
+              onPress={() => setMoreOpen(!moreOpen)}
+              right={<Ionicons name={moreOpen ? "chevron-up" : "chevron-down"} size={18} color={THEME.inkFaint} />}
+            />
+          </Group>
+
+          {moreOpen && (
+            <View style={styles.moreBody}>
+              {!isHotel && (
+                <Choices label="Durée sur place">
+                  {DURATION_CHOICES.map((d) => (
+                    <Chip
+                      key={d}
+                      label={formatIdeaDuration(d)}
+                      selected={durationMin === d}
+                      onPress={() => {
+                        setDurationMin(d);
+                        setDurationTouched(true);
+                      }}
+                    />
+                  ))}
+                </Choices>
+              )}
+
+              {!isHotel && (
+                <Field label={`Prix estimé (${trip.currency}) — optionnel`} value={price} onChangeText={setPrice} placeholder="0" keyboardType="decimal-pad" inputStyle={type.numeral} />
+              )}
+
+              <Field
+                label="Lien source (TikTok, YouTube, site…)"
+                value={sourceUrl}
+                onChangeText={setSourceUrl}
+                placeholder="https://…"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                right={
+                  <View style={styles.linkActions}>
+                    <IconButton icon="clipboard-outline" label="Coller le lien" size={20} onPress={pasteLink} />
+                    {!!sourceUrl.trim() && <IconButton icon="open-outline" label="Ouvrir le lien" size={20} onPress={openLink} />}
+                  </View>
+                }
+              />
+
+              <Field label="Note" value={note} onChangeText={setNote} placeholder="Réserver, à tester, plat à goûter…" multiline />
+            </View>
           )}
-
-          <Field
-            label="Lien source (TikTok, YouTube, site…)"
-            value={sourceUrl}
-            onChangeText={setSourceUrl}
-            placeholder="https://…"
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            right={
-              <View style={styles.linkActions}>
-                <IconButton icon="clipboard-outline" label="Coller le lien" size={20} onPress={pasteLink} />
-                {!!sourceUrl.trim() && <IconButton icon="open-outline" label="Ouvrir le lien" size={20} onPress={openLink} />}
-              </View>
-            }
-          />
-
-          <Field label="Note" value={note} onChangeText={setNote} placeholder="Réserver, à tester, plat à goûter…" multiline />
 
           {isEditing && (
             <Surface pad="lg" style={styles.placeBox}>
@@ -485,6 +505,8 @@ const styles = themedStyles(() => ({
   selfCenter: { alignSelf: "center" },
   positionClear: { marginRight: -space.sm },
   linkActions: { flexDirection: "row", marginRight: -space.sm },
+  moreGroup: { marginBottom: space.lg },
+  moreBody: { marginBottom: space.sm },
   placeBox: { marginTop: space.md },
   placeSub: { marginTop: space.xs },
   placeAction: { marginTop: space.md },

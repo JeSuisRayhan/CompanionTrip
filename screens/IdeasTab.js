@@ -21,7 +21,8 @@ import {
 } from "../lib/ideas";
 import { planCandidates } from "../lib/planner";
 import DayPickerModal from "../components/DayPickerModal";
-import { Txt, Button, IconButton, Chip, Badge, Group, Row, Field, EmptyState, Sheet } from "../components/ui";
+import TripScroll from "../components/TripScroll";
+import { Txt, Button, IconButton, Chip, Badge, Group, Row, Field, EmptyState, Sheet, ActionSheet } from "../components/ui";
 
 // A category stores its colour; the tone with the same foreground gives the
 // tinted pair that Chip and Row expect.
@@ -49,6 +50,7 @@ export default function IdeasTab({ trip, navigation, onChange }) {
   const [filter, setFilter] = useState("all");
   const [pickerIdea, setPickerIdea] = useState(null);
   const [catModalOpen, setCatModalOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const categories = getIdeaCategories(trip);
   const ideas = trip.ideas || [];
@@ -87,70 +89,39 @@ export default function IdeasTab({ trip, navigation, onChange }) {
     ]);
   }
 
-  // Also shown under the empty state, where it is the only other way out.
-  const hotelsButton = (
-    <Button
-      title={`Hôtels${staysCount ? ` (${staysCount})` : ""}`}
-      icon="bed-outline"
-      variant="secondary"
-      size="sm"
-      style={ideas.length === 0 ? styles.selfCenter : null}
-      onPress={() => navigation.navigate("Hotels", { tripId: trip.id })}
-    />
-  );
-
+  // With ideas, Importer and Hôtels sit in the "…" menu; the empty state shows them as buttons.
+  const openHotels = () => navigation.navigate("Hotels", { tripId: trip.id });
+  const openImport = () => navigation.navigate("ImportIdeas", { tripId: trip.id });
+  const hotelsButton = <Button title={`Hôtels${staysCount ? ` (${staysCount})` : ""}`} icon="bed-outline" variant="secondary" size="sm" style={styles.selfCenter} onPress={openHotels} />;
+  const importButton = <Button title="Importer" icon="download-outline" variant="secondary" accessibilityLabel="Importer des idées depuis un lien ou un texte" style={styles.selfCenter} onPress={openImport} />;
   const canGenerate = plannable > 0 && trip.days.length > 0;
-  const importButton = (
-    <Button
-      title="Importer"
-      icon="download-outline"
-      variant="secondary"
-      accessibilityLabel="Importer des idées depuis un lien ou un texte"
-      style={ideas.length === 0 ? styles.selfCenter : canGenerate ? null : styles.flex}
-      onPress={() => navigation.navigate("ImportIdeas", { tripId: trip.id })}
-    />
-  );
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <TripScroll contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       {ideas.length > 0 && (
         <>
           <View style={styles.actionRow}>
             <Button title="Ajouter une idée" icon="add" onPress={() => openEditor(undefined)} style={styles.flex} />
-            {hotelsButton}
+            <IconButton icon="ellipsis-horizontal" label="Plus d'actions" filled size={20} onPress={() => setMenuOpen(true)} />
           </View>
-          <View style={[styles.actionRow, styles.generate]}>
-            {importButton}
-            {canGenerate && (
-              <Button
-                title="Générer le planning"
-                icon="sparkles-outline"
-                tone="gold"
-                style={styles.flex}
-                accessibilityLabel={`Générer le planning avec ${plannable} idée${plannable !== 1 ? "s" : ""} à placer`}
-                onPress={() => navigation.navigate("PlanGenerator", { tripId: trip.id })}
-              />
-            )}
-          </View>
-          <View style={styles.statsRow}>
-            <View style={styles.statsText}>
-              <Txt variant="subhead">
-                {`${stats.total} idée${stats.total !== 1 ? "s" : ""}, ${stats.placed} placée${stats.placed !== 1 ? "s" : ""}`}
-              </Txt>
-              {stats.mustUnplaced > 0 && (
-                <Txt variant="caption" color="stamp">
-                  {`${stats.mustUnplaced} indispensable${stats.mustUnplaced !== 1 ? "s" : ""} à placer`}
-                </Txt>
-              )}
-            </View>
+          {canGenerate && (
             <Button
-              title="Carte"
-              icon="map-outline"
-              variant="secondary"
-              size="sm"
-              accessibilityLabel="Voir les idées sur la carte"
-              onPress={() => navigation.navigate("TripMap", { tripId: trip.id })}
+              title="Générer le planning"
+              icon="sparkles-outline"
+              tone="gold"
+              full
+              style={styles.generate}
+              accessibilityLabel={`Générer le planning avec ${plannable} idée${plannable !== 1 ? "s" : ""} à placer`}
+              onPress={() => navigation.navigate("PlanGenerator", { tripId: trip.id })}
             />
+          )}
+          <View style={styles.statsText}>
+            <Txt variant="subhead">{`${stats.total} idée${stats.total !== 1 ? "s" : ""}, ${stats.placed} placée${stats.placed !== 1 ? "s" : ""}`}</Txt>
+            {stats.mustUnplaced > 0 && (
+              <Txt variant="caption" color="stamp">
+                {`${stats.mustUnplaced} indispensable${stats.mustUnplaced !== 1 ? "s" : ""} à placer`}
+              </Txt>
+            )}
           </View>
         </>
       )}
@@ -249,6 +220,17 @@ export default function IdeasTab({ trip, navigation, onChange }) {
         }}
       />
 
+      <ActionSheet
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        title="Plus d'actions"
+        actions={[
+          { icon: "download-outline", title: "Importer des idées", subtitle: "Depuis un lien ou un texte", onPress: openImport },
+          { icon: "bed-outline", title: staysCount ? `Hôtels (${staysCount})` : "Hôtels", subtitle: "Ajouter ou modifier vos hôtels", onPress: openHotels },
+          { icon: "map-outline", title: "Voir les idées sur la carte", onPress: () => navigation.navigate("TripMap", { tripId: trip.id }) },
+        ]}
+      />
+
       <CategoryModal
         visible={catModalOpen}
         onClose={() => setCatModalOpen(false)}
@@ -259,7 +241,7 @@ export default function IdeasTab({ trip, navigation, onChange }) {
           onChange();
         }}
       />
-    </ScrollView>
+    </TripScroll>
   );
 }
 
@@ -367,8 +349,7 @@ const styles = themedStyles(() => ({
   selfCenter: { alignSelf: "center" },
   emptyActions: { alignItems: "center", gap: space.md },
   generate: { marginTop: space.sm },
-  statsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.md, marginTop: space.lg },
-  statsText: { flex: 1, gap: 2 },
+  statsText: { gap: 2, marginTop: space.lg },
   chipScroll: { flexGrow: 0, marginHorizontal: -layout.gutter },
   chipScrollGap: { marginTop: space.md },
   chipRow: { paddingHorizontal: layout.gutter, gap: space.sm, alignItems: "center" },
