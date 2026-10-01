@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { View, Text, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -17,6 +17,8 @@ import {
   placeIdeaOnDay,
   addIdeaCategory,
   deleteIdeaCategory,
+  needsStayIdeas,
+  backfillStayIdeas,
   CUSTOM_CATEGORY_ICONS,
 } from "../lib/ideas";
 import { planCandidates } from "../lib/planner";
@@ -58,6 +60,12 @@ export default function IdeasTab({ trip, navigation, onChange }) {
   const stats = ideaStats(trip);
   const plannable = useMemo(() => planCandidates(trip).length, [trip]);
   const staysCount = trip.days.reduce((n, d) => n + d.activities.filter((a) => a.type === "hotel" && a.stayId).length, 0);
+
+  // Hotels booked before they became ideas: add them once (the flag stops it from running again).
+  const backfill = needsStayIdeas(trip);
+  useEffect(() => {
+    if (backfill) backfillStayIdeas(trip.id).then(onChange);
+  }, [backfill, trip.id]);
 
   const visibleCategories = filter === "all" ? categories : categories.filter((c) => c.id === filter);
   const countFor = (catId) => ideas.filter((i) => getIdeaCategory(trip, i.categoryId).id === catId).length;

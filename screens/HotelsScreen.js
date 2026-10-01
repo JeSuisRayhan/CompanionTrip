@@ -4,7 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, space, layout, type, themedStyles } from "../lib/theme";
-import { getTrip, listHotelStays, upsertHotelStay, removeHotelStay } from "../lib/trips";
+import { getTrip, listHotelStays } from "../lib/trips";
+import { saveHotelStay, deleteHotelStay } from "../lib/ideas";
 import { addDaysISO, formatDateRange } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { Txt, Button, IconButton, Group, Row, Field, EmptyState, Sheet, BackHeader, Fab } from "../components/ui";
@@ -47,7 +48,7 @@ export default function HotelsScreen({ route, navigation }) {
         text: "Supprimer",
         style: "destructive",
         onPress: async () => {
-          await removeHotelStay(tripId, stay.stayId);
+          await deleteHotelStay(tripId, stay.stayId);
           refresh();
         },
       },
@@ -123,7 +124,7 @@ export default function HotelsScreen({ route, navigation }) {
         currency={trip.currency}
         onClose={() => setEditing(null)}
         onSave={async (values) => {
-          await upsertHotelStay(tripId, { stayId: editing?.stayId, ideaId: editing?.ideaId, lat: editing?.lat, lng: editing?.lng, ...values });
+          await saveHotelStay(tripId, { stayId: editing?.stayId, ideaId: editing?.ideaId, lat: editing?.lat, lng: editing?.lng, ...values });
           setEditing(null);
           refresh();
         }}
