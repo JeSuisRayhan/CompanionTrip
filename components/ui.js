@@ -243,36 +243,44 @@ export function SectionTitle({ title, count, action, style }) {
 }
 
 // ---------- Field (labelled text input) ----------
-export function Field({ label, hint, error, multiline, style, inputStyle, left, right, ...inputProps }) {
-  const [focused, setFocused] = useState(false);
+// The frame of a field (label, bordered box, then error or hint) around any
+// content. Field puts a text input in it; DateField puts a button.
+export function FieldFrame({ label, hint, error, multiline, active, style, children }) {
   const onCard = useContext(OnCardContext);
-  const borderColor = error ? THEME.stamp : focused ? THEME.gold : THEME.hairStrong;
+  const borderColor = error ? THEME.stamp : active ? THEME.gold : THEME.hairStrong;
   return (
     <View style={[styles.field, style]}>
       {label ? <Text style={[type.caption, styles.fieldLabel]}>{label}</Text> : null}
-      <View style={[styles.inputWrap, round("md"), { borderColor }, onCard && { backgroundColor: THEME.surfaceSunk }, multiline && styles.inputWrapMulti]}>
-        {left}
-        <TextInput
-          accessibilityLabel={label}
-          placeholderTextColor={THEME.placeholder}
-          selectionColor={THEME.gold}
-          cursorColor={THEME.gold}
-          multiline={multiline}
-          {...inputProps}
-          onFocus={(e) => {
-            setFocused(true);
-            inputProps.onFocus && inputProps.onFocus(e);
-          }}
-          onBlur={(e) => {
-            setFocused(false);
-            inputProps.onBlur && inputProps.onBlur(e);
-          }}
-          style={[type.body, styles.input, multiline && styles.inputMulti, inputStyle]}
-        />
-        {right}
-      </View>
+      <View style={[styles.inputWrap, round("md"), { borderColor }, onCard && { backgroundColor: THEME.surfaceSunk }, multiline && styles.inputWrapMulti]}>{children}</View>
       {error ? <Text style={[type.caption, { color: THEME.stamp, marginTop: space.xs }]}>{error}</Text> : hint ? <Text style={[type.caption, styles.fieldHint]}>{hint}</Text> : null}
     </View>
+  );
+}
+
+export function Field({ label, hint, error, multiline, style, inputStyle, left, right, ...inputProps }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <FieldFrame label={label} hint={hint} error={error} multiline={multiline} active={focused} style={style}>
+      {left}
+      <TextInput
+        accessibilityLabel={label}
+        placeholderTextColor={THEME.placeholder}
+        selectionColor={THEME.gold}
+        cursorColor={THEME.gold}
+        multiline={multiline}
+        {...inputProps}
+        onFocus={(e) => {
+          setFocused(true);
+          inputProps.onFocus && inputProps.onFocus(e);
+        }}
+        onBlur={(e) => {
+          setFocused(false);
+          inputProps.onBlur && inputProps.onBlur(e);
+        }}
+        style={[type.body, styles.input, multiline && styles.inputMulti, inputStyle]}
+      />
+      {right}
+    </FieldFrame>
   );
 }
 

@@ -8,6 +8,7 @@ import { getTrip, listHotelStays, upsertHotelStay, removeHotelStay } from "../li
 import { addDaysISO, formatDateRange } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { Txt, Button, IconButton, Group, Row, Field, EmptyState, Sheet, BackHeader, Fab } from "../components/ui";
+import DateField from "../components/DateField";
 
 export default function HotelsScreen({ route, navigation }) {
   const { tripId } = route.params;
@@ -162,9 +163,16 @@ function HotelFormModal({ visible, initial, currency, onClose, onSave }) {
     return /^\d{4}-\d{2}-\d{2}$/.test(v);
   }
 
+  // Choosing the arrival also moves the departure to the next day when it would
+  // otherwise be missing or not after it.
+  function onCheckInChange(v) {
+    setCheckIn(v);
+    if (v && (!checkOut || checkOut <= v)) setCheckOut(addDaysStr(v, 1));
+  }
+
   function save() {
     if (!name.trim()) return setError("Ajoutez un nom d'hôtel.");
-    if (!isValidDate(checkIn) || !isValidDate(checkOut)) return setError("Dates au format AAAA-MM-JJ requises.");
+    if (!isValidDate(checkIn) || !isValidDate(checkOut)) return setError("Choisissez les dates d'arrivée et de départ.");
     const nights = Math.round((new Date(checkOut + "T00:00:00") - new Date(checkIn + "T00:00:00")) / 86400000);
     if (nights < 1) return setError("La date de départ doit être après la date d'arrivée.");
     const price = parseFloat(totalPrice.replace(",", "."));
@@ -185,8 +193,8 @@ function HotelFormModal({ visible, initial, currency, onClose, onSave }) {
       <Field label="Adresse" value={address} onChangeText={setAddress} placeholder="1-19-1 Kabukicho, Tokyo" />
 
       <View style={styles.dateRow}>
-        <Field label="Arrivée" value={checkIn} onChangeText={setCheckIn} placeholder="2026-09-15" autoCapitalize="none" inputStyle={type.numeral} style={styles.flex} />
-        <Field label="Départ" value={checkOut} onChangeText={setCheckOut} placeholder="2026-09-18" autoCapitalize="none" inputStyle={type.numeral} style={styles.flex} />
+        <DateField label="Arrivée" compact value={checkIn} onChange={onCheckInChange} style={styles.flex} />
+        <DateField label="Départ" compact value={checkOut} min={checkIn ? addDaysStr(checkIn, 1) : undefined} onChange={setCheckOut} style={styles.flex} />
       </View>
 
       <Field label={`Prix total du séjour (${currency})`} value={totalPrice} onChangeText={setTotalPrice} placeholder="0" keyboardType="decimal-pad" inputStyle={type.numeral} />

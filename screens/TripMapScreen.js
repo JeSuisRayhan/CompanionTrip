@@ -6,6 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { getTrip } from "../lib/trips";
+import { realTripId } from "../lib/parkDay";
 import { previewTrip } from "../lib/planner";
 import { formatIdeaDuration, placeIdeaOnDay } from "../lib/ideas";
 import { buildMapModel, pinsForFilter, filterOptions, externalMapUrl, locateIdeas, saveIdeaPositions } from "../lib/map";
@@ -257,9 +258,9 @@ export default function TripMapScreen({ route, navigation }) {
           onClose={() => setSelectedId(null)}
           onPlace={() => setPickerIdea({ id: selected.ideaId, name: selected.name })}
           onBook={() =>
-            navigation.navigate("Hotels", { tripId: trip.id, prefill: { name: selected.name, address: selected.address, ideaId: selected.ideaId, lat: selected.lat, lng: selected.lng } })
+            navigation.navigate("Hotels", { tripId: realTripId(trip.id), prefill: { name: selected.name, address: selected.address, ideaId: selected.ideaId, lat: selected.lat, lng: selected.lng } })
           }
-          onOpenDay={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: selected.dayId })}
+          onOpenDay={() => navigation.navigate("DayDetail", { tripId: realTripId(trip.id), dayId: selected.dayId })}
           onEdit={() => (isPark ? setEditing(trip.ideas.find((i) => i.id === selected.ideaId) || null) : navigation.navigate("IdeaEditor", { tripId: trip.id, ideaId: selected.ideaId }))}
           onGo={() => Linking.openURL(externalMapUrl(selected, Platform.OS))}
         />

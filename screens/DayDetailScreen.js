@@ -7,13 +7,14 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
+import { scopedId } from "../lib/parkDay";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDayLabel } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { fetchDayWeather, weatherInfo, guessDayLocation } from "../lib/weather";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
 import UndoToast from "../components/UndoToast";
-import { Txt, Button, IconButton, Chip, Badge, Surface, Field, Group, Row, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
+import { Txt, Button, IconButton, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
   const [weather, setWeather] = useState(undefined); // undefined = loading, null = no data
@@ -68,6 +69,7 @@ export default function DayDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
+  const [flightOpen, setFlightOpen] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: "", undoActivity: null });
   const insets = useContext(SafeAreaInsetsContext);
 
@@ -120,6 +122,9 @@ export default function DayDetailScreen({ route, navigation }) {
   const doneCount = day.activities.filter((a) => a.done).length;
   const firstUndoneIndex = sorted.findIndex((a) => !a.done);
   const location = (day.location || "").trim();
+  // A park day of a normal trip has its own park and attractions: the park screens open it through a view of the trip.
+  const isParkTrip = trip.tripType === "park";
+  const parkTripId = isParkTrip ? tripId : scopedId(tripId, dayId);
 
   async function onToggleDone(activityId) {
     await toggleActivityDone(tripId, dayId, activityId);
@@ -206,7 +211,27 @@ export default function DayDetailScreen({ route, navigation }) {
         ) : null}
 
         {day.dayType === "flight" ? <FlightDayBanner day={day} dateISO={date} /> : null}
-        {day.dayType === "park" ? <ParkDayBanner day={day} onPlan={() => navigation.navigate("ParkPlan", { tripId, dayId })} onLive={() => navigation.navigate("ParkLive", { tripId, dayId })} /> : null}
+        {day.dayType === "flight" ? (
+          <TicketsBlock
+            docs={(trip.documents || []).filter((d) => d.dayId === dayId)}
+            hasRoute={!!(day.flightInfo && (day.flightInfo.origin || day.flightInfo.destination || day.flightInfo.flightNumber || day.flightInfo.seat))}
+            onScan={() => navigation.navigate("TicketScanner", { tripId, dayId })}
+            onGallery={() => navigation.navigate("Trip", { tripId, addFrom: "library", dayId })}
+            onOpen={(doc) => navigation.navigate("Trip", { tripId, viewDocId: doc.id })}
+            onEdit={() => setFlightOpen(true)}
+          />
+        ) : null}
+        {day.dayType === "park" ? (
+          <ParkDayBanner
+            day={day}
+            park={isParkTrip ? trip.park : day.park}
+            attractionCount={isParkTrip ? 0 : ((day.park && trip.parkLists && trip.parkLists[day.park.qtId]) || []).length}
+            ownPark={!isParkTrip}
+            onAttractions={() => navigation.navigate("DayAttractions", { tripId, dayId })}
+            onPlan={() => navigation.navigate("ParkPlan", { tripId: parkTripId, dayId })}
+            onLive={() => navigation.navigate("ParkLive", { tripId: parkTripId, dayId })}
+          />
+        ) : null}
 
         {sorted.length === 0 ? (
           <EmptyState
@@ -248,13 +273,24 @@ export default function DayDetailScreen({ route, navigation }) {
         }}
       />
 
+      <FlightSheet
+        visible={flightOpen}
+        initial={day.flightInfo}
+        onClose={() => setFlightOpen(false)}
+        onSave={async (info) => {
+          setFlightOpen(false);
+          await setDayType(tripId, dayId, "flight", info);
+          refresh();
+        }}
+      />
+
       <Sheet visible={typeMenuOpen} onClose={() => setTypeMenuOpen(false)} title="Type de jour">
         <Txt variant="subhead" style={styles.sheetHelp}>
           Donne un habillage et des rappels adaptés à ce jour.
         </Txt>
         <Group style={styles.typeGroup}>
           <Row icon="today-outline" title="Jour normal" selected={!day.dayType} right={!day.dayType ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType(null)} />
-          <Row icon="airplane-outline" title="Jour de vol" selected={day.dayType === "flight"} right={day.dayType === "flight" ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("flight")} />
+          <Row icon="airplane-outline" title="Jour de vol ou de train" selected={day.dayType === "flight"} right={day.dayType === "flight" ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("flight")} />
           <Row icon="happy-outline" title="Jour parc d'attractions" selected={day.dayType === "park"} right={day.dayType === "park" ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("park")} />
         </Group>
       </Sheet>
@@ -385,7 +421,7 @@ function FlightDayBanner({ day, dateISO }) {
           {hasRoute ? (
             <View style={styles.flightRoute}>
               <View style={styles.flightAirport}>
-                <Text style={styles.flightCode}>{info.origin || "?"}</Text>
+                <Text style={styles.flightCode} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{info.origin || "?"}</Text>
                 {departureGate ? <Text style={styles.flightGate}>Porte {departureGate}</Text> : null}
               </View>
               <View style={styles.flightPath}>
@@ -394,7 +430,7 @@ function FlightDayBanner({ day, dateISO }) {
                 <Dashes />
               </View>
               <View style={[styles.flightAirport, { alignItems: "flex-end" }]}>
-                <Text style={styles.flightCode}>{info.destination || "?"}</Text>
+                <Text style={styles.flightCode} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{info.destination || "?"}</Text>
                 {arrivalGate ? <Text style={styles.flightGate}>Porte {arrivalGate}</Text> : null}
               </View>
             </View>
@@ -404,7 +440,7 @@ function FlightDayBanner({ day, dateISO }) {
             <View style={[styles.flightFacts, hasRoute && styles.flightFactsRuled]}>
               {info.flightNumber ? (
                 <View>
-                  <Text style={type.caption}>Vol</Text>
+                  <Text style={type.caption}>Numéro</Text>
                   <Text style={type.numeral}>{info.flightNumber}</Text>
                 </View>
               ) : null}
@@ -434,7 +470,7 @@ function FlightDayBanner({ day, dateISO }) {
         <View style={styles.panelRow}>
           <Ionicons name="airplane" size={22} color={THEME.blue} />
           <Txt variant="subhead" style={styles.panelText}>
-            Jour de vol — scannez votre carte d'embarquement dans Documents pour remplir automatiquement le vol.
+            Jour de vol ou de train — scannez votre billet ou saisissez le trajet ci-dessous.
           </Txt>
         </View>
       )}
@@ -442,20 +478,119 @@ function FlightDayBanner({ day, dateISO }) {
   );
 }
 
-function ParkDayBanner({ day, onPlan, onLive }) {
+// Tickets of a flight or train day: scan one (the barcode is kept with the
+// photo), add one from the gallery, read the ones already added, and type the
+// route by hand when there is nothing to scan.
+function TicketsBlock({ docs, hasRoute, onScan, onGallery, onOpen, onEdit }) {
+  return (
+    <View style={styles.tickets}>
+      <SectionTitle title="Billets" count={docs.length > 0 ? docs.length : undefined} />
+      {docs.length > 0 ? (
+        <Group style={styles.ticketList}>
+          {docs.map((doc) => (
+            <Row
+              key={doc.id}
+              lead={<Thumb uri={doc.uri} icon="document-text" size={44} />}
+              title={doc.title}
+              subtitle={doc.scannedCode ? <Text style={type.numeralSmall} numberOfLines={1}>{doc.scannedCode}</Text> : undefined}
+              chevron
+              accessibilityLabel={`Ouvrir le billet ${doc.title}`}
+              onPress={() => onOpen(doc)}
+            />
+          ))}
+        </Group>
+      ) : (
+        <Txt variant="subhead" style={styles.ticketHelp}>
+          Scannez votre billet de vol ou de train : il reste ici, sous la main le jour du départ.
+        </Txt>
+      )}
+      <View style={styles.ticketActions}>
+        <Button title="Scanner un billet" icon="qr-code-outline" size="sm" tone="gold" onPress={onScan} />
+        <Button title="Galerie" icon="images-outline" size="sm" variant="secondary" accessibilityLabel="Ajouter un billet depuis la galerie" onPress={onGallery} />
+        <Button title={hasRoute ? "Modifier le trajet" : "Saisir le trajet"} icon="create-outline" size="sm" variant="secondary" onPress={onEdit} />
+      </View>
+    </View>
+  );
+}
+
+// The route of a flight or train day, typed by hand.
+function FlightSheet({ visible, initial, onClose, onSave }) {
+  const [origin, setOrigin] = useState("");
+  const [destination, setDestination] = useState("");
+  const [number, setNumber] = useState("");
+  const [seat, setSeat] = useState("");
+
+  useEffect(() => {
+    if (visible) {
+      setOrigin((initial && initial.origin) || "");
+      setDestination((initial && initial.destination) || "");
+      setNumber((initial && initial.flightNumber) || "");
+      setSeat((initial && initial.seat) || "");
+    }
+  }, [visible]);
+
+  // "cdg" becomes "CDG"; a city name is left as typed
+  const code = (v) => (/^[A-Za-z]{3}$/.test(v.trim()) ? v.trim().toUpperCase() : v.trim());
+
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Trajet du jour">
+      <Txt variant="subhead" style={styles.sheetHelp}>
+        Un vol ou un train : un code d'aéroport (CDG) ou une ville (Lyon).
+      </Txt>
+      <View style={styles.sheetButtons}>
+        <Field label="Départ" value={origin} onChangeText={setOrigin} placeholder="CDG" maxLength={16} style={styles.sheetButton} />
+        <Field label="Arrivée" value={destination} onChangeText={setDestination} placeholder="NRT" maxLength={16} style={styles.sheetButton} />
+      </View>
+      <Field label="Numéro de vol ou de train" value={number} onChangeText={setNumber} placeholder="AF 274" autoCapitalize="characters" maxLength={14} />
+      <Field label="Siège ou place" value={seat} onChangeText={setSeat} placeholder="32A" autoCapitalize="characters" maxLength={10} />
+      <View style={styles.sheetButtons}>
+        <Button title="Annuler" variant="secondary" style={styles.sheetButton} onPress={onClose} />
+        <Button title="Enregistrer" style={styles.sheetButton} onPress={() => onSave({ origin: code(origin), destination: code(destination), flightNumber: number.trim(), seat: seat.trim() })} />
+      </View>
+    </Sheet>
+  );
+}
+
+// The park day's card. In a park trip the park is the trip's; in a normal trip
+// each park day has its own park and list of attractions, chosen from here.
+function ParkDayBanner({ day, park, attractionCount, ownPark, onAttractions, onPlan, onLive }) {
   const done = day.activities.filter((a) => a.done).length;
   const total = day.activities.length;
+  const many = (n) => (n !== 1 ? "s" : "");
+  let line;
+  if (total > 0) line = `${done}/${total} attraction${many(total)} faite${many(total)} — bonne journée parc !`;
+  else if (!ownPark) line = "Jour parc d'attraction — ajoutez vos attractions !";
+  else if (!park) line = "Choisissez le parc pour ajouter ses attractions et préparer la journée.";
+  else if (attractionCount === 0) line = "Aucune attraction pour l'instant : ajoutez celles du parc.";
+  else line = `${attractionCount} attraction${many(attractionCount)} dans la liste.`;
+
   return (
     <Surface pad="lg" style={styles.panel}>
       <View style={styles.panelRow}>
         <Ionicons name="sparkles" size={22} color={THEME.pink} />
-        <Txt variant="subhead" style={styles.panelText}>
-          {total > 0 ? `${done}/${total} attraction${total !== 1 ? "s" : ""} faite${total !== 1 ? "s" : ""} — bonne journée parc !` : "Jour parc d'attraction — ajoutez vos attractions !"}
-        </Txt>
+        <View style={styles.panelText}>
+          {ownPark && park ? (
+            <Txt variant="heading" numberOfLines={2}>
+              {park.name}
+            </Txt>
+          ) : null}
+          <Txt variant="subhead">{line}</Txt>
+        </View>
       </View>
       {total > 0 ? <ProgressBar value={done / total} height={6} style={styles.parkBar} /> : null}
       <View style={styles.parkActions}>
-        <Button title="Parcours" icon="sparkles-outline" size="sm" tone="gold" accessibilityLabel="Préparer le parcours de ce jour" onPress={onPlan} />
+        {ownPark ? (
+          <Button
+            title={park ? "Attractions" : "Choisir le parc"}
+            icon={park ? "list-outline" : "search"}
+            size="sm"
+            tone={park && attractionCount > 0 ? undefined : "gold"}
+            variant={park && attractionCount > 0 ? "secondary" : undefined}
+            accessibilityLabel={park ? `Attractions de ${park.name}` : "Choisir le parc de ce jour"}
+            onPress={onAttractions}
+          />
+        ) : null}
+        {!ownPark || (park && attractionCount > 0) ? <Button title="Parcours" icon="sparkles-outline" size="sm" tone="gold" accessibilityLabel="Préparer le parcours de ce jour" onPress={onPlan} /> : null}
         {total > 0 ? <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel="Suivre ce jour en direct" onPress={onLive} /> : null}
       </View>
     </Surface>
@@ -510,11 +645,15 @@ const styles = themedStyles(() => ({
   panel: { marginBottom: space.lg },
   panelRow: { flexDirection: "row", alignItems: "center", gap: space.md },
   panelText: { flex: 1 },
-  parkActions: { flexDirection: "row", gap: space.sm, marginTop: space.md },
+  tickets: { marginBottom: space.lg },
+  ticketList: { marginBottom: space.md },
+  ticketHelp: { marginBottom: space.md },
+  ticketActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  parkActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md },
   parkBar: { marginTop: space.md },
 
   flightRoute: { flexDirection: "row", alignItems: "center", gap: space.md },
-  flightAirport: { alignItems: "flex-start", gap: space.xs },
+  flightAirport: { alignItems: "flex-start", gap: space.xs, maxWidth: "44%" }, // a city name shrinks instead of pushing the route off the card
   flightCode: { ...type.numeralLarge },
   flightGate: { ...type.caption, color: THEME.blue },
   flightPath: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.sm },

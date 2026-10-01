@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { PARK_PRIORITIES, getIdeaCategory, placementIndex, priorityMeta } from "../lib/ideas";
+import { getTrip } from "../lib/trips";
 import { setPark, setMinHeight, tooTall, groupByLand, attractionInputs, importParkAttractions } from "../lib/park";
 import { fetchParks, searchParks, fetchQueueTimes, liveByRideId, liveSummary, latestUpdate, ageLabel, QUEUE_TIMES_CREDIT } from "../lib/queueTimes";
 import { logError } from "../lib/errorLog";
@@ -102,8 +103,10 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
     setPickerOpen(false);
     await setPark(trip.id, p);
     setNotice(null);
-    // an empty list is filled straight away: that is what choosing a park is for
-    if (!ideas.length) {
+    // an empty list is filled straight away: that is what choosing a park is for.
+    // (A park day keeps one list per park: it is the new park's list that counts.)
+    const now = await getTrip(trip.id);
+    if (!now || !(now.ideas || []).length) {
       try {
         const data = await fetchQueueTimes(p.qtId, { force: true });
         const r = await importParkAttractions(trip.id, data.rides);
@@ -133,6 +136,9 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
     setDayPickerOpen(false);
     navigation.navigate("ParkPlan", { tripId: trip.id, dayId });
   }
+
+  // On a park day of a normal trip there is one day to prepare: this one.
+  const scopeDayId = trip.scope ? trip.scope.dayId : null;
 
   const shown = filter === "all" ? ideas : ideas.filter((i) => i.priority === filter);
   const groups = groupByLand(shown);
@@ -210,7 +216,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
           tone="gold"
           full
           accessibilityLabel={`Préparer ma journée avec ${plural(planCount, "attraction à placer", "attractions à placer")}`}
-          onPress={() => (trip.days.length === 1 ? prepareDay(trip.days[0].id) : setDayPickerOpen(true))}
+          onPress={() => (scopeDayId ? prepareDay(scopeDayId) : trip.days.length === 1 ? prepareDay(trip.days[0].id) : setDayPickerOpen(true))}
         />
       ) : null}
 
@@ -245,14 +251,16 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
           accessibilityLabel={`Taille du plus petit du groupe, ${park.minHeightCm ? park.minHeightCm + " centimètres" : "non renseignée"}`}
           onPress={() => setHeightOpen(true)}
         />
-        <Chip
-          icon="notifications-outline"
-          tone="teal"
-          label={alerts.on ? `Alerte sous ${alerts.maxWait} min` : "Alerte de file"}
-          selected={alerts.on}
-          accessibilityLabel={`Alerte de file courte, ${alerts.on ? "activée, sous " + alerts.maxWait + " minutes" : "désactivée"}`}
-          onPress={() => setAlertOpen(true)}
-        />
+        {scopeDayId ? null : (
+          <Chip
+            icon="notifications-outline"
+            tone="teal"
+            label={alerts.on ? `Alerte sous ${alerts.maxWait} min` : "Alerte de file"}
+            selected={alerts.on}
+            accessibilityLabel={`Alerte de file courte, ${alerts.on ? "activée, sous " + alerts.maxWait + " minutes" : "désactivée"}`}
+            onPress={() => setAlertOpen(true)}
+          />
+        )}
       </View>
       {tallCount > 0 ? (
         <Txt variant="caption" style={[styles.tallNote, { color: THEME.stamp }]}>

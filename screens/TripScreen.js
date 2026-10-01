@@ -10,7 +10,6 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha } from "../lib/theme";
-import { TYPES } from "../lib/constants";
 import { getTrip, addChecklistItem, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
@@ -48,14 +47,25 @@ export default function TripScreen({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [gridView, setGridView] = useState(false);
   const [incomingScan, setIncomingScan] = useState(null);
+  const [incomingAction, setIncomingAction] = useState(null);
 
   useEffect(() => {
     if (route.params?.scannedUri) {
       setTab("documents");
-      setIncomingScan({ uri: route.params.scannedUri, scannedCode: route.params.scannedCode || null });
-      navigation.setParams({ scannedUri: undefined, scannedCode: undefined });
+      setIncomingScan({ uri: route.params.scannedUri, scannedCode: route.params.scannedCode || null, dayId: route.params.dayId || null });
+      navigation.setParams({ scannedUri: undefined, scannedCode: undefined, dayId: undefined });
     }
   }, [route.params?.scannedUri]);
+
+  // A day (flight or train) sends here to add a ticket from the gallery, or to look at one.
+  useEffect(() => {
+    const { addFrom, viewDocId, dayId } = route.params || {};
+    if (addFrom || viewDocId) {
+      setTab("documents");
+      setIncomingAction({ addFrom: addFrom || null, viewDocId: viewDocId || null, dayId: dayId || null });
+      navigation.setParams({ addFrom: undefined, viewDocId: undefined, dayId: undefined });
+    }
+  }, [route.params?.addFrom, route.params?.viewDocId]);
 
   const refresh = useCallback(async () => {
     const t = await getTrip(tripId);
@@ -147,6 +157,8 @@ export default function TripScreen({ route, navigation }) {
           navigation={navigation}
           incomingScan={incomingScan}
           onConsumeIncomingScan={() => setIncomingScan(null)}
+          incomingAction={incomingAction}
+          onConsumeIncomingAction={() => setIncomingAction(null)}
         />
       )}
       {tab === "phrases" && <PhrasesTab trip={trip} onChange={refresh} />}
@@ -359,142 +371,163 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
         </Pressable>
       )}
 
-      {isPark ? (
-        <ParkDays trip={trip} navigation={navigation} />
-      ) : (
-        (() => {
-          const filtered = trip.days
-            .map((day, index) => ({ day, index }))
-            .filter(({ day, index }) => {
-              if (!q) return true;
-              const date = resolveDayDate(trip, day, index);
-              const dateLabel = date ? formatDateLabel(date) : "";
-              const activityMatch = day.activities.some((a) => a.title.toLowerCase().includes(q));
-              return day.title.toLowerCase().includes(q) || dateLabel.toLowerCase().includes(q) || activityMatch;
-            });
+      {(() => {
+        const filtered = trip.days
+          .map((day, index) => ({ day, index }))
+          .filter(({ day, index }) => {
+            if (!q) return true;
+            const date = resolveDayDate(trip, day, index);
+            const dateLabel = date ? formatDateLabel(date) : "";
+            const activityMatch = day.activities.some((a) => a.title.toLowerCase().includes(q));
+            return day.title.toLowerCase().includes(q) || dateLabel.toLowerCase().includes(q) || activityMatch;
+          });
 
-          if (filtered.length === 0) {
-            if (!q) {
-              return (
-                <EmptyState
-                  icon="calendar-outline"
-                  tone="gold"
-                  title="Aucun jour pour l'instant"
-                  action={{ label: "Ajouter un jour", icon: "add", onPress: onAddDay }}
-                />
-              );
-            }
-            return <EmptyState icon="search-outline" title="Aucun résultat" text={`Aucun jour ne correspond à « ${searchQuery} ».`} />;
-          }
-
-          function openDayMenu(day, index) {
-            setMenuDay({ day, index });
-          }
-
-          if (gridView) {
+        if (filtered.length === 0) {
+          if (!q) {
             return (
-              <View style={styles.dayGrid}>
-                {filtered.map(({ day, index }) => {
-                  const date = resolveDayDate(trip, day, index);
-                  const state = dayState(day, date, today);
-                  return (
-                    <Pressable
-                      key={day.id}
-                      onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${day.title}, ${day.activities.length} étapes`}
-                      style={({ pressed }) => [styles.tile, round("lg"), state === "today" && styles.tileToday, pressed && { opacity: 0.8 }]}
-                    >
-                      <View style={styles.tileTop}>
-                        <DayNode state={state} number={index + 1} />
-                        {day.dayType === "flight" && <Ionicons name="airplane" size={15} color={THEME.blue} />}
-                        {day.dayType === "park" && <Ionicons name="sparkles" size={15} color={THEME.pink} />}
-                      </View>
-                      <Text style={[type.label, { marginTop: space.md }]} numberOfLines={2}>
-                        {day.title}
-                      </Text>
-                      {date ? <Text style={[type.caption, { marginTop: 2 }]}>{formatDayLabel(date)}</Text> : null}
-                      <Text style={[type.numeralSmall, { marginTop: space.sm, color: THEME.inkFaint }]}>
-                        {day.activities.length} étape{day.activities.length !== 1 ? "s" : ""}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-                {!q && (
-                  <View style={styles.gridAdd}>
-                    <Button title="Ajouter un jour" icon="add" variant="secondary" full onPress={onAddDay} />
-                  </View>
-                )}
-              </View>
+              <EmptyState
+                icon="calendar-outline"
+                tone="gold"
+                title="Aucun jour pour l'instant"
+                action={{ label: "Ajouter un jour", icon: "add", onPress: onAddDay }}
+              />
             );
           }
+          return <EmptyState icon="search-outline" title="Aucun résultat" text={`Aucun jour ne correspond à « ${searchQuery} ».`} />;
+        }
 
+        function openDayMenu(day, index) {
+          setMenuDay({ day, index });
+        }
+
+        if (gridView) {
           return (
-            <View>
-              {filtered.map(({ day, index }, i) => {
+            <View style={styles.dayGrid}>
+              {filtered.map(({ day, index }) => {
                 const date = resolveDayDate(trip, day, index);
                 const state = dayState(day, date, today);
-                const isFirst = i === 0;
-                const showAdd = !q;
-                const isLast = i === filtered.length - 1 && !showAdd;
-                const count = day.activities.length;
                 return (
                   <Pressable
                     key={day.id}
                     onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })}
                     accessibilityRole="button"
-                    accessibilityLabel={`${day.title}${date ? ", " + formatDayLabel(date) : ""}, ${count} étape${count !== 1 ? "s" : ""}`}
-                    style={({ pressed }) => [styles.routeRow, pressed && { backgroundColor: THEME.pressed }]}
+                    accessibilityLabel={`${day.title}, ${day.activities.length} étapes`}
+                    style={({ pressed }) => [styles.tile, round("lg"), state === "today" && styles.tileToday, pressed && { opacity: 0.8 }]}
                   >
-                    <View style={styles.rail}>
-                      <View style={[styles.railLine, { height: space.md }, isFirst && { backgroundColor: "transparent" }]} />
+                    <View style={styles.tileTop}>
                       <DayNode state={state} number={index + 1} />
-                      <View style={[styles.railLine, { flex: 1 }, isLast && { backgroundColor: "transparent" }]} />
+                      {day.dayType === "flight" && <Ionicons name="airplane" size={15} color={THEME.blue} />}
+                      {day.dayType === "park" && <Ionicons name="sparkles" size={15} color={THEME.pink} />}
                     </View>
-                    <View style={styles.routeBody}>
-                      <View style={styles.routeTitleRow}>
-                        <Text style={[type.heading, { flexShrink: 1 }]} numberOfLines={2}>
-                          {day.title}
-                        </Text>
-                        {day.dayType === "flight" && <Ionicons name="airplane" size={15} color={THEME.blue} />}
-                        {day.dayType === "park" && <Ionicons name="sparkles" size={15} color={THEME.pink} />}
-                      </View>
-                      <View style={styles.routeMeta}>
-                        {state === "today" ? <Badge label="Aujourd'hui" tone="gold" solid /> : null}
-                        {date ? <Text style={type.subhead}>{formatDayLabel(date)}</Text> : null}
-                        {date ? <WeatherBadge day={day} dateISO={date} compact fallbackLocation={trip.defaultLocation} /> : null}
-                      </View>
-                      <Text style={[type.caption, { color: THEME.inkFaint, marginTop: 2 }]}>
-                        {count === 0 ? "Aucune étape" : `${count} étape${count !== 1 ? "s" : ""}`}
-                      </Text>
-                    </View>
-                    {!q && (
-                      <IconButton icon="ellipsis-horizontal" label={`Options de ${day.title}`} onPress={() => openDayMenu(day, index)} size={20} />
-                    )}
+                    <Text style={[type.label, { marginTop: space.md }]} numberOfLines={2}>
+                      {day.title}
+                    </Text>
+                    {date ? <Text style={[type.caption, { marginTop: 2 }]}>{formatDayLabel(date)}</Text> : null}
+                    <Text style={[type.numeralSmall, { marginTop: space.sm, color: THEME.inkFaint }]}>
+                      {day.activities.length} étape{day.activities.length !== 1 ? "s" : ""}
+                    </Text>
                   </Pressable>
                 );
               })}
               {!q && (
-                <Pressable onPress={onAddDay} accessibilityRole="button" accessibilityLabel="Ajouter un jour" style={({ pressed }) => [styles.routeRow, pressed && { backgroundColor: THEME.pressed }]}>
-                  <View style={styles.rail}>
-                    <View style={[styles.railLine, { height: space.md, backgroundColor: "transparent" }]} />
-                    <View style={[styles.node, styles.nodeAdd]}>
-                      <Ionicons name="add" size={16} color={THEME.inkMuted} />
-                    </View>
-                  </View>
-                  <View style={[styles.routeBody, { justifyContent: "center", paddingTop: space.md }]}>
-                    <Text style={[type.label, { color: THEME.inkMuted, fontFamily: type.body.fontFamily }]}>Ajouter un jour</Text>
-                  </View>
-                </Pressable>
+                <View style={styles.gridAdd}>
+                  <Button title="Ajouter un jour" icon="add" variant="secondary" full onPress={onAddDay} />
+                </View>
               )}
             </View>
           );
-        })()
-      )}
+        }
+
+        return (
+          <View>
+            {filtered.map(({ day, index }, i) => {
+              const date = resolveDayDate(trip, day, index);
+              const state = dayState(day, date, today);
+              const isFirst = i === 0;
+              const showAdd = !q;
+              const isLast = i === filtered.length - 1 && !showAdd;
+              const count = day.activities.length;
+              return (
+                <Pressable
+                  key={day.id}
+                  onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${day.title}${date ? ", " + formatDayLabel(date) : ""}, ${count} étape${count !== 1 ? "s" : ""}`}
+                  style={({ pressed }) => [styles.routeRow, pressed && { backgroundColor: THEME.pressed }]}
+                >
+                  <View style={styles.rail}>
+                    <View style={[styles.railLine, { height: space.md }, isFirst && { backgroundColor: "transparent" }]} />
+                    <DayNode state={state} number={index + 1} />
+                    <View style={[styles.railLine, { flex: 1 }, isLast && { backgroundColor: "transparent" }]} />
+                  </View>
+                  <View style={styles.routeBody}>
+                    <View style={styles.routeTitleRow}>
+                      <Text style={[type.heading, { flexShrink: 1 }]} numberOfLines={2}>
+                        {day.title}
+                      </Text>
+                      {day.dayType === "flight" && <Ionicons name="airplane" size={15} color={THEME.blue} />}
+                      {day.dayType === "park" && <Ionicons name="sparkles" size={15} color={THEME.pink} />}
+                    </View>
+                    <View style={styles.routeMeta}>
+                      {state === "today" ? <Badge label="Aujourd'hui" tone="gold" solid /> : null}
+                      {date ? <Text style={type.subhead}>{formatDayLabel(date)}</Text> : null}
+                      {date ? <WeatherBadge day={day} dateISO={date} compact fallbackLocation={trip.defaultLocation} /> : null}
+                    </View>
+                    <Text style={[type.caption, { color: THEME.inkFaint, marginTop: 2 }]}>
+                      {count === 0 ? "Aucune étape" : isPark ? `${day.activities.filter((a) => a.done).length}/${count} faites` : `${count} étape${count !== 1 ? "s" : ""}`}
+                    </Text>
+                  </View>
+                  {isPark && state === "today" && count > 0 ? (
+                    <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel={`Suivre ${day.title} en direct`} style={styles.routeLive} onPress={() => navigation.navigate("ParkLive", { tripId: trip.id, dayId: day.id })} />
+                  ) : null}
+                  {!q && (
+                    <IconButton icon="ellipsis-horizontal" label={`Options de ${day.title}`} onPress={() => openDayMenu(day, index)} size={20} />
+                  )}
+                </Pressable>
+              );
+            })}
+            {!q && (
+              <Pressable onPress={onAddDay} accessibilityRole="button" accessibilityLabel="Ajouter un jour" style={({ pressed }) => [styles.routeRow, pressed && { backgroundColor: THEME.pressed }]}>
+                <View style={styles.rail}>
+                  <View style={[styles.railLine, { height: space.md, backgroundColor: "transparent" }]} />
+                  <View style={[styles.node, styles.nodeAdd]}>
+                    <Ionicons name="add" size={16} color={THEME.inkMuted} />
+                  </View>
+                </View>
+                <View style={[styles.routeBody, { justifyContent: "center", paddingTop: space.md }]}>
+                  <Text style={[type.label, { color: THEME.inkMuted, fontFamily: type.body.fontFamily }]}>Ajouter un jour</Text>
+                </View>
+              </Pressable>
+            )}
+          </View>
+        );
+      })()}
 
       <Sheet visible={!!menuDay} onClose={() => setMenuDay(null)} title={menuDay ? menuDay.day.title : ""}>
         {menuDay && (
           <Group style={{ marginBottom: space.md }}>
+            {isPark ? (
+              <Row
+                icon="sparkles-outline"
+                title="Préparer le parcours"
+                onPress={() => {
+                  const d = menuDay.day;
+                  setMenuDay(null);
+                  navigation.navigate("ParkPlan", { tripId: trip.id, dayId: d.id });
+                }}
+              />
+            ) : null}
+            {isPark && menuDay.day.activities.length > 0 ? (
+              <Row
+                icon="play"
+                title="Jour J"
+                onPress={() => {
+                  const d = menuDay.day;
+                  setMenuDay(null);
+                  navigation.navigate("ParkLive", { tripId: trip.id, dayId: d.id });
+                }}
+              />
+            ) : null}
             {menuDay.index > 0 && (
               <Row
                 icon="arrow-up-outline"
@@ -531,73 +564,6 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
       </Sheet>
     </ScrollView>
   );
-}
-
-// Park trips: every day is a block of its own with the two park actions
-// (prepare the route, follow it on the day) and its steps in time order.
-function ParkDays({ trip, navigation }) {
-  return (
-    <View>
-      {trip.days.map((day, index) => {
-        const date = resolveDayDate(trip, day, index);
-        const steps = day.activities
-          .map((activity, i) => ({ activity, i }))
-          .sort((a, b) => (a.activity.time || "99:99").localeCompare(b.activity.time || "99:99") || a.i - b.i)
-          .map((x) => x.activity);
-        const done = steps.filter((a) => a.done).length;
-        return (
-          <View key={day.id} style={styles.parkDay}>
-            <View style={styles.parkDayHead}>
-              <View style={styles.parkDayTitle}>
-                <Text style={type.heading} accessibilityRole="header" numberOfLines={1}>
-                  {day.title}
-                </Text>
-                {date ? <Txt variant="subhead">{formatDayLabel(date)}</Txt> : null}
-              </View>
-              {steps.length > 0 ? <Text style={[type.numeralSmall, { color: THEME.inkFaint }]}>{`${done}/${steps.length}`}</Text> : null}
-            </View>
-            <View style={styles.parkDayActions}>
-              <Button
-                title="Parcours"
-                icon="sparkles-outline"
-                size="sm"
-                tone="gold"
-                accessibilityLabel={`Préparer le parcours de ${day.title}`}
-                onPress={() => navigation.navigate("ParkPlan", { tripId: trip.id, dayId: day.id })}
-              />
-              {steps.length > 0 ? (
-                <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel={`Suivre ${day.title} en direct`} onPress={() => navigation.navigate("ParkLive", { tripId: trip.id, dayId: day.id })} />
-              ) : null}
-              <Button title="Détails" size="sm" variant="secondary" accessibilityLabel={`Ouvrir ${day.title}`} onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })} />
-            </View>
-            {steps.length > 0 ? (
-              <Group>
-                {steps.map((activity) => {
-                  const t = TYPES[activity.type] || TYPES.activite;
-                  return (
-                    <Row
-                      key={activity.id}
-                      lead={<Thumb icon={activity.done ? "checkmark" : t.icon} tone={activity.done ? "teal" : typeTone(activity.type)} size={40} />}
-                      title={activity.title}
-                      subtitle={activity.time || "heure libre"}
-                      chevron
-                      onPress={() => navigation.navigate("ActivityEditor", { tripId: trip.id, dayId: day.id, activity })}
-                    />
-                  );
-                })}
-              </Group>
-            ) : (
-              <Txt variant="subhead">Aucune étape pour l'instant.</Txt>
-            )}
-          </View>
-        );
-      })}
-    </View>
-  );
-}
-
-function typeTone(key) {
-  return key === "repas" ? "gold" : key === "hotel" ? "stamp" : key === "transport" ? "blue" : "teal";
 }
 
 const BUDGET_CATEGORIES = [
@@ -765,21 +731,42 @@ function ChecklistSection({ title, trip, listKey, onChange }) {
   );
 }
 
-function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncomingScan }) {
+function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncomingScan, incomingAction, onConsumeIncomingAction }) {
   const [pendingUri, setPendingUri] = useState(null);
   const [pendingScannedCode, setPendingScannedCode] = useState(null);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [viewingDoc, setViewingDoc] = useState(null);
+  const [forDayId, setForDayId] = useState(null); // the flight or train day a ticket is being added for
   const docs = trip.documents || [];
 
   useEffect(() => {
     if (incomingScan) {
       setPendingUri(incomingScan.uri);
       setPendingScannedCode(incomingScan.scannedCode);
+      setForDayId(incomingScan.dayId || null);
       const boardingPass = incomingScan.scannedCode ? decodeBoardingPass(incomingScan.scannedCode) : null;
-      if (boardingPass) {
+      const forDay = incomingScan.dayId ? trip.days.find((d) => d.id === incomingScan.dayId) : null;
+      if (boardingPass && forDay) {
+        // scanned from a day: no date to guess, it is that day's ticket
+        setTitle(`Vol ${boardingPass.flightNumber} — ${boardingPass.origin} → ${boardingPass.destination}`);
+        Alert.alert("Carte d'embarquement détectée", `Vol ${boardingPass.flightNumber} (${boardingPass.origin} → ${boardingPass.destination}). Remplir le trajet de « ${forDay.title} » avec ce billet ?`, [
+          { text: "Non merci", style: "cancel" },
+          {
+            text: "Oui",
+            onPress: async () => {
+              await setDayType(trip.id, forDay.id, "flight", {
+                origin: boardingPass.origin,
+                destination: boardingPass.destination,
+                flightNumber: boardingPass.flightNumber,
+                seat: boardingPass.seat,
+              });
+              onChange();
+            },
+          },
+        ]);
+      } else if (boardingPass) {
         setTitle(`Vol ${boardingPass.flightNumber} — ${boardingPass.origin} → ${boardingPass.destination}`);
         const flightDateISO = resolveJulianDate(boardingPass.julianDay, trip.startDate);
         const matchIndex = trip.days.findIndex((d, i) => resolveDayDate(trip, d, i) === flightDateISO);
@@ -812,6 +799,25 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
     }
   }, [incomingScan]);
 
+  // Sent from a day: look at one of its tickets, or add one from the gallery.
+  useEffect(() => {
+    if (!incomingAction) return;
+    if (incomingAction.viewDocId) {
+      const doc = docs.find((d) => d.id === incomingAction.viewDocId);
+      if (doc) setViewingDoc(doc);
+    } else if (incomingAction.addFrom) {
+      setForDayId(incomingAction.dayId || null);
+      setTimeout(() => pick(incomingAction.addFrom), 350); // let the screen finish opening
+    }
+    onConsumeIncomingAction();
+  }, [incomingAction]);
+
+  function closePending() {
+    setPendingUri(null);
+    setPendingScannedCode(null);
+    setForDayId(null);
+  }
+
   const [addMenuOpen, setAddMenuOpen] = useState(false);
 
   function choosePhoto() {
@@ -823,7 +829,9 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
     try {
       const uri = await pickImage(source);
       if (uri) setPendingUri(uri);
+      else setForDayId(null);
     } catch (e) {
+      setForDayId(null);
       setError(e && e.code === "PERMISSION_DENIED" ? "Autorisation refusée. Activez l'accès à la caméra/aux photos dans les réglages du téléphone." : "Échec de la sélection.");
     }
   }
@@ -831,11 +839,12 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
   async function confirmAdd() {
     setBusy(true);
     try {
-      await addDocument(trip.id, { title, category: "autre", tempUri: pendingUri, scannedCode: pendingScannedCode });
-      setPendingUri(null);
-      setPendingScannedCode(null);
+      await addDocument(trip.id, { title, category: "autre", tempUri: pendingUri, scannedCode: pendingScannedCode, dayId: forDayId });
+      const backToDay = forDayId;
+      closePending();
       setTitle("");
       onChange();
+      if (backToDay) navigation.navigate("DayDetail", { tripId: trip.id, dayId: backToDay });
     } catch (e) {
       setError("Échec de l'enregistrement du document.");
     } finally {
@@ -864,6 +873,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
               key={doc.id}
               lead={<Thumb uri={doc.uri} icon="document-text" size={44} />}
               title={doc.title}
+              subtitle={doc.dayId && trip.days.find((d) => d.id === doc.dayId) ? trip.days.find((d) => d.id === doc.dayId).title : undefined}
               onPress={() => setViewingDoc(doc)}
               right={<IconButton icon="trash-outline" label={`Supprimer ${doc.title}`} size={18} onPress={() => onRemove(doc.id)} />}
               style={{ paddingRight: space.xs }}
@@ -925,14 +935,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
         </Pressable>
       </Modal>
 
-      <Sheet
-        visible={!!pendingUri}
-        onClose={() => {
-          setPendingUri(null);
-          setPendingScannedCode(null);
-        }}
-        title="Nouveau document"
-      >
+      <Sheet visible={!!pendingUri} onClose={closePending} title="Nouveau document">
         {pendingUri && <Image source={{ uri: pendingUri }} style={[styles.previewImage, round("md")]} />}
         {pendingScannedCode && (
           <View style={styles.scannedCodeBadge}>
@@ -950,10 +953,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
             variant="secondary"
             disabled={busy}
             style={{ flex: 1 }}
-            onPress={() => {
-              setPendingUri(null);
-              setPendingScannedCode(null);
-            }}
+            onPress={closePending}
           />
           <Button title="Enregistrer" loading={busy} style={{ flex: 1 }} onPress={confirmAdd} />
         </View>
@@ -1052,12 +1052,9 @@ const styles = themedStyles(() => ({
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
   actionRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: space.sm, marginBottom: space.md },
   gridToggle: { width: 40, height: 40, marginRight: -space.xs },
-  parkDay: { marginBottom: space.xl },
-  parkDayHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: space.md },
-  parkDayTitle: { flex: 1, flexDirection: "row", alignItems: "baseline", gap: space.md },
-  parkDayActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginVertical: space.md },
   inlineLink: { flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: layout.minTouch, marginBottom: space.sm },
 
+  routeLive: { alignSelf: "center" }, // the row stretches its children: keep the button its own height
   routeRow: { flexDirection: "row", alignItems: "stretch", gap: space.md, paddingRight: space.xs, borderRadius: radius.md },
   rail: { width: NODE, alignItems: "center" },
   railLine: { width: 2, backgroundColor: THEME.hairStrong },

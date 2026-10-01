@@ -46,7 +46,7 @@ export default function TicketScannerScreen({ navigation, route }) {
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       const photo = await cameraRef.current?.takePictureAsync({ quality: 0.6, skipProcessing: true });
-      navigation.navigate("Trip", { tripId: route.params?.tripId, scannedUri: photo?.uri, scannedCode: scannedCode || null });
+      navigation.navigate("Trip", { tripId: route.params?.tripId, scannedUri: photo?.uri, scannedCode: scannedCode || null, dayId: route.params?.dayId || null });
     } catch (e) {
       hasHandledScan.current = false;
       setCapturing(false);

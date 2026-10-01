@@ -7,6 +7,7 @@ import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { TRIP_TYPES } from "../lib/constants";
 import { buildNewTrip, buildEmptyDays, daysFromScript, createTrip, setCoverImage, MAX_PLANNED_DAYS } from "../lib/trips";
 import { parseDateInput, addDaysISO, diffDaysISO, formatDateRange } from "../lib/dates";
+import DateField from "../components/DateField";
 import { runScriptCorrection } from "../lib/script";
 import { getSetting } from "../lib/storage";
 import { searchDestinationPhoto, trackUnsplashDownload } from "../lib/unsplash";
@@ -115,9 +116,7 @@ export default function OnboardingScreen({ navigation }) {
   // What blocks the "info" step, if anything (build mode only; script mode
   // keeps its single optional date).
   function infoProblem() {
-    if (startDate.trim() && !start) return "Date de départ non reconnue — utilisez AAAA-MM-JJ ou JJ/MM/AAAA.";
     if (mode !== "build") return null;
-    if (endDate.trim() && !end) return "Date de retour non reconnue — utilisez AAAA-MM-JJ ou JJ/MM/AAAA.";
     if (start && end && end < start) return "Le retour est avant le départ.";
     const n = parseInt(nbDays, 10);
     if (nbDays.trim() && !(n >= 1)) return "Indiquez au moins 1 jour.";
@@ -131,9 +130,8 @@ export default function OnboardingScreen({ navigation }) {
 
   // Which field owns the message above (same order as infoProblem), so it can
   // be shown right under that field.
-  const startBad = !!problem && !!startDate.trim() && !start;
-  const endBad = !!problem && !startBad && ((!!endDate.trim() && !end) || (!!start && !!end && end < start));
-  const nbBad = !!problem && !startBad && !endBad;
+  const endBad = !!problem && !!start && !!end && end < start;
+  const nbBad = !!problem && !endBad;
 
   async function fixWithAI() {
     if (!script.trim() || fixing) return;
@@ -274,28 +272,12 @@ export default function OnboardingScreen({ navigation }) {
                 />
               )}
 
-              <Field
-                label="Date de départ (optionnel)"
-                value={startDate}
-                onChangeText={mode === "build" ? onStartChange : setStartDate}
-                placeholder="2026-09-15"
-                autoCapitalize="none"
-                error={startBad ? problem : undefined}
-                hint="AAAA-MM-JJ ou JJ/MM/AAAA"
-              />
+              <DateField label="Date de départ (optionnel)" optional value={startDate} onChange={mode === "build" ? onStartChange : setStartDate} />
 
               {mode === "build" && (
                 <>
                   <View style={[styles.twoCols, { marginBottom: problem ? space.lg : space.sm }]}>
-                    <Field
-                      label="Date de retour"
-                      value={endDate}
-                      onChangeText={onEndChange}
-                      placeholder="2026-09-22"
-                      autoCapitalize="none"
-                      error={endBad ? problem : undefined}
-                      style={styles.colEnd}
-                    />
+                    <DateField label="Date de retour" optional compact value={endDate} min={start || undefined} onChange={onEndChange} error={endBad ? problem : undefined} style={styles.colEnd} />
                     <Field
                       label="ou nombre de jours"
                       value={nbDays}

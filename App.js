@@ -29,6 +29,7 @@ import HotelsScreen from "./screens/HotelsScreen";
 import IdeaEditorScreen from "./screens/IdeaEditorScreen";
 import TripMapScreen from "./screens/TripMapScreen";
 import ParkPlanScreen from "./screens/ParkPlanScreen";
+import DayAttractionsScreen from "./screens/DayAttractionsScreen";
 import ParkLiveScreen from "./screens/ParkLiveScreen";
 import PlanGeneratorScreen from "./screens/PlanGeneratorScreen";
 import ImportIdeasScreen from "./screens/ImportIdeasScreen";
@@ -137,6 +138,7 @@ export default function App() {
               options={{ headerShown: false, presentation: "modal" }}
             />
             <Stack.Screen name="TripMap" component={TripMapScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="DayAttractions" component={DayAttractionsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ParkPlan" component={ParkPlanScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ParkLive" component={ParkLiveScreen} options={{ headerShown: false }} />
             <Stack.Screen name="PlanGenerator" component={PlanGeneratorScreen} options={{ headerShown: false }} />
