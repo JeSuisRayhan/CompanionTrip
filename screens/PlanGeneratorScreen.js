@@ -275,7 +275,7 @@ function StepRow({ item, trip, onPress }) {
   const line = ideaAddressLine(idea);
   return (
     <Row
-      lead={<Text style={[type.numeral, styles.time]}>{time}</Text>}
+      lead={<Text style={[type.numeral, styles.time]} numberOfLines={1}>{time}</Text>}
       title={idea.name}
       subtitle={line || undefined}
       accessibilityLabel={`${time}, ${idea.name}, ${cat.label}. Changer de jour`}
@@ -315,7 +315,7 @@ const styles = themedStyles(() => ({
   dayHeadText: { flex: 1, flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: space.md },
   dayTitle: { flexShrink: 1 },
   dayMap: { marginRight: -space.sm },
-  time: { width: 48, alignSelf: "flex-start", paddingTop: 2 },
+  time: { minWidth: 48, flexShrink: 0, alignSelf: "flex-start", paddingTop: 2 },
   metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.md, rowGap: 2, marginTop: space.xs },
   metaItem: { flexDirection: "row", alignItems: "center", gap: space.xs + 2 },
   dot: { width: space.sm, height: space.sm, borderRadius: radius.full },

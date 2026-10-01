@@ -13,6 +13,8 @@ import { THEME, TONES, space, layout, radius, type, shadow, themedStyles } from 
 // True inside surfaces that are themselves card-coloured (Group, Sheet), so a
 // Field there can step darker and stay visible.
 const OnCardContext = React.createContext(false);
+// True inside a raised surface: a secondary button steps one level up there, else it vanishes into it.
+const OnRaisedContext = React.createContext(false);
 
 // Rounded corners + iOS continuous curve, from a radius token name.
 export function round(name) {
@@ -44,7 +46,8 @@ const BUTTON_SIZES = {
 };
 
 export function Button({ title, icon, variant = "primary", tone, size = "md", loading, disabled, full, style, onPress, accessibilityLabel }) {
-  const t = tone ? { bg: toneOf(tone).bg, fg: toneOf(tone).fg } : buttonVariants()[variant];
+  const onRaised = useContext(OnRaisedContext);
+  const t = tone ? { bg: toneOf(tone).bg, fg: toneOf(tone).fg } : variant === "secondary" && onRaised ? { bg: THEME.bgRaised, fg: THEME.ink } : buttonVariants()[variant];
   const s = BUTTON_SIZES[size];
   const inactive = disabled || loading;
   return (
@@ -70,7 +73,7 @@ export function Button({ title, icon, variant = "primary", tone, size = "md", lo
       ) : (
         <>
           {icon ? <Ionicons name={icon} size={s.icon} color={t.fg} /> : null}
-          <Text style={[type[s.font], { color: t.fg, fontFamily: type.label.fontFamily }]} numberOfLines={1}>
+          <Text style={[type[s.font], { color: t.fg, fontFamily: type.label.fontFamily }, full && { flexShrink: 1, textAlign: "center" }]} numberOfLines={full ? 2 : 1}>
             {title}
           </Text>
         </>
@@ -151,9 +154,11 @@ export function Surface({ tone = "card", r = "lg", pad, style, children, ...prop
   const padding = pad == null ? undefined : typeof pad === "number" ? pad : space[pad];
   return (
     <OnCardContext.Provider value={tone !== "sunk"}>
-      <View {...props} style={[round(r), { backgroundColor: bg, padding }, style]}>
-        {children}
-      </View>
+      <OnRaisedContext.Provider value={tone === "raised"}>
+        <View {...props} style={[round(r), { backgroundColor: bg, padding }, style]}>
+          {children}
+        </View>
+      </OnRaisedContext.Provider>
     </OnCardContext.Provider>
   );
 }

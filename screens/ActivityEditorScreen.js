@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { THEME, space, layout, type as ramp, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, addActivity, editActivity, deleteActivity } from "../lib/trips";
-import { resolveDayDate } from "../lib/dates";
+import { resolveDayDate, parseTimeInput, maskTimeInput } from "../lib/dates";
 import { scheduleActivityReminder, cancelScheduledNotification } from "../lib/notifications";
 import { transportDeparturePlace, TRANSPORT_MODES, CONFIRMATION_TYPES } from "../lib/constants";
 import { Txt, Button, Chip, Group, Row, Field, ModalHeader, round } from "../components/ui";
@@ -33,13 +33,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
 
   const isEditing = !!activity;
 
-  function normalizedTime() {
-    const v = time.trim();
-    if (!v) return null;
-    const m = v.match(/^(\d{1,2})[h:](\d{2})?$/i);
-    if (!m) return null;
-    return `${m[1].padStart(2, "0")}:${m[2] || "00"}`;
-  }
+  const normalizedTime = () => parseTimeInput(time);
 
   async function save() {
     if (!title.trim()) {
@@ -47,7 +41,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
       return;
     }
     if (time.trim() && !normalizedTime()) {
-      setError("Heure non reconnue — utilisez HH:MM (ex : 09:30).");
+      setError("Heure non reconnue — utilisez HH:MM, de 00:00 à 23:59 (ex : 09:30).");
       return;
     }
     setSaving(true);
@@ -140,7 +134,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
           <Field
             label="Heure (optionnel)"
             value={time}
-            onChangeText={setTime}
+            onChangeText={(v) => setTime(maskTimeInput(v))}
             placeholder="09:30"
             keyboardType="numbers-and-punctuation"
             inputStyle={ramp.numeral}

@@ -916,9 +916,19 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
     }
   }
 
-  async function onRemove(docId) {
-    await removeDocument(trip.id, docId);
-    onChange();
+  // A photo of a ticket cannot be brought back: ask first
+  function onRemove(doc) {
+    Alert.alert("Supprimer ce document ?", `« ${doc.title} » sera retiré du voyage. Cette action est définitive.`, [
+      { text: "Annuler", style: "cancel" },
+      {
+        text: "Supprimer",
+        style: "destructive",
+        onPress: async () => {
+          await removeDocument(trip.id, doc.id);
+          onChange();
+        },
+      },
+    ]);
   }
 
   return (
@@ -939,7 +949,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
               title={doc.title}
               subtitle={doc.dayId && trip.days.find((d) => d.id === doc.dayId) ? trip.days.find((d) => d.id === doc.dayId).title : undefined}
               onPress={() => setViewingDoc(doc)}
-              right={<IconButton icon="trash-outline" label={`Supprimer ${doc.title}`} size={18} onPress={() => onRemove(doc.id)} />}
+              right={<IconButton icon="trash-outline" label={`Supprimer ${doc.title}`} size={18} onPress={() => onRemove(doc)} />}
               style={{ paddingRight: space.xs }}
             />
           ))}

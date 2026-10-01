@@ -188,7 +188,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
               </Txt>
             ) : summary ? (
               <>
-                <Txt variant="label" numberOfLines={2}>
+                <Txt variant="label" numberOfLines={3}>
                   {`${summary.open} ouvertes sur ${summary.total}${summary.avgWait != null ? `, attente moyenne ${summary.avgWait} min` : ""}`}
                 </Txt>
                 {updated ? <Txt variant="caption">{`Attentes mises à jour ${updated}`}</Txt> : null}

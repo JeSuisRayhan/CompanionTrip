@@ -371,9 +371,8 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
             <View style={styles.body}>
               <View style={styles.stepTitleRow}>
                 <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{name}</Text>
-                {hasPrice ? <Text style={[styles.stepPrice, done && { color: THEME.inkFaint }]}>{formatMoney(activity.price, trip.currency)}</Text> : null}
               </View>
-              {place || liveWait || estimate || activity.confirmationCode ? (
+              {place || liveWait || estimate || activity.confirmationCode || hasPrice ? (
                 <View style={styles.detailLine}>
                   {place ? (
                     <View style={styles.metaLine}>
@@ -384,6 +383,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
                   {liveWait ? <WaitBadge ride={ride} idea={idea} /> : null}
                   {estimate ? <Badge label={`~${estimate} min`} icon="hourglass-outline" tone="neutral" /> : null}
                   {activity.confirmationCode ? <Badge label={activity.confirmationCode} icon="key-outline" tone="neutral" /> : null}
+                  {hasPrice ? <Text style={styles.stepPrice}>{formatMoney(activity.price, trip.currency)}</Text> : null}
                 </View>
               ) : null}
               {note ? <Text style={[type.subhead, done && { color: THEME.inkFaint }]}>{note}</Text> : null}

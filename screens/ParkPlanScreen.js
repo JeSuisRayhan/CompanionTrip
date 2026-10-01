@@ -216,7 +216,7 @@ export default function ParkPlanScreen({ route, navigation }) {
               return (
                 <Row
                   key={`${it.kind}-${it.idea ? it.idea.id : index}`}
-                  lead={<Text style={[type.numeral, styles.time]}>{it.time}</Text>}
+                  lead={<Text style={[type.numeral, styles.time]} numberOfLines={1}>{it.time}</Text>}
                   title={stepTitle(it)}
                   subtitle={stepLine(it)}
                   accessibilityLabel={`${it.time}, ${stepTitle(it)}, ${stepLine(it)}`}
@@ -281,6 +281,6 @@ const styles = themedStyles(() => ({
   note: { marginTop: space.xs, marginBottom: space.sm },
   list: { marginTop: space.md },
   section: { marginTop: space.xl },
-  time: { width: 48, alignSelf: "flex-start", paddingTop: 2 },
+  time: { minWidth: 48, flexShrink: 0, alignSelf: "flex-start", paddingTop: 2 },
   footer: { paddingHorizontal: layout.gutter, paddingTop: space.md, paddingBottom: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: THEME.hairStrong, backgroundColor: THEME.bg },
 }));

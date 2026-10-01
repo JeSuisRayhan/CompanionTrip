@@ -165,7 +165,7 @@ export default function TripSettingsScreen({ route, navigation }) {
   if (loading || !trip) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ModalHeader title="Réglages du voyage" left={cancel} />
+        <ModalHeader title="Réglages" left={cancel} />
         <View style={styles.loading}>
           <ActivityIndicator color={THEME.teal} />
         </View>
@@ -178,7 +178,7 @@ export default function TripSettingsScreen({ route, navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
       <ModalHeader
-        title="Réglages du voyage"
+        title="Réglages"
         left={cancel}
         right={{ label: saving ? "…" : "Enregistrer", onPress: save, disabled: saving }}
       />

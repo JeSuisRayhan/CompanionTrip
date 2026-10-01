@@ -218,9 +218,9 @@ export default function ParkLiveScreen({ route, navigation }) {
             <Button title="Fait" icon="checkmark" full style={styles.nextDone} accessibilityLabel={`Marquer ${next.activity.title} comme faite`} onPress={() => markDone(next)} />
             <View style={styles.nextActions}>
               {todo.length > 1 ? (
-                <Button title="Plus tard" icon="time-outline" variant="secondary" style={styles.flex} accessibilityLabel={`Repousser ${next.activity.title} après les autres`} onPress={() => postpone(next)} />
+                <Button title="Plus tard" icon="time-outline" variant="secondary" style={styles.nextButton} accessibilityLabel={`Repousser ${next.activity.title} après les autres`} onPress={() => postpone(next)} />
               ) : null}
-              <Button title="Carte" icon="map-outline" variant="secondary" style={styles.flex} accessibilityLabel="Voir le jour sur la carte" onPress={() => navigation.navigate("TripMap", { tripId: trip.id, dayId: day.id })} />
+              <Button title="Carte" icon="map-outline" variant="secondary" style={styles.nextButton} accessibilityLabel="Voir le jour sur la carte" onPress={() => navigation.navigate("TripMap", { tripId: trip.id, dayId: day.id })} />
             </View>
           </Surface>
         ) : (
@@ -244,13 +244,10 @@ export default function ParkLiveScreen({ route, navigation }) {
                   title={s.idea.name}
                   subtitle={s.idea.land || undefined}
                   accessibilityLabel={`${s.idea.name}, ${s.ride.wait} minutes d'attente`}
-                  right={
-                    <View style={styles.rowRight}>
-                      <WaitBadge ride={s.ride} idea={s.idea} />
-                      <Button title="Y aller" size="sm" tone="gold" accessibilityLabel={`Faire ${s.idea.name} maintenant`} onPress={() => goNow(s.idea)} />
-                    </View>
-                  }
-                />
+                  right={<Button title="Y aller" size="sm" tone="gold" accessibilityLabel={`Faire ${s.idea.name} maintenant`} onPress={() => goNow(s.idea)} />}
+                >
+                  <WaitBadge ride={s.ride} idea={s.idea} />
+                </Row>
               ))}
             </Group>
           </View>
@@ -265,17 +262,14 @@ export default function ParkLiveScreen({ route, navigation }) {
               {later.map((s) => (
                 <Row
                   key={s.activity.id}
-                  lead={<Text style={[type.numeral, styles.time]}>{s.activity.time || "--:--"}</Text>}
+                  lead={<Text style={[type.numeral, styles.time]} numberOfLines={1}>{s.activity.time || "--:--"}</Text>}
                   title={s.activity.title}
                   subtitle={isClosed(s) ? "Fermée pour le moment" : s.idea && s.idea.land ? s.idea.land : undefined}
                   accessibilityLabel={`${s.activity.time || "sans heure"}, ${s.activity.title}${isClosed(s) ? ", fermée" : ""}`}
-                  right={
-                    <View style={styles.rowRight}>
-                      {isMeal(s) ? null : <WaitBadge ride={s.ride} idea={s.idea} />}
-                      <IconButton icon="checkmark-circle-outline" label={`Marquer ${s.activity.title} comme faite`} size={24} tone="teal" onPress={() => markDone(s)} />
-                    </View>
-                  }
-                />
+                  right={<IconButton icon="checkmark-circle-outline" label={`Marquer ${s.activity.title} comme faite`} size={24} tone="teal" onPress={() => markDone(s)} />}
+                >
+                  {isMeal(s) || isClosed(s) ? null : <WaitBadge ride={s.ride} idea={s.idea} />}
+                </Row>
               ))}
             </Group>
           </View>
@@ -323,11 +317,11 @@ const styles = themedStyles(() => ({
   nextInfo: { marginTop: space.lg, gap: space.xs },
   waitRow: { flexDirection: "row", alignItems: "baseline", gap: space.sm },
   nextDone: { marginTop: space.xl },
-  nextActions: { flexDirection: "row", gap: space.sm, marginTop: space.sm },
+  nextActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.sm }, // on a narrow screen the buttons stack rather than cut their label
+  nextButton: { flexGrow: 1, flexBasis: 140 },
   finished: { marginTop: space.xl },
   section: { marginTop: space.xl },
   note: { marginTop: space.xs, marginBottom: space.sm },
   list: { marginTop: space.md },
-  time: { width: 48, alignSelf: "flex-start", paddingTop: 2 },
-  rowRight: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  time: { minWidth: 48, flexShrink: 0, alignSelf: "flex-start", paddingTop: 2 }, // never wraps, whatever the text size
 }));
