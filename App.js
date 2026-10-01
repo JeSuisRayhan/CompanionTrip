@@ -124,6 +124,7 @@ export default function App() {
               options={{ headerShown: false, presentation: "modal" }}
             />
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: "Réglages" }} />
+            <Stack.Screen name="ErrorLog" component={ErrorLogScreen} options={{ headerShown: false }} />
             <Stack.Screen
               name="TripSettings"
               component={TripSettingsScreen}
