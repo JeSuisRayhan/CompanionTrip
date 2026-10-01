@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { CameraView, requestCameraPermissionsAsync } from "expo-camera";
+import { Camera, CameraView } from "expo-camera";
 import * as Haptics from "expo-haptics";
 
 import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
@@ -24,7 +24,7 @@ export default function TicketScannerScreen({ navigation, route }) {
     let cancelled = false;
     (async () => {
       try {
-        const perm = await requestCameraPermissionsAsync();
+        const perm = await Camera.requestCameraPermissionsAsync();
         if (cancelled) return;
         setGranted(perm.granted);
       } catch (e) {
