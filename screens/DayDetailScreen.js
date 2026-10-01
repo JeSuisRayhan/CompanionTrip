@@ -13,8 +13,11 @@ import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivit
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
+import { fetchQueueTimes, liveByRideId } from "../lib/queueTimes";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
 import UndoToast from "../components/UndoToast";
+import WaitBadge from "../components/WaitBadge";
+import QueueTimesCredit from "../components/QueueTimesCredit";
 import { Txt, Button, IconButton, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
@@ -82,6 +85,22 @@ export default function DayDetailScreen({ route, navigation }) {
     }, [refresh])
   );
 
+  // A park day shows the queues of the moment, as the attractions list and the live day do
+  const [live, setLive] = useState(null);
+  const parkDay = trip ? trip.days.find((d) => d.id === dayId) : null;
+  const qtId = parkDay && parkDay.dayType === "park" ? ((trip.tripType === "park" ? trip.park : parkDay.park) || {}).qtId : null;
+  useEffect(() => {
+    setLive(null);
+    if (qtId == null) return undefined;
+    let cancelled = false;
+    fetchQueueTimes(qtId)
+      .then((data) => !cancelled && setLive(liveByRideId(data)))
+      .catch(() => {}); // no live data: the estimate written with the step
+    return () => {
+      cancelled = true;
+    };
+  }, [qtId]);
+
   if (loading || !trip) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -125,10 +144,7 @@ export default function DayDetailScreen({ route, navigation }) {
   const parkTripId = isParkTrip ? tripId : scopedId(tripId, dayId);
   // On a park day, the zone of a ride says more than its street address.
   const parkIdeas = day.dayType === "park" ? (isParkTrip ? trip.ideas : (day.park && trip.parkLists && trip.parkLists[day.park.qtId]) || []) : [];
-  const parkLandOf = (a) => {
-    const idea = a.ideaId ? parkIdeas.find((i) => i.id === a.ideaId) : null;
-    return (idea && idea.land) || null;
-  };
+  const parkIdeaOf = (a) => (a.ideaId ? parkIdeas.find((i) => i.id === a.ideaId) || null : null);
 
   async function onToggleDone(activityId) {
     await toggleActivityDone(tripId, dayId, activityId);
@@ -250,7 +266,8 @@ export default function DayDetailScreen({ route, navigation }) {
                 key={a.id}
                 activity={a}
                 trip={trip}
-                land={parkLandOf(a)}
+                idea={parkIdeaOf(a)}
+                ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
                 isCurrent={i === firstUndoneIndex}
                 onToggleDone={() => onToggleDone(a.id)}
                 onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
@@ -261,6 +278,7 @@ export default function DayDetailScreen({ route, navigation }) {
         )}
 
         {sorted.length > 0 ? <Button title="Ajouter une étape" icon="add" variant="secondary" full onPress={addStep} style={styles.addStep} /> : null}
+        {live && sorted.length > 0 ? <QueueTimesCredit /> : null}
       </ScrollView>
 
       <LocationModal
@@ -308,16 +326,20 @@ const WAIT_NOTE = /^Attente estimée : (\d+) min$/;
 // One step of the day, as a small ticket: a stub with the time and the kind of
 // step, then the name with what matters under it. Next (first undone) = gold
 // stub and outline; done = teal, softened. The round box on the right marks it done.
-function ActivityRow({ activity, trip, land, isCurrent, onToggleDone, onPress, onDeleteWithUndo }) {
+function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPress, onDeleteWithUndo }) {
   const t = TYPES[activity.type] || TYPES.activite;
   const done = !!activity.done;
   const hasPrice = activity.price != null;
+  const land = idea ? idea.land : null;
   const split = activity.address ? { title: activity.title, place: null } : splitTitlePlace(activity.title);
   const place = land || activity.address || split.place;
   // "Electric Railway (American Waterfront)" next to its zone "American Waterfront": the zone is said once
   const name = land && split.title.toLowerCase().endsWith(`(${land.toLowerCase()})`) ? split.title.slice(0, -(land.length + 2)).trim() : split.title;
   const waitMatch = activity.note ? activity.note.match(WAIT_NOTE) : null;
   const note = waitMatch ? "" : activity.note;
+  // the queue of the moment when Queue-Times has it (a show has none), else the estimate; nothing once done
+  const liveWait = !done && !!ride && (!ride.open || ride.wait != null) && !(idea && (idea.categoryId === "spectacle" || idea.showTime));
+  const estimate = !done && !liveWait && waitMatch ? waitMatch[1] : null;
   const stubBg = done ? THEME.bgCardAlt : isCurrent ? THEME.gold : t.dim;
   const stubInk = done ? THEME.inkFaint : isCurrent ? THEME.onGold : t.color;
   // the usual "activité" pin says nothing: an icon only for the other kinds, or when there is no time to show
@@ -351,7 +373,7 @@ function ActivityRow({ activity, trip, land, isCurrent, onToggleDone, onPress, o
                 <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{name}</Text>
                 {hasPrice ? <Text style={[styles.stepPrice, done && { color: THEME.inkFaint }]}>{formatMoney(activity.price, trip.currency)}</Text> : null}
               </View>
-              {place || waitMatch || activity.confirmationCode ? (
+              {place || liveWait || estimate || activity.confirmationCode ? (
                 <View style={styles.detailLine}>
                   {place ? (
                     <View style={styles.metaLine}>
@@ -359,7 +381,8 @@ function ActivityRow({ activity, trip, land, isCurrent, onToggleDone, onPress, o
                       <Text style={[type.caption, styles.metaText]} numberOfLines={2}>{place}</Text>
                     </View>
                   ) : null}
-                  {waitMatch ? <Badge label={`~${waitMatch[1]} min`} icon="hourglass-outline" tone="neutral" /> : null}
+                  {liveWait ? <WaitBadge ride={ride} idea={idea} /> : null}
+                  {estimate ? <Badge label={`~${estimate} min`} icon="hourglass-outline" tone="neutral" /> : null}
                   {activity.confirmationCode ? <Badge label={activity.confirmationCode} icon="key-outline" tone="neutral" /> : null}
                 </View>
               ) : null}
