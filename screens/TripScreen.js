@@ -138,6 +138,8 @@ export default function TripScreen({ route, navigation }) {
   const { start, end } = tripRange(trip);
   const status = tripStatus(trip, isoToday());
   const isParkTrip = trip.tripType === "park";
+  // The map opens as soon as there is something to put on it: a step or an idea (the map finds the positions).
+  const showMap = !isParkTrip && (trip.days.some((d) => d.activities.length > 0) || (trip.ideas || []).length > 0);
   const hasIdeasTab = !isParkTrip; // a trip with a ready-made programme can also get ideas, to place on its days
   const tabList = hasIdeasTab ? [TABS[0], IDEAS_TAB, ...TABS.slice(1)] : isParkTrip ? [TABS[0], ATTRACTIONS_TAB, ...TABS.slice(1)] : TABS;
 
@@ -145,7 +147,7 @@ export default function TripScreen({ route, navigation }) {
     top: (
       <View>
         <View onLayout={(e) => setHeadH(e.nativeEvent.layout.height)}>
-          <TripHeader trip={trip} start={start} end={end} status={status} onBack={() => navigation.goBack()} onSettings={() => navigation.navigate("TripSettings", { tripId: trip.id })} />
+          <TripHeader trip={trip} start={start} end={end} status={status} onBack={() => navigation.goBack()} onSettings={() => navigation.navigate("TripSettings", { tripId: trip.id })} onMap={showMap ? () => navigation.navigate("TripMap", { tripId: trip.id }) : null} />
         </View>
         <TabBar tabs={tabList} value={tab} onChange={changeTab} />
       </View>
@@ -224,14 +226,17 @@ export default function TripScreen({ route, navigation }) {
 }
 
 // Trip name, dates and status. The cover photo (when there is one) sits behind it.
-function TripHeader({ trip, start, end, status, onBack, onSettings }) {
+function TripHeader({ trip, start, end, status, onBack, onSettings, onMap }) {
   const insets = useContext(SafeAreaInsetsContext);
   const cover = trip.coverImage;
   const body = (
     <>
       <View style={[styles.headerBar, { paddingTop: space.xs + (insets ? insets.top : 0) }]}>
         <IconButton icon="chevron-back" label="Retour" filled onPress={onBack} />
-        <IconButton icon="options-outline" label="Réglages du voyage" filled onPress={onSettings} />
+        <View style={styles.headerActions}>
+          {onMap ? <IconButton icon="map-outline" label="Voir le voyage sur la carte" filled onPress={onMap} /> : null}
+          <IconButton icon="options-outline" label="Réglages du voyage" filled onPress={onSettings} />
+        </View>
       </View>
       <View style={[styles.headerTitleBlock, cover?.url && { paddingTop: space.xl }]}>
         <Txt variant="display" numberOfLines={2} accessibilityRole="header">
@@ -1116,6 +1121,7 @@ const styles = themedStyles(() => ({
 
   headerPhoto: { width: "100%" },
   headerBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: space.md },
+  headerActions: { flexDirection: "row", gap: space.sm },
   headerTitleBlock: { paddingHorizontal: layout.gutter, paddingTop: space.sm, paddingBottom: space.lg, gap: space.sm },
   headerMeta: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
 

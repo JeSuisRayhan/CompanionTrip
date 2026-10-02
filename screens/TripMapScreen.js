@@ -9,7 +9,7 @@ import { getTrip } from "../lib/trips";
 import { realTripId } from "../lib/parkDay";
 import { previewTrip } from "../lib/planner";
 import { formatIdeaDuration, placeIdeaOnDay } from "../lib/ideas";
-import { buildMapModel, pinsForFilter, filterOptions, externalMapUrl, locateIdeas, saveIdeaPositions, locateSteps, saveStepPositions } from "../lib/map";
+import { buildMapModel, pinsForFilter, filterOptions, externalMapUrl, locateIdeas, saveIdeaPositions, locateSteps, saveStepPositions, dropStrayStepPositions } from "../lib/map";
 import { isParkTrip, hasParkPosition, locateParkAttractions } from "../lib/park";
 import { logError } from "../lib/errorLog";
 import { withParkSteps } from "../lib/parkPlanner";
@@ -65,7 +65,12 @@ export default function TripMapScreen({ route, navigation }) {
     useCallback(() => {
       let cancelled = false;
       (async () => {
-        const t = await getTrip(tripId);
+        let t = await getTrip(tripId);
+        // once per trip: forget the positions the first step search may have put on a namesake
+        if (t && !t.stepPositionsChecked && t.tripType !== "park" && realTripId(tripId) === tripId) {
+          await dropStrayStepPositions(tripId);
+          t = await getTrip(tripId);
+        }
         if (!cancelled) {
           setTrip(t);
           setLoading(false);
@@ -172,6 +177,7 @@ export default function TripMapScreen({ route, navigation }) {
     const error = r.error || st.error;
     if (error) sentence += `. ${error.message}`;
     else if (r.stopped || st.stopped) sentence += ". Recherche arrêtée.";
+    else if (st.total > 0 && st.foundCount === 0) sentence += ". Vérifiez le « Lieu principal du voyage » dans les réglages du voyage.";
     setResult(sentence);
     setLocating(null);
     setTrip(await getTrip(trip.id));
