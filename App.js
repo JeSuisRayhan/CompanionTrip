@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useSyncExternalStore } from "react"
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { View, ActivityIndicator } from "react-native";
+import { View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
@@ -15,6 +15,7 @@ import { loadPalette } from "./lib/appearance";
 import { installErrorHandlers } from "./lib/errorLog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { hasPin } from "./lib/pin";
+import SplashOverlay, { SPLASH_BACKGROUND } from "./components/SplashOverlay";
 // imported here so the park alert task is defined whenever the app starts, even in the background
 import { syncParkAlertTask } from "./lib/parkAlertsTask";
 import HomeScreen from "./screens/HomeScreen";
@@ -53,12 +54,23 @@ const buildNavTheme = () => ({
   },
 });
 
-// The native splash screen (the logo) stays up until the fonts and the saved palette are ready, so there
-// is no spinner flash between it and the first screen. A build made before this module existed has no
+// The native splash screen (the logo) stays up until the app has drawn its own copy of it (SplashOverlay), which
+// spins while the fonts and the saved palette load. A build made before expo-splash-screen existed has no
 // splash to control: the calls then do nothing.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function App() {
+  const [ready, setReady] = useState(false);
+  const [overlay, setOverlay] = useState(true);
+  return (
+    <View style={{ flex: 1, backgroundColor: SPLASH_BACKGROUND }}>
+      <AppContent onReady={() => setReady(true)} />
+      {overlay ? <SplashOverlay ready={ready} onDone={() => setOverlay(false)} /> : null}
+    </View>
+  );
+}
+
+function AppContent({ onReady }) {
   const [checking, setChecking] = useState(true);
   const [locked, setLocked] = useState(false);
   // A new palette rebuilds the navigator (fresh colours everywhere) and puts
@@ -88,21 +100,10 @@ export default function App() {
 
   const ready = !checking && fontsLoaded;
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync().catch(() => {});
+    if (ready) onReady();
   }, [ready]);
-  // safety net: never keep the person on the splash screen if something never finishes loading
-  useEffect(() => {
-    const timer = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 8000);
-    return () => clearTimeout(timer);
-  }, []);
 
-  if (!ready) {
-    return (
-      <View style={{ flex: 1, backgroundColor: THEME.bg, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator color={THEME.teal} />
-      </View>
-    );
-  }
+  if (!ready) return null; // the splash overlay is on screen meanwhile
 
   if (locked) {
     return <LockScreen onUnlock={() => setLocked(false)} />;
