@@ -137,9 +137,9 @@ export default function TripScreen({ route, navigation }) {
 
   const { start, end } = tripRange(trip);
   const status = tripStatus(trip, isoToday());
-  const isBuildMode = trip.planMode === "build" && trip.tripType !== "park";
   const isParkTrip = trip.tripType === "park";
-  const tabList = isBuildMode ? [TABS[0], IDEAS_TAB, ...TABS.slice(1)] : isParkTrip ? [TABS[0], ATTRACTIONS_TAB, ...TABS.slice(1)] : TABS;
+  const hasIdeasTab = !isParkTrip; // a trip with a ready-made programme can also get ideas, to place on its days
+  const tabList = hasIdeasTab ? [TABS[0], IDEAS_TAB, ...TABS.slice(1)] : isParkTrip ? [TABS[0], ATTRACTIONS_TAB, ...TABS.slice(1)] : TABS;
 
   const chrome = {
     top: (
@@ -186,7 +186,7 @@ export default function TripScreen({ route, navigation }) {
           onToggleGrid={() => setGridView((v) => !v)}
         />
       )}
-      {tab === "ideas" && isBuildMode && <IdeasTab trip={trip} navigation={navigation} onChange={refresh} />}
+      {tab === "ideas" && hasIdeasTab && <IdeasTab trip={trip} navigation={navigation} onChange={refresh} />}
       {tab === "attractions" && isParkTrip && <AttractionsTab trip={trip} navigation={navigation} onChange={refresh} />}
       {tab === "budget" && <BudgetTab trip={trip} />}
       {tab === "checklists" && <ChecklistsTab trip={trip} onChange={refresh} />}
@@ -354,7 +354,8 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
   const q = (searchQuery || "").trim().toLowerCase();
   const today = isoToday();
   // The map has something to show once a step or an idea has a position.
-  const hasMap = !isPark && (trip.days.some((d) => d.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng))) || (trip.ideas || []).some((i) => Number.isFinite(i.lat) && Number.isFinite(i.lng)));
+  // The map opens as soon as there is something to put on it: a step or an idea, located or not (the map finds the positions).
+  const hasMap = !isPark && (trip.days.some((d) => d.activities.length > 0) || (trip.ideas || []).length > 0);
   const canSearch = !isPark && trip.days.length >= 6;
   const showSearch = canSearch && (searchOpen || !!searchQuery);
 

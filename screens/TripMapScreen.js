@@ -9,7 +9,7 @@ import { getTrip } from "../lib/trips";
 import { realTripId } from "../lib/parkDay";
 import { previewTrip } from "../lib/planner";
 import { formatIdeaDuration, placeIdeaOnDay } from "../lib/ideas";
-import { buildMapModel, pinsForFilter, filterOptions, externalMapUrl, locateIdeas, saveIdeaPositions } from "../lib/map";
+import { buildMapModel, pinsForFilter, filterOptions, externalMapUrl, locateIdeas, saveIdeaPositions, locateSteps, saveStepPositions } from "../lib/map";
 import { isParkTrip, hasParkPosition, locateParkAttractions } from "../lib/park";
 import { logError } from "../lib/errorLog";
 import { withParkSteps } from "../lib/parkPlanner";
@@ -28,9 +28,9 @@ function toneOfColor(color) {
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const PARK_MAX_KM = 5; // a park is small: a lookup result farther than this is a namesake
 
-// "Construire mon voyage", phase 4: the trip on a map. Every idea with a
-// position is a pin; a day shows its steps in order with the route between
-// them. Ideas with no position can be looked up in one go.
+// The trip on a map. Every idea with a position is a pin; a day shows its
+// steps in order with the route between them. Ideas and steps with no position
+// (a programme pasted from elsewhere has none) can be looked up in one go.
 //
 // With route.params.plan ({ assign, order }) it shows the proposed planning
 // instead, before it is added: same map, read-only. route.params.parkPlan
@@ -129,7 +129,9 @@ export default function TripMapScreen({ route, navigation }) {
   async function onLocate() {
     stopRef.current = false;
     setResult(null);
-    setLocating({ done: 0, total: model.unlocated.length });
+    // A ready-made programme: its steps are looked up after the ideas, with the same progress bar.
+    const stepsTotal = isPark ? 0 : model.stepsToLocate.length;
+    setLocating({ done: 0, total: model.unlocated.length + stepsTotal });
     // In a park, OpenStreetMap knows the rides by name: one request places most of them.
     let fromPark = 0;
     let current = trip;
@@ -145,20 +147,31 @@ export default function TripMapScreen({ route, navigation }) {
     const rest = current.ideas.filter((i) => !Number.isFinite(i.lat) || !Number.isFinite(i.lng)).length;
     const r = rest
       ? await locateIdeas(current, {
-          onProgress: (done, total) => mounted.current && setLocating({ done, total }),
+          onProgress: (done, total) => mounted.current && setLocating({ done, total: total + stepsTotal }),
           shouldStop: () => stopRef.current,
           ...(isPark && hasParkPosition(current.park) ? { near: current.park, maxKm: PARK_MAX_KM, fallbackCity: current.park.name } : {}),
         })
-      : { found: {}, foundCount: 0, missing: 0, stopped: false, error: null };
+      : { found: {}, foundCount: 0, missing: 0, total: 0, stopped: false, error: null };
     await saveIdeaPositions(trip.id, r.found);
+    let st = { found: {}, foundCount: 0, missing: 0, total: 0, stopped: false, error: null };
+    if (stepsTotal && !r.stopped && !r.error) {
+      st = await locateSteps(await getTrip(trip.id), {
+        onProgress: (done, total) => mounted.current && setLocating({ done: r.total + done, total: r.total + total }),
+        shouldStop: () => stopRef.current,
+      });
+      await saveStepPositions(trip.id, st.found);
+    }
     if (!mounted.current) return;
     const noun = isPark ? ["attraction localisée", "attractions localisées"] : ["idée localisée", "idées localisées"];
     const bits = [];
     if (r.foundCount + fromPark) bits.push(plural(r.foundCount + fromPark, noun[0], noun[1]));
-    if (r.missing) bits.push(plural(r.missing, "introuvable", "introuvables"));
+    if (st.foundCount) bits.push(plural(st.foundCount, "étape localisée", "étapes localisées"));
+    const missing = r.missing + st.missing;
+    if (missing) bits.push(plural(missing, "introuvable", "introuvables"));
     let sentence = bits.join(", ") || "Aucune position trouvée";
-    if (r.error) sentence += `. ${r.error.message}`;
-    else if (r.stopped) sentence += ". Recherche arrêtée.";
+    const error = r.error || st.error;
+    if (error) sentence += `. ${error.message}`;
+    else if (r.stopped || st.stopped) sentence += ". Recherche arrêtée.";
     setResult(sentence);
     setLocating(null);
     setTrip(await getTrip(trip.id));
@@ -172,8 +185,12 @@ export default function TripMapScreen({ route, navigation }) {
     setTrip(await getTrip(trip.id));
   }
 
-  const unlocatedCount = model.unlocated.length;
-  const unlocatedLabel = isPark ? plural(unlocatedCount, "attraction sans position", "attractions sans position") : plural(unlocatedCount, "idée sans position", "idées sans position");
+  const stepsCount = isPark ? 0 : model.stepsToLocate.length;
+  const unlocatedCount = model.unlocated.length + stepsCount;
+  const unlocatedWhat = isPark
+    ? plural(unlocatedCount, "attraction", "attractions")
+    : [model.unlocated.length ? plural(model.unlocated.length, "idée", "idées") : null, stepsCount ? plural(stepsCount, "étape", "étapes") : null].filter(Boolean).join(" et ");
+  const unlocatedLabel = `${unlocatedWhat} sans position`;
   const showBanner = !isPreview && (unlocatedCount > 0 || !!result || !!locating);
   const nothingToShow = model.pins.length === 0;
 
@@ -218,7 +235,7 @@ export default function TripMapScreen({ route, navigation }) {
             {locating ? (
               <Button title="Arrêter" size="sm" variant="secondary" onPress={() => (stopRef.current = true)} />
             ) : unlocatedCount > 0 ? (
-              <Button title="Localiser" size="sm" tone="gold" accessibilityLabel={`Localiser ${plural(unlocatedCount, isPark ? "attraction" : "idée", isPark ? "attractions" : "idées")} sur la carte`} onPress={onLocate} />
+              <Button title="Localiser" size="sm" tone="gold" accessibilityLabel={`Localiser ${unlocatedWhat} sur la carte`} onPress={onLocate} />
             ) : null}
           </View>
           {locating ? <ProgressBar value={locating.total ? locating.done / locating.total : 0} tone="gold" style={styles.bannerProgress} /> : null}
@@ -238,11 +255,13 @@ export default function TripMapScreen({ route, navigation }) {
                   : "Les idées de ce planning n'ont pas de position. Localisez-les depuis la carte du voyage (onglet Idées)."
                 : isPark
                 ? "Les attractions n'ont pas encore de position. Lancez la recherche ci-dessus : elles sont cherchées dans le parc sur OpenStreetMap."
+                : stepsCount
+                ? "Votre programme n'a pas encore de position. Lancez la recherche ci-dessus : chaque étape est cherchée par son adresse ou son nom sur OpenStreetMap."
                 : (trip.ideas || []).length
                 ? "Vos idées n'ont pas encore de position. Lancez la recherche ci-dessus, ou choisissez une adresse dans chaque fiche."
                 : "Ajoutez des idées avec une adresse : elles apparaissent ici."
             }
-            action={isPreview || isPark || (trip.ideas || []).length ? undefined : { label: "Ajouter une idée", icon: "add", onPress: () => navigation.navigate("IdeaEditor", { tripId: trip.id }) }}
+            action={isPreview || isPark || (trip.ideas || []).length || stepsCount ? undefined : { label: "Ajouter une idée", icon: "add", onPress: () => navigation.navigate("IdeaEditor", { tripId: trip.id }) }}
           />
         </View>
       ) : (
@@ -261,7 +280,16 @@ export default function TripMapScreen({ route, navigation }) {
             navigation.navigate("Hotels", { tripId: realTripId(trip.id), prefill: { name: selected.name, address: selected.address, ideaId: selected.ideaId, lat: selected.lat, lng: selected.lng } })
           }
           onOpenDay={() => navigation.navigate("DayDetail", { tripId: realTripId(trip.id), dayId: selected.dayId })}
-          onEdit={() => (isPark ? setEditing(trip.ideas.find((i) => i.id === selected.ideaId) || null) : navigation.navigate("IdeaEditor", { tripId: trip.id, ideaId: selected.ideaId }))}
+          canEdit={selected.kind === "idea" || !isPark}
+          onEdit={() => {
+            if (isPark) return setEditing(trip.ideas.find((i) => i.id === selected.ideaId) || null);
+            if (selected.kind === "step") {
+              const day = trip.days.find((d) => d.id === selected.dayId);
+              const activity = day && day.activities.find((a) => a.id === selected.activityId);
+              return activity && navigation.navigate("ActivityEditor", { tripId: trip.id, dayId: day.id, activity });
+            }
+            return navigation.navigate("IdeaEditor", { tripId: trip.id, ideaId: selected.ideaId });
+          }}
           onGo={() => Linking.openURL(externalMapUrl(selected, Platform.OS))}
         />
       ) : null}
@@ -286,7 +314,7 @@ export default function TripMapScreen({ route, navigation }) {
 }
 
 // The selected pin: what it is, where it is in the programme, what to do next.
-function PinCard({ pin, ride, idea, readOnly, onClose, onPlace, onBook, onOpenDay, onEdit, onGo }) {
+function PinCard({ pin, ride, idea, readOnly, canEdit, onClose, onPlace, onBook, onOpenDay, onEdit, onGo }) {
   const placed = pin.dayId != null;
   const duration = pin.isHotel ? null : formatIdeaDuration(pin.durationMin);
   const dayLabel = placed ? `Jour ${pin.dayIndex + 1}${pin.time ? ` · ${pin.time}` : ""}` : null;
@@ -325,7 +353,7 @@ function PinCard({ pin, ride, idea, readOnly, onClose, onPlace, onBook, onOpenDa
           pin.isHotel ? <Button title="Réserver" size="sm" tone="gold" style={styles.action} onPress={onBook} /> : <Button title="Placer" size="sm" tone="gold" style={styles.action} onPress={onPlace} />
         ) : null}
         {!readOnly && placed ? <Button title="Voir le jour" size="sm" variant="secondary" style={styles.action} onPress={onOpenDay} /> : null}
-        {!readOnly && pin.kind === "idea" ? <Button title="Modifier" size="sm" variant="secondary" style={styles.action} onPress={onEdit} /> : null}
+        {!readOnly && canEdit ? <Button title="Modifier" size="sm" variant="secondary" style={styles.action} onPress={onEdit} /> : null}
         <Button title="Y aller" icon="navigate-outline" size="sm" variant="secondary" style={styles.action} accessibilityLabel={`Ouvrir ${pin.name} dans une application de cartes`} onPress={onGo} />
       </View>
     </Surface>

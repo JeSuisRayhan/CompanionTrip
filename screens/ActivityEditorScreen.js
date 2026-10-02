@@ -86,6 +86,11 @@ export default function ActivityEditorScreen({ route, navigation }) {
         notificationId,
       };
       if (isEditing) {
+        // A new address makes the old position stale: the map finds it again.
+        if (!activity.ideaId && payload.address !== (activity.address || null)) {
+          payload.lat = null;
+          payload.lng = null;
+        }
         await editActivity(tripId, dayId, activity.id, payload);
       } else {
         await addActivity(tripId, dayId, payload);

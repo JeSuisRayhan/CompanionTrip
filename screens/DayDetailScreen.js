@@ -134,7 +134,8 @@ export default function DayDetailScreen({ route, navigation }) {
     if (!b.time) return -1;
     return a.time.localeCompare(b.time);
   });
-  const hasMapPin = day.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng));
+  // Steps of a normal day can be located from the map; a park day only has its attractions' positions.
+  const hasMapPin = day.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng)) || (trip.tripType !== "park" && day.dayType !== "park" && day.activities.length > 0);
   const doneCount = day.activities.filter((a) => a.done).length;
   // "Next step" is only marked on a day being lived: today, or already started
   const firstUndoneIndex = date === isoDate(new Date()) || doneCount > 0 ? sorted.findIndex((a) => !a.done) : -1;
