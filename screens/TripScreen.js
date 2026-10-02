@@ -14,12 +14,12 @@ import { getTrip, addChecklistItem, addChecklistItems, toggleChecklistItem, remo
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
 import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, formatMoney, convertAmount } from "../lib/budget";
-import { pickImage, addDocument, removeDocument } from "../lib/documents";
+import { pickImage, addDocument, removeDocument, setDocumentCategory, DOCUMENT_CATEGORIES, documentCategory, suggestDocumentCategory } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
 import { exportTripFile } from "../lib/backup";
 import DonutChart from "../components/DonutChart";
-import { Txt, Button, IconButton, Badge, Group, Row, Thumb, SectionTitle, Field, ProgressBar, EmptyState, Sheet, ActionSheet, round } from "../components/ui";
+import { Txt, Button, IconButton, Badge, Chip, Group, Row, Thumb, SectionTitle, Field, ProgressBar, EmptyState, Sheet, ActionSheet, round } from "../components/ui";
 import TripScroll, { TripChromeContext } from "../components/TripScroll";
 import IdeasTab from "./IdeasTab";
 import AttractionsTab from "./AttractionsTab";
@@ -325,6 +325,63 @@ function DayNode({ state, number }) {
   );
 }
 
+// A day as a ticket: its number, title, date and what it holds on the left; the options on the stub, behind the perforation.
+function DayTicket({ day, index, date, state, isPark, trip, onPress, onMenu, onLive }) {
+  const count = day.activities.length;
+  const kinds = new Set(day.activities.map((a) => a.type));
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${day.title}${date ? ", " + formatDayLabel(date) : ""}, ${count} étape${count !== 1 ? "s" : ""}`}
+      style={({ pressed }) => [styles.dayTicket, round("lg"), state === "today" && styles.dayTicketToday, pressed && { backgroundColor: THEME.pressed }]}
+    >
+      <View style={styles.dayBody}>
+        <View style={styles.dayHead}>
+          <Badge label={`J${index + 1}`} tone="gold" />
+          {state === "today" ? <Badge label="Aujourd'hui" tone="gold" solid /> : null}
+          {state === "done" ? <Badge label="Fait" tone="teal" icon="checkmark" /> : null}
+        </View>
+        <View style={styles.routeTitleRow}>
+          <Text style={[type.heading, { flexShrink: 1 }]} numberOfLines={2}>
+            {day.title}
+          </Text>
+          {day.dayType === "flight" && <Ionicons name="airplane" size={15} color={THEME.blue} />}
+          {day.dayType === "park" && <Ionicons name="sparkles" size={15} color={THEME.pink} />}
+        </View>
+        {date ? (
+          <View style={styles.routeMeta}>
+            <Text style={type.subhead}>{formatDayLabel(date)}</Text>
+            <WeatherBadge day={day} dateISO={date} compact fallbackLocation={trip.defaultLocation} />
+          </View>
+        ) : null}
+        <View style={styles.dayTags}>
+          <Text style={[type.caption, { color: THEME.inkFaint }]}>
+            {count === 0 ? "Aucune étape" : isPark ? `${day.activities.filter((a) => a.done).length}/${count} faites` : `${count} étape${count !== 1 ? "s" : ""}`}
+          </Text>
+          {kinds.has("hotel") ? <Text style={[type.caption, { color: THEME.stamp }]}>hôtel</Text> : null}
+          {kinds.has("transport") ? <Text style={[type.caption, { color: THEME.blue }]}>transport</Text> : null}
+        </View>
+        {onLive ? <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel={`Suivre ${day.title} en direct`} style={styles.dayLive} onPress={onLive} /> : null}
+      </View>
+      {onMenu ? (
+        <>
+          <View style={styles.dayStub}>
+            <View style={styles.perfDots} pointerEvents="none">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <View key={i} style={styles.perfDot} />
+              ))}
+            </View>
+            <IconButton icon="ellipsis-horizontal" label={`Options de ${day.title}`} onPress={onMenu} size={20} />
+          </View>
+          <View style={[styles.dayNotch, { top: -NOTCH / 2 }]} pointerEvents="none" />
+          <View style={[styles.dayNotch, { bottom: -NOTCH / 2 }]} pointerEvents="none" />
+        </>
+      ) : null}
+    </Pressable>
+  );
+}
+
 function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, onAddDay, searchQuery, gridView, onSearchChange, onToggleGrid }) {
   const isPark = trip.tripType === "park";
   const [menuDay, setMenuDay] = useState(null); // { day, index } while the day menu sheet is open
@@ -494,64 +551,29 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
         }
 
         return (
-          <View>
-            {filtered.map(({ day, index }, i) => {
+          <View style={styles.dayList}>
+            {filtered.map(({ day, index }) => {
               const date = resolveDayDate(trip, day, index);
               const state = dayState(day, date, today);
-              const isFirst = i === 0;
-              const showAdd = !q;
-              const isLast = i === filtered.length - 1 && !showAdd;
-              const count = day.activities.length;
               return (
-                <Pressable
+                <DayTicket
                   key={day.id}
+                  day={day}
+                  index={index}
+                  date={date}
+                  state={state}
+                  isPark={isPark}
+                  trip={trip}
                   onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${day.title}${date ? ", " + formatDayLabel(date) : ""}, ${count} étape${count !== 1 ? "s" : ""}`}
-                  style={({ pressed }) => [styles.routeRow, pressed && { backgroundColor: THEME.pressed }]}
-                >
-                  <View style={styles.rail}>
-                    <View style={[styles.railLine, { height: space.md }, isFirst && { backgroundColor: "transparent" }]} />
-                    <DayNode state={state} number={index + 1} />
-                    <View style={[styles.railLine, { flex: 1 }, isLast && { backgroundColor: "transparent" }]} />
-                  </View>
-                  <View style={styles.routeBody}>
-                    <View style={styles.routeTitleRow}>
-                      <Text style={[type.heading, { flexShrink: 1 }]} numberOfLines={2}>
-                        {day.title}
-                      </Text>
-                      {day.dayType === "flight" && <Ionicons name="airplane" size={15} color={THEME.blue} />}
-                      {day.dayType === "park" && <Ionicons name="sparkles" size={15} color={THEME.pink} />}
-                    </View>
-                    <View style={styles.routeMeta}>
-                      {state === "today" ? <Badge label="Aujourd'hui" tone="gold" solid /> : null}
-                      {date ? <Text style={type.subhead}>{formatDayLabel(date)}</Text> : null}
-                      {date ? <WeatherBadge day={day} dateISO={date} compact fallbackLocation={trip.defaultLocation} /> : null}
-                    </View>
-                    <Text style={[type.caption, { color: THEME.inkFaint, marginTop: 2 }]}>
-                      {count === 0 ? "Aucune étape" : isPark ? `${day.activities.filter((a) => a.done).length}/${count} faites` : `${count} étape${count !== 1 ? "s" : ""}`}
-                    </Text>
-                  </View>
-                  {isPark && state === "today" && count > 0 ? (
-                    <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel={`Suivre ${day.title} en direct`} style={styles.routeLive} onPress={() => navigation.navigate("ParkLive", { tripId: trip.id, dayId: day.id })} />
-                  ) : null}
-                  {!q && (
-                    <IconButton icon="ellipsis-horizontal" label={`Options de ${day.title}`} onPress={() => openDayMenu(day, index)} size={20} />
-                  )}
-                </Pressable>
+                  onMenu={!q ? () => openDayMenu(day, index) : null}
+                  onLive={isPark && state === "today" && day.activities.length > 0 ? () => navigation.navigate("ParkLive", { tripId: trip.id, dayId: day.id }) : null}
+                />
               );
             })}
             {!q && (
-              <Pressable onPress={onAddDay} accessibilityRole="button" accessibilityLabel="Ajouter un jour" style={({ pressed }) => [styles.routeRow, pressed && { backgroundColor: THEME.pressed }]}>
-                <View style={styles.rail}>
-                  <View style={[styles.railLine, { height: space.md, backgroundColor: "transparent" }]} />
-                  <View style={[styles.node, styles.nodeAdd]}>
-                    <Ionicons name="add" size={16} color={THEME.inkMuted} />
-                  </View>
-                </View>
-                <View style={[styles.routeBody, { justifyContent: "center", paddingTop: space.md }]}>
-                  <Text style={[type.label, { color: THEME.inkMuted, fontFamily: type.body.fontFamily }]}>Ajouter un jour</Text>
-                </View>
+              <Pressable onPress={onAddDay} accessibilityRole="button" accessibilityLabel="Ajouter un jour" style={({ pressed }) => [styles.dayAdd, round("lg"), pressed && { backgroundColor: THEME.pressed }]}>
+                <Ionicons name="add" size={18} color={THEME.inkMuted} />
+                <Text style={[type.label, { color: THEME.inkMuted, fontFamily: type.body.fontFamily }]}>Ajouter un jour</Text>
               </Pressable>
             )}
           </View>
@@ -809,7 +831,17 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
   const [error, setError] = useState("");
   const [viewingDoc, setViewingDoc] = useState(null);
   const [forDayId, setForDayId] = useState(null); // the flight or train day a ticket is being added for
+  const [chosenCategory, setChosenCategory] = useState(null); // set once the person picks a drawer; until then it follows the best guess
+  const [openCats, setOpenCats] = useState({}); // drawer key → opened or closed by hand
+  const [docMenu, setDocMenu] = useState(null);
   const docs = trip.documents || [];
+  const byCategory = {};
+  for (const c of DOCUMENT_CATEGORIES) byCategory[c.key] = [];
+  for (const d of docs) byCategory[documentCategory(d)].push(d);
+  const category = chosenCategory || suggestDocumentCategory(trip, { title, scannedCode: pendingScannedCode, dayId: forDayId });
+  // A drawer with documents is open; with none at all, the first one is, to say what goes there.
+  const isOpen = (key) => (openCats[key] !== undefined ? openCats[key] : byCategory[key].length > 0 || (docs.length === 0 && key === DOCUMENT_CATEGORIES[0].key));
+  const openCategory = (key) => setOpenCats((o) => ({ ...o, [key]: true }));
 
   useEffect(() => {
     if (incomingScan) {
@@ -886,6 +918,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
     setPendingUri(null);
     setPendingScannedCode(null);
     setForDayId(null);
+    setChosenCategory(null);
   }
 
   const [addMenuOpen, setAddMenuOpen] = useState(false);
@@ -909,8 +942,9 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
   async function confirmAdd() {
     setBusy(true);
     try {
-      await addDocument(trip.id, { title, category: "autre", tempUri: pendingUri, scannedCode: pendingScannedCode, dayId: forDayId });
+      await addDocument(trip.id, { title, category, tempUri: pendingUri, scannedCode: pendingScannedCode, dayId: forDayId });
       const backToDay = forDayId;
+      openCategory(category);
       closePending();
       setTitle("");
       onChange();
@@ -939,28 +973,68 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
 
   return (
     <TripScroll contentContainerStyle={styles.scrollContent}>
-      <Button title="Ajouter un document" icon="camera-outline" variant="secondary" full onPress={choosePhoto} style={{ marginBottom: space.lg }} />
+      <View style={styles.toolbar}>
+        <Text style={[type.subhead, styles.toolbarCount]}>{docs.length === 0 ? "Billets, réservations, codes Wi-Fi…" : `${docs.length} document${docs.length !== 1 ? "s" : ""}`}</Text>
+        <Button title="Ajouter" icon="add" size="sm" variant="secondary" accessibilityLabel="Ajouter un document" onPress={choosePhoto} />
+      </View>
       {error ? <Text style={[type.caption, { color: THEME.stamp, marginBottom: space.md }]}>{error}</Text> : null}
 
-      {docs.length === 0 && (
-        <EmptyState icon="document-text-outline" title="Aucun document" text="Billets, réservations, codes Wi-Fi de l'hôtel : tout ce qu'on cherche toujours au pire moment." />
-      )}
+      <View style={styles.docDrawers}>
+        {DOCUMENT_CATEGORIES.map((c) => {
+          const list = byCategory[c.key];
+          const open = isOpen(c.key);
+          const countText = list.length === 0 ? "Aucun document" : `${list.length} document${list.length !== 1 ? "s" : ""}`;
+          return (
+            <Group key={c.key}>
+              <Row
+                icon={c.icon}
+                tone={c.tone}
+                title={c.label}
+                subtitle={countText}
+                accessibilityLabel={`${c.label}, ${countText}, ${open ? "ouvert" : "fermé"}`}
+                onPress={() => setOpenCats((o) => ({ ...o, [c.key]: !open }))}
+                right={<Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={THEME.inkFaint} />}
+              />
+              {open && list.length === 0 ? <Row subtitle="Aucun document pour l'instant." /> : null}
+              {open
+                ? list.map((doc) => (
+                    <Row
+                      key={doc.id}
+                      lead={<Thumb uri={doc.uri} icon="document-text" size={44} />}
+                      title={doc.title}
+                      subtitle={doc.dayId && trip.days.find((d) => d.id === doc.dayId) ? trip.days.find((d) => d.id === doc.dayId).title : undefined}
+                      onPress={() => setViewingDoc(doc)}
+                      right={<IconButton icon="ellipsis-horizontal" label={`Options de ${doc.title}`} size={20} onPress={() => setDocMenu(doc)} />}
+                      style={{ paddingRight: space.xs }}
+                    />
+                  ))
+                : null}
+            </Group>
+          );
+        })}
+      </View>
 
-      {docs.length > 0 && (
-        <Group>
-          {docs.map((doc) => (
-            <Row
-              key={doc.id}
-              lead={<Thumb uri={doc.uri} icon="document-text" size={44} />}
-              title={doc.title}
-              subtitle={doc.dayId && trip.days.find((d) => d.id === doc.dayId) ? trip.days.find((d) => d.id === doc.dayId).title : undefined}
-              onPress={() => setViewingDoc(doc)}
-              right={<IconButton icon="trash-outline" label={`Supprimer ${doc.title}`} size={18} onPress={() => onRemove(doc)} />}
-              style={{ paddingRight: space.xs }}
-            />
-          ))}
-        </Group>
-      )}
+      <ActionSheet
+        visible={!!docMenu}
+        onClose={() => setDocMenu(null)}
+        title={docMenu ? docMenu.title : ""}
+        actions={
+          docMenu
+            ? [
+                ...DOCUMENT_CATEGORIES.filter((c) => c.key !== documentCategory(docMenu)).map((c) => ({
+                  icon: c.icon,
+                  title: `Classer dans « ${c.label} »`,
+                  onPress: async () => {
+                    await setDocumentCategory(trip.id, docMenu.id, c.key);
+                    openCategory(c.key);
+                    onChange();
+                  },
+                })),
+                { icon: "trash-outline", tone: "stamp", title: "Supprimer", onPress: () => onRemove(docMenu) },
+              ]
+            : []
+        }
+      />
 
       <Sheet visible={addMenuOpen} onClose={() => setAddMenuOpen(false)} title="Ajouter un document">
         <Group style={{ marginBottom: space.md }}>
@@ -1026,6 +1100,12 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
           </View>
         )}
         <Field label="Titre" value={title} onChangeText={setTitle} placeholder="Ex : voucher hôtel" style={{ marginTop: space.lg }} />
+        <Text style={[type.caption, { marginBottom: space.sm }]}>Rubrique</Text>
+        <View style={styles.categoryChips}>
+          {DOCUMENT_CATEGORIES.map((c) => (
+            <Chip key={c.key} label={c.label} icon={c.icon} tone={c.tone} selected={category === c.key} onPress={() => setChosenCategory(c.key)} />
+          ))}
+        </View>
         {error ? <Text style={[type.caption, { color: THEME.stamp, marginBottom: space.md }]}>{error}</Text> : null}
         <View style={styles.sheetButtons}>
           <Button
@@ -1114,6 +1194,8 @@ function ShiftDatesModal({ visible, onClose, onConfirm }) {
 }
 
 const NODE = 30;
+const NOTCH = 18; // the half circles cut into a day ticket at the perforation
+const STUB = 56; // width of the ticket stub that holds the options button
 
 const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
@@ -1135,13 +1217,21 @@ const styles = themedStyles(() => ({
   toolbar: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.md },
   toolbarCount: { flex: 1 },
 
-  routeLive: { alignSelf: "center" }, // the row stretches its children: keep the button its own height
-  routeRow: { flexDirection: "row", alignItems: "stretch", gap: space.md, paddingRight: space.xs, borderRadius: radius.md },
-  rail: { width: NODE, alignItems: "center" },
-  railLine: { width: 2, backgroundColor: THEME.hairStrong },
-  routeBody: { flex: 1, paddingTop: space.md, paddingBottom: space.md, gap: 2 },
   routeTitleRow: { flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap" },
   routeMeta: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
+
+  dayList: { gap: space.md },
+  dayTicket: { flexDirection: "row", alignItems: "stretch", backgroundColor: THEME.bgCard, borderWidth: 1, borderColor: THEME.hairStrong },
+  dayTicketToday: { borderWidth: 1.5, borderColor: THEME.gold },
+  dayBody: { flex: 1, padding: space.lg, gap: space.xs },
+  dayHead: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: 2 },
+  dayTags: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap", marginTop: 2 },
+  dayLive: { alignSelf: "flex-start", marginTop: space.sm },
+  dayStub: { width: STUB, alignItems: "center", justifyContent: "center" },
+  perfDots: { position: "absolute", left: 0, top: NOTCH, bottom: NOTCH, width: 2, alignItems: "center", justifyContent: "space-evenly" },
+  perfDot: { width: 2, height: 4, borderRadius: 1, backgroundColor: THEME.hairStrong },
+  dayNotch: { position: "absolute", right: STUB - NOTCH / 2, width: NOTCH, height: NOTCH, borderRadius: NOTCH / 2, backgroundColor: THEME.bg },
+  dayAdd: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: 56, borderWidth: 1.5, borderStyle: "dashed", borderColor: THEME.hairStrong },
 
   node: { width: NODE, height: NODE, borderRadius: NODE / 2, alignItems: "center", justifyContent: "center" },
   nodeNumber: { ...type.numeralSmall },
@@ -1149,7 +1239,6 @@ const styles = themedStyles(() => ({
   nodeDone: { backgroundColor: THEME.teal },
   nodePast: { borderWidth: 2, borderColor: "rgba(63, 214, 192, 0.45)" },
   nodeFuture: { borderWidth: 2, borderColor: THEME.hairStrong },
-  nodeAdd: { borderWidth: 2, borderColor: THEME.hairStrong, borderStyle: "dashed" },
 
   dayGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.md },
   gridAdd: { width: "100%" },
@@ -1167,6 +1256,8 @@ const styles = themedStyles(() => ({
   addItemRow: { flexDirection: "row", gap: space.sm, alignItems: "center" },
   addItemButton: { width: 50, height: 50 },
 
+  docDrawers: { gap: space.md },
+  categoryChips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginBottom: space.lg },
   sheetButtons: { flexDirection: "row", gap: space.md, marginTop: space.xs },
   previewImage: { width: "100%", height: 200, backgroundColor: THEME.bgCardAlt },
   scannedCodeBadge: {
