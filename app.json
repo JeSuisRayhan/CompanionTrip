@@ -21,7 +21,7 @@
     "android": {
       "package": "com.compagnondevoyage.app",
       "adaptiveIcon": {
-        "backgroundColor": "#170F1F",
+        "backgroundColor": "#17120E",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -33,9 +33,18 @@
     },
     "plugins": [
       [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#17120E",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 288,
+          "resizeMode": "contain"
+        }
+      ],
+      [
         "expo-notifications",
         {
-          "icon": "./assets/android-icon-foreground.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#F4B740"
         }
       ],

@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { View, ActivityIndicator } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
 import { SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
@@ -52,6 +53,11 @@ const buildNavTheme = () => ({
   },
 });
 
+// The native splash screen (the logo) stays up until the fonts and the saved palette are ready, so there
+// is no spinner flash between it and the first screen. A build made before this module existed has no
+// splash to control: the calls then do nothing.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function App() {
   const [checking, setChecking] = useState(true);
   const [locked, setLocked] = useState(false);
@@ -80,7 +86,17 @@ export default function App() {
     })();
   }, []);
 
-  if (checking || !fontsLoaded) {
+  const ready = !checking && fontsLoaded;
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync().catch(() => {});
+  }, [ready]);
+  // safety net: never keep the person on the splash screen if something never finishes loading
+  useEffect(() => {
+    const timer = setTimeout(() => SplashScreen.hideAsync().catch(() => {}), 8000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!ready) {
     return (
       <View style={{ flex: 1, backgroundColor: THEME.bg, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator color={THEME.teal} />
