@@ -72,6 +72,7 @@ export default function IdeaEditorScreen({ route, navigation }) {
   const [searching, setSearching] = useState(false);
   const [candidates, setCandidates] = useState(null); // null = never searched
   const [searchError, setSearchError] = useState("");
+  const [approximate, setApproximate] = useState(false); // the hits are the district: keep the typed address
   const [error, setError] = useState("");
   const scrollRef = useRef(null);
   const [saving, setSaving] = useState(false);
@@ -156,7 +157,8 @@ export default function IdeaEditorScreen({ route, navigation }) {
     setSearching(true);
     try {
       const near = centroidOf(trip.ideas || []);
-      const { results } = await searchPlacesWithFallback({ name, address, city, fallbackCity: trip.defaultLocation }, { near });
+      const { results, approximate: fromDistrict } = await searchPlacesWithFallback({ name, address, city, fallbackCity: trip.defaultLocation }, { near, loose: true });
+      setApproximate(fromDistrict);
       setCandidates(results);
     } catch (e) {
       setCandidates(null);
@@ -168,8 +170,9 @@ export default function IdeaEditorScreen({ route, navigation }) {
 
   function applyCandidate(r) {
     if (!name.trim()) setName(r.name);
-    setAddress(r.address || "");
-    setCity(r.city || city);
+    // A district-level hit must not replace the exact address the person typed.
+    if (!approximate || !address.trim()) setAddress(r.address || "");
+    if (!approximate || !city.trim()) setCity(r.city || city);
     setPosition({ lat: r.lat, lng: r.lng });
     setOpeningHours(r.openingHours || null);
     setCandidates(null);
@@ -330,14 +333,19 @@ export default function IdeaEditorScreen({ route, navigation }) {
 
             {candidates && candidates.length === 0 && (
               <Txt variant="caption" style={styles.note}>
-                Aucun résultat. Précisez la ville, ou gardez l'adresse saisie à la main (l'idée sera « sans position »).
+                Aucun résultat. Essayez le nom du lieu avec le quartier (ex : « Akabane, Tokyo »), ou gardez l'adresse saisie à la main (l'idée sera « sans position »).
               </Txt>
             )}
             {candidates && candidates.length > 0 && (
               <View style={styles.candidates}>
                 <Txt variant="subhead" style={styles.candidatesTitle}>
-                  Touchez le bon lieu
+                  {approximate ? "Adresse exacte introuvable : touchez le quartier" : "Touchez le bon lieu"}
                 </Txt>
+                {approximate && (
+                  <Txt variant="caption" style={styles.note}>
+                    La position sera celle du quartier, votre adresse reste telle que saisie.
+                  </Txt>
+                )}
                 <Group>
                   {candidates.map((r, i) => (
                     <Row key={`${r.osmRef || i}`} icon="location-outline" title={r.name} subtitle={r.address} onPress={() => applyCandidate(r)} />
