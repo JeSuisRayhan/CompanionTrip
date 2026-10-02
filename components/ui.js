@@ -481,7 +481,7 @@ const styles = themedStyles(() => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: THEME.hairStrong,
   },
-  modalHeaderSide: { flex: 1 },
+  modalHeaderSide: { flex: 1, minWidth: 96 }, // "Enregistrer" must not wrap, even with a large system font
   modalHeaderAction: { minHeight: layout.minTouch, justifyContent: "center" },
   modalHeaderTitle: { flex: 2, textAlign: "center" },
   backHeader: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: layout.gutter, paddingTop: space.sm, paddingBottom: space.md },

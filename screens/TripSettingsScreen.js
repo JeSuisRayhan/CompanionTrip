@@ -10,7 +10,7 @@ import { getTrip, updateTripSettings } from "../lib/trips";
 import { fetchRate } from "../lib/rates";
 import { formatShortDate } from "../lib/dates";
 import { scheduleDailySummaries, scheduleDepartureReminder } from "../lib/notifications";
-import { requestGeofencingPermissions, scheduleHotelProximityAlerts, stopHotelProximityAlerts, isHotelProximityActiveForTrip } from "../lib/geofencing";
+import { requestGeofencingPermissions, scheduleHotelProximityAlerts, stopHotelProximityAlerts, isHotelProximityActiveForTrip, hotelStops } from "../lib/geofencing";
 import { Txt, Button, Group, Row, SectionTitle, Field, ModalHeader, Sheet } from "../components/ui";
 
 const CATEGORY_LABELS = { transport: "Transport", hotel: "Hébergement", repas: "Repas" };
@@ -115,10 +115,16 @@ export default function TripSettingsScreen({ route, navigation }) {
       }
       const count = await scheduleHotelProximityAlerts(trip);
       setGeofenceEnabled(count > 0);
+      const total = hotelStops(trip).length;
+      const s = (n) => (n !== 1 ? "s" : "");
       setGeofenceStatus(
-        count > 0
-          ? `Activé pour ${count} hôtel${count !== 1 ? "s" : ""} avec adresse renseignée.`
-          : "Aucun hôtel avec adresse renseignée sur ce voyage — ajoutez une adresse aux étapes hôtel pour activer ceci."
+        total === 0
+          ? "Aucun hôtel avec adresse renseignée sur ce voyage — ajoutez une adresse aux étapes hôtel pour activer ceci."
+          : count === 0
+          ? `${total === 1 ? "L'adresse de l'hôtel n'a pas pu être localisée" : `Les adresses des ${total} hôtels n'ont pas pu être localisées`} — précisez la rue et la ville (ou vérifiez la connexion), puis réessayez.`
+          : count < total
+          ? `Activé pour ${count} hôtel${s(count)} sur ${total} — l'adresse des autres n'a pas pu être localisée.`
+          : `Activé pour ${count} hôtel${s(count)} avec adresse renseignée.`
       );
     } finally {
       setGeofenceBusy(false);
