@@ -156,7 +156,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
             </View>
           </View>
 
-          {(type === "transport" || type === "hotel" || type === "repas") && (
+          {(type === "transport" || type === "hotel" || type === "repas" || type === "activite") && (
             <Field
               label="Prix (optionnel)"
               value={price}
