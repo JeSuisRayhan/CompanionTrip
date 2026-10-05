@@ -18,10 +18,8 @@ import { updatesInfo, fetchUpdateNow, restartApp } from "../lib/appUpdates";
 import { Txt, Button, Badge, Group, Row, SectionTitle, Field } from "../components/ui";
 
 export default function SettingsScreen({ navigation }) {
-  const [apiKey, setApiKey] = useState("");
   const [unsplashKey, setUnsplashKey] = useState("");
   const [unsplashSaved, setUnsplashSaved] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [notifPermission, setNotifPermission] = useState("default");
   const [tripCount, setTripCount] = useState(0);
   const [lastBackup, setLastBackup] = useState(null);
@@ -60,8 +58,6 @@ export default function SettingsScreen({ navigation }) {
 
   useEffect(() => {
     (async () => {
-      const key = await getSetting("anthropicApiKey");
-      if (key) setApiKey(key);
       const uKey = await getSetting("unsplashAccessKey");
       if (uKey) setUnsplashKey(uKey);
       const perm = await getNotificationPermission();
@@ -72,16 +68,6 @@ export default function SettingsScreen({ navigation }) {
       setPinEnabled(await hasPin());
     })();
   }, []);
-
-  async function saveKey() {
-    if (apiKey.trim()) {
-      await setSetting("anthropicApiKey", apiKey.trim());
-    } else {
-      await removeSetting("anthropicApiKey");
-    }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  }
 
   async function saveUnsplashKey() {
     if (unsplashKey.trim()) {
@@ -169,8 +155,6 @@ export default function SettingsScreen({ navigation }) {
         const copyNote = result.copied ? ` Ce voyage existait déjà avec des différences : il est ajouté en copie, le vôtre est intact.` : "";
         setBackupStatus(`${result.imported} voyage${result.imported !== 1 ? "s" : ""} importé${result.imported !== 1 ? "s" : ""}${result.skipped ? ` (${result.skipped} déjà présents ignorés)` : ""}.${copyNote}${keyNote}`);
         await refreshTripCount();
-        const key = await getSetting("anthropicApiKey");
-        if (key) setApiKey(key);
         const uKey = await getSetting("unsplashAccessKey");
         if (uKey) setUnsplashKey(uKey);
       }
@@ -258,31 +242,6 @@ export default function SettingsScreen({ navigation }) {
               </>
             )}
             {pinStatus ? <StatusNote text={pinStatus} failed={pinFailed} /> : null}
-          </View>
-        </Section>
-
-        <Section title="Clé API (recommandé)">
-          <View style={styles.formFirst}>
-            <Txt variant="subhead">
-              Utilisée uniquement en dernier recours pour « Corriger le format » quand le texte est vraiment en vrac — le reste du temps, la correction se fait sans aucune IA. Reste sur cet appareil, envoyée uniquement à l'API Anthropic. Créez-en une sur console.anthropic.com.
-            </Txt>
-            <Field
-              value={apiKey}
-              onChangeText={setApiKey}
-              placeholder="sk-ant-..."
-              autoCapitalize="none"
-              secureTextEntry
-              accessibilityLabel="Clé API Anthropic"
-              style={styles.fieldTight}
-            />
-            <Button
-              title={saved ? "Enregistrée" : "Enregistrer la clé"}
-              icon={saved ? "checkmark" : undefined}
-              tone={saved ? "teal" : undefined}
-              variant="secondary"
-              full
-              onPress={saveKey}
-            />
           </View>
         </Section>
 

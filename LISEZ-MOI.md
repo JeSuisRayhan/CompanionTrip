@@ -121,6 +121,47 @@ du code qu'il ne sait pas exécuter.
 `preview` (celles de l'étape précédente : `EXPO_PUBLIC_AVIATIONSTACK_API_KEY`,
 `EXPO_PUBLIC_UNSPLASH_ACCESS_KEY`), comme le fait le build : rien de plus à faire.
 
+## Envoyer vers l'app (Partager)
+
+Depuis une autre appli : **Partager → Compagnon de voyage**. L'app demande pour
+quel voyage (rien à choisir s'il n'y en a qu'un), puis :
+
+- **Un lien ou un lieu** (TikTok, YouTube, Google Maps, navigateur) : ouvre
+  l'import d'idées avec le lien déjà en place, il ne reste qu'à appuyer sur
+  **Analyser** et à cocher les lieux reconnus.
+- **Une réservation** (le texte d'un mail de confirmation, une capture d'écran,
+  un PDF ou plusieurs captures) : ouvre « Réservation » qui la lit tout de
+  suite et propose les étapes (vol, train, bus, bateau, hôtel…) à cocher avant de
+  les ajouter au planning. Tout est lu **sur le téléphone, sans IA et sans clé** :
+  une capture passe par la reconnaissance de texte du téléphone, un PDF donne son
+  propre texte, puis des règles simples y repèrent dates, heures, lieux, prix et
+  numéro de réservation. Le fichier d'origine peut être gardé dans les Documents
+  du voyage.
+
+Même fonction depuis l'app : dans un voyage, **Ajouter une réservation** (mail
+collé, captures ou PDF choisis dans le téléphone).
+
+À savoir sur la lecture des captures et des PDF :
+
+- Plus la capture est nette et complète, meilleur est le résultat. Ce qui a été lu
+  est toujours montré avant d'ajouter : décochez ou corrigez ce qui ne va pas.
+- La première fois, le téléphone télécharge son modèle de lecture de texte (via
+  Google Play Services) : il faut une connexion à Internet cette fois-là.
+- Un PDF qui est un scan (une photo de papier) ne contient pas de texte : faites-en
+  une capture d'écran à la place.
+- Seuls les prix en euros sont lus. Une capture de bus sans le nom de la compagnie
+  peut être rangée en « Train » : changez le mode à la main.
+- Android seulement pour l'instant (pas de lecture des captures et des PDF sur iPhone).
+- L'app n'utilise aucune IA ni aucune clé d'API. Si une ancienne version avait gardé
+  une clé Anthropic, elle est effacée du téléphone au démarrage.
+
+Le bouton Partager et la lecture locale des captures et des PDF ajoutent des
+modules natifs et de nouveaux types de fichiers acceptés : il faut **un nouvel
+APK** (la version de l'app est passée à `1.1.0` pour cette raison). Les mises à
+jour publiées avec cette version ne vont qu'aux APK `1.1.0` ; l'ancien APK
+continue de recevoir celles de la version `1.0.0`. Dans un ancien APK, lire une
+capture ou un PDF affiche « installez la dernière version » au lieu de planter.
+
 ## Vérification avant chaque build
 
 Le workflow de build commence par vérifier que le code compile

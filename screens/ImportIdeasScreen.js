@@ -6,7 +6,6 @@ import * as Clipboard from "expo-clipboard";
 
 import { THEME, TONES, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip } from "../lib/trips";
-import { getSetting } from "../lib/storage";
 import { DEFAULT_IDEA_CATEGORIES } from "../lib/ideas";
 import { analyzeInput, markDuplicates, locatePlaces, addImportedIdeas, SOURCE_LABELS } from "../lib/importIdeas";
 import { Txt, Button, Badge, Group, Row, Field, EmptyState, ModalHeader, ProgressBar } from "../components/ui";
@@ -18,14 +17,13 @@ const toneOfCategory = (cat) => Object.keys(TONES).find((k) => TONES[k].fg === c
 // "Construire mon voyage", phase 3: fill the notebook from a link or a text.
 // Steps: paste -> tick what is right -> added with positions.
 export default function ImportIdeasScreen({ route, navigation }) {
-  const { tripId } = route.params;
+  const { tripId, initialText } = route.params; // initialText: what another app shared
   const [trip, setTrip] = useState(null);
-  const [hasKey, setHasKey] = useState(false);
   const [stage, setStage] = useState("input"); // input | review | saving | done
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText || "");
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState(null); // { places, links, usedAI, aiError }
+  const [result, setResult] = useState(null); // { places, links }
   const [progress, setProgress] = useState({ i: 0, n: 0, name: "" });
   const [done, setDone] = useState(null); // { count, missing }
   const stopRef = useRef(false);
@@ -33,7 +31,6 @@ export default function ImportIdeasScreen({ route, navigation }) {
   useEffect(() => {
     (async () => {
       setTrip(await getTrip(tripId));
-      setHasKey(!!(await getSetting("anthropicApiKey")));
     })();
   }, [tripId]);
 
@@ -52,8 +49,7 @@ export default function ImportIdeasScreen({ route, navigation }) {
     setAnalyzing(true);
     setError("");
     try {
-      const key = await getSetting("anthropicApiKey");
-      const res = await analyzeInput(text, { apiKey: key });
+      const res = await analyzeInput(text);
       const places = markDuplicates(res.places, trip).map((p, i) => ({ ...p, key: String(i), checked: !p.duplicate }));
       setResult({ ...res, places });
       setStage("review");
@@ -154,22 +150,13 @@ export default function ImportIdeasScreen({ route, navigation }) {
               ))}
             </Group>
           )}
-          {result.aiError ? (
-            <Txt variant="caption" color="inkFaint" style={styles.note}>
-              {`L'IA n'a pas répondu (${result.aiError}). La liste ci-dessous vient d'une lecture simple du texte.`}
-            </Txt>
-          ) : null}
 
           {places.length === 0 ? (
             <EmptyState
               icon="search-outline"
               tone="gold"
               title="Aucun lieu reconnu"
-              text={
-                hasKey
-                  ? "Écrivez un lieu par ligne, ou collez la description complète de la vidéo."
-                  : "Écrivez un lieu par ligne (ou avec 📍 devant chaque lieu). Pour lire un texte libre, enregistrez une clé API dans les réglages."
-              }
+              text="Écrivez un lieu par ligne (ou avec 📍 devant chaque lieu), ou collez la description complète de la vidéo."
               action={{ label: "Modifier le texte", onPress: () => setStage("input") }}
             />
           ) : (
@@ -242,9 +229,7 @@ export default function ImportIdeasScreen({ route, navigation }) {
             <Row icon="logo-instagram" tone="pink" title="Instagram" subtitle="Collez la description, le lien ne peut pas être lu." accessibilityLabel="Instagram : collez la description, le lien ne peut pas être lu" />
           </Group>
           <Txt variant="caption" color="inkFaint" style={styles.note}>
-            {hasKey
-              ? "Les textes en phrases sont lus par l'IA (votre clé API, enregistrée dans les réglages)."
-              : "Pour lire un texte en phrases, enregistrez une clé API dans les réglages. Sans elle, une liste (un lieu par ligne, ou 📍 devant chaque lieu) fonctionne très bien."}
+            Une liste fonctionne très bien : un lieu par ligne, ou 📍 devant chaque lieu. Un texte en phrases n'est pas compris.
           </Txt>
         </ScrollView>
         <View style={styles.footer}>

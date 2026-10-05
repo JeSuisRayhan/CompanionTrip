@@ -9,7 +9,6 @@ import { buildNewTrip, buildEmptyDays, daysFromScript, createTrip, setCoverImage
 import { parseDateInput, addDaysISO, diffDaysISO, formatDateRange } from "../lib/dates";
 import DateField from "../components/DateField";
 import { runScriptCorrection } from "../lib/script";
-import { getSetting } from "../lib/storage";
 import { searchDestinationPhoto, trackUnsplashDownload } from "../lib/unsplash";
 import VoiceInputButton from "../components/VoiceInputButton";
 import { Txt, Button, IconButton, Group, Row, Field } from "../components/ui";
@@ -133,22 +132,17 @@ export default function OnboardingScreen({ navigation }) {
   const endBad = !!problem && !!start && !!end && end < start;
   const nbBad = !!problem && !endBad;
 
-  async function fixWithAI() {
+  function fixFormat() {
     if (!script.trim() || fixing) return;
     setFixing(true);
     setFixError("");
     setFixStatus("");
     try {
-      const apiKey = await getSetting("anthropicApiKey");
-      const result = await runScriptCorrection(script, apiKey, { onProgress: setFixStatus });
+      const result = runScriptCorrection(script);
       if (result.changed) setScript(result.text);
-      setFixStatus(result.changed ? (result.usedAI ? "Reformaté via l'IA." : "Reformaté automatiquement.") : "Le texte semble déjà correct.");
+      setFixStatus(result.changed ? "Reformaté automatiquement." : "Le texte semble déjà correct.");
     } catch (e) {
-      setFixError(
-        e && e.code === "NO_API_KEY"
-          ? "Aucune structure trouvée. Ajoutez une clé API dans Réglages pour activer la correction IA, ou décrivez chaque étape sur sa propre ligne."
-          : e.message || "La correction a échoué."
-      );
+      setFixError(e.message || "La correction a échoué.");
     } finally {
       setFixing(false);
     }
@@ -341,7 +335,7 @@ export default function OnboardingScreen({ navigation }) {
                 full
                 loading={fixing}
                 disabled={!script.trim()}
-                onPress={fixWithAI}
+                onPress={fixFormat}
               />
               {fixNote ? (
                 <Txt variant="caption" color={fixing ? "inkMuted" : "teal"} style={styles.note} accessibilityLiveRegion="polite">

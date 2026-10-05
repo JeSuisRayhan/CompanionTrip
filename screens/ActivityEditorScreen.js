@@ -6,10 +6,12 @@ import Icon from "../components/Icon";
 import { THEME, space, layout, type as ramp, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, addActivity, editActivity, deleteActivity } from "../lib/trips";
-import { resolveDayDate, parseTimeInput, maskTimeInput } from "../lib/dates";
-import { scheduleActivityReminder, cancelScheduledNotification } from "../lib/notifications";
+import { resolveDayDate, parseTimeInput, maskTimeInput, isoDate } from "../lib/dates";
+import { scheduleActivityReminder, cancelScheduledNotification, getNotificationPermission, requestNotificationPermission } from "../lib/notifications";
+import { BOOKING_STATES, bookingOf } from "../lib/booking";
 import { transportDeparturePlace, TRANSPORT_MODES, CONFIRMATION_TYPES } from "../lib/constants";
 import { Txt, Button, Chip, Group, Row, Field, ModalHeader, round } from "../components/ui";
+import DateField from "../components/DateField";
 
 // Same tone per step type everywhere (route rows, editor chips).
 function typeTone(key) {
@@ -29,6 +31,8 @@ export default function ActivityEditorScreen({ route, navigation }) {
   const [confirmationCode, setConfirmationCode] = useState(activity?.confirmationCode || "");
   const [transportMode, setTransportMode] = useState(activity?.transportMode || null);
   const [outdoor, setOutdoor] = useState(!!activity?.outdoor);
+  const [booking, setBooking] = useState(bookingOf(activity)); // null | "todo" | "done"
+  const [bookBy, setBookBy] = useState(activity?.bookBy || "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -74,6 +78,15 @@ export default function ActivityEditorScreen({ route, navigation }) {
         }
       }
 
+      // A deadline to book by is reminded: ask for the permission once, when it is first needed.
+      if (booking === "todo" && bookBy) {
+        try {
+          if ((await getNotificationPermission()) !== "granted") await requestNotificationPermission();
+        } catch (e) {
+          // no reminder without the permission; the step still shows as to book
+        }
+      }
+
       const payload = {
         title: title.trim(),
         time: resolvedTime,
@@ -86,6 +99,8 @@ export default function ActivityEditorScreen({ route, navigation }) {
         transportMode: type === "transport" ? transportMode : null,
         outdoor: type === "activite" || type === "repas" ? outdoor : false,
         notificationId,
+        booking,
+        bookBy: booking === "todo" && bookBy ? bookBy : null,
       };
       if (isEditing) {
         // A new address makes the old position stale: the map finds it again.
@@ -225,6 +240,21 @@ export default function ActivityEditorScreen({ route, navigation }) {
                 }
               />
             </Group>
+          )}
+
+          <View style={styles.choiceGroup}>
+            <Txt variant="caption" style={styles.choiceLabel}>
+              Réservation (optionnel)
+            </Txt>
+            <View style={styles.chipRow}>
+              <Chip label="Aucune" tone="neutral" selected={!booking} onPress={() => setBooking(null)} />
+              {BOOKING_STATES.map((b) => (
+                <Chip key={b.key} label={b.label} icon={b.key === "done" ? "checkmark" : "ticket-outline"} tone={b.key === "done" ? "teal" : "stamp"} selected={booking === b.key} onPress={() => setBooking(b.key)} />
+              ))}
+            </View>
+          </View>
+          {booking === "todo" && (
+            <DateField label="À réserver avant le (optionnel)" value={bookBy} onChange={setBookBy} optional min={isoDate(new Date())} hint="Un rappel arrive 2 jours avant, à 9 h." />
           )}
 
           <Field label="Note (optionnel)" value={note} onChangeText={setNote} placeholder="Réserver un créneau à l'avance" multiline />

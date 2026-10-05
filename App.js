@@ -17,9 +17,11 @@ import { installErrorHandlers } from "./lib/errorLog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PaperGrain from "./components/PaperGrain";
 import { hasPin } from "./lib/pin";
-import { onTripsSaved } from "./lib/storage";
+import { onTripsSaved, removeSetting } from "./lib/storage";
 import { scheduleStepReminderSync } from "./lib/notifications";
 import { targetFromResponse } from "./lib/stepReminders";
+import { useSharedContent } from "./lib/useSharedContent";
+import { sharedContentOf } from "./lib/shareIntake";
 import SplashOverlay, { SPLASH_BACKGROUND } from "./components/SplashOverlay";
 // imported here so the park alert task is defined whenever the app starts, even in the background
 import { syncParkAlertTask } from "./lib/parkAlertsTask";
@@ -29,6 +31,7 @@ import TripScreen from "./screens/TripScreen";
 import DayDetailScreen from "./screens/DayDetailScreen";
 import TodayScreen from "./screens/TodayScreen";
 import ShowDriverScreen from "./screens/ShowDriverScreen";
+import ShowPhraseScreen from "./screens/ShowPhraseScreen";
 import ActivityEditorScreen from "./screens/ActivityEditorScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import TripSettingsScreen from "./screens/TripSettingsScreen";
@@ -44,6 +47,7 @@ import PlanGeneratorScreen from "./screens/PlanGeneratorScreen";
 import ImportIdeasScreen from "./screens/ImportIdeasScreen";
 import ImportScriptScreen from "./screens/ImportScriptScreen";
 import ImportConfirmationScreen from "./screens/ImportConfirmationScreen";
+import ShareTargetScreen from "./screens/ShareTargetScreen";
 import RecapScreen from "./screens/RecapScreen";
 import LockScreen from "./screens/LockScreen";
 import ErrorLogScreen from "./screens/ErrorLogScreen";
@@ -106,6 +110,7 @@ function AppContent({ onReady }) {
   useEffect(() => {
     (async () => {
       await loadPalette();
+      removeSetting("anthropicApiKey").catch(() => {}); // the app no longer uses an AI: a key saved by an older version is erased
       syncParkAlertTask(); // registers or removes the background check to match the trips' settings
       const pinSet = await hasPin();
       setLocked(pinSet);
@@ -152,6 +157,19 @@ function AppContent({ onReady }) {
     };
   }, []);
 
+  // A link, a place, a confirmation (text, screenshot, PDF) shared from another app ("Partager") opens the choice of the
+  // trip it is for, once the app is unlocked and its screens are up.
+  const { hasShareIntent, shareIntent, resetShareIntent } = useSharedContent();
+  const pendingShare = useRef(null);
+  useEffect(() => {
+    if (!hasShareIntent) return;
+    const shared = sharedContentOf(shareIntent);
+    resetShareIntent();
+    if (!shared) return;
+    if (navigationRef.isReady()) navigationRef.navigate("ShareTarget", shared);
+    else pendingShare.current = shared;
+  }, [hasShareIntent, shareIntent]);
+
   const ready = !checking && fontsLoaded;
   useEffect(() => {
     if (ready) onReady();
@@ -174,6 +192,11 @@ function AppContent({ onReady }) {
             if (target) {
               pendingTarget.current = null;
               navigationRef.navigate(target.screen, target.params);
+            }
+            const shared = pendingShare.current;
+            if (shared) {
+              pendingShare.current = null;
+              navigationRef.navigate("ShareTarget", shared);
             }
           }}
           theme={buildNavTheme()}
@@ -199,6 +222,7 @@ function AppContent({ onReady }) {
             <Stack.Screen name="DayDetail" component={DayDetailScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Today" component={TodayScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ShowDriver" component={ShowDriverScreen} options={{ headerShown: false, presentation: "fullScreenModal" }} />
+            <Stack.Screen name="ShowPhrase" component={ShowPhraseScreen} options={{ headerShown: false, presentation: "fullScreenModal" }} />
             <Stack.Screen
               name="ActivityEditor"
               component={ActivityEditorScreen}
@@ -225,6 +249,7 @@ function AppContent({ onReady }) {
             <Stack.Screen name="ParkLive" component={ParkLiveScreen} options={{ headerShown: false }} />
             <Stack.Screen name="PlanGenerator" component={PlanGeneratorScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ImportIdeas" component={ImportIdeasScreen} options={{ headerShown: false, presentation: "modal" }} />
+            <Stack.Screen name="ShareTarget" component={ShareTargetScreen} options={{ headerShown: false, presentation: "modal" }} />
             <Stack.Screen name="ImportScript" component={ImportScriptScreen} options={{ headerShown: false, presentation: "modal" }} />
             <Stack.Screen name="ImportConfirmation" component={ImportConfirmationScreen} options={{ headerShown: false, presentation: "modal" }} />
             <Stack.Screen name="TripRecap" component={RecapScreen} options={{ headerShown: false }} />
