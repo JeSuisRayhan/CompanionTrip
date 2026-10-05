@@ -10,6 +10,7 @@ import { TYPES } from "../lib/constants";
 import { scopedId } from "../lib/parkDay";
 import { splitTitlePlace } from "../lib/script";
 import { directionsUrl } from "../lib/map";
+import { driverCard } from "../lib/driverCard";
 import { isPdfDoc } from "../lib/documents";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
@@ -274,6 +275,7 @@ export default function DayDetailScreen({ route, navigation }) {
                 isCurrent={i === firstUndoneIndex}
                 onToggleDone={() => onToggleDone(a.id)}
                 onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
+                onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
                 onDeleteWithUndo={() => onDeleteWithUndo(a)}
               />
             ))}
@@ -329,7 +331,7 @@ const WAIT_NOTE = /^Attente estimée : (\d+) min$/;
 // One step of the day, as a small ticket: a stub with the time and the kind of
 // step, then the name with what matters under it. Next (first undone) = gold
 // stub and outline; done = teal, softened. The round box on the right marks it done.
-function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPress, onDeleteWithUndo }) {
+function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPress, onShowDriver, onDeleteWithUndo }) {
   const t = TYPES[activity.type] || TYPES.activite;
   const done = !!activity.done;
   const hasPrice = activity.price != null;
@@ -351,6 +353,8 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
   // a step that is not done yet and has an address or a position can be gone to
   const goUrl = done ? null : directionsUrl(activity, Platform.OS);
   const goThere = () => Linking.openURL(goUrl).catch(() => Alert.alert("Impossible d'ouvrir l'application de cartes"));
+  // the address held out to a driver: for a step with a place that is not done yet
+  const card = done || idea ? null : driverCard(activity);
 
   return (
     <View style={styles.stepWrap}>
@@ -378,7 +382,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
               <View style={styles.stepTitleRow}>
                 <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{name}</Text>
               </View>
-              {place || liveWait || estimate || activity.confirmationCode || hasPrice || goUrl ? (
+              {place || liveWait || estimate || activity.confirmationCode || hasPrice || goUrl || card ? (
                 <View style={styles.detailLine}>
                   {place ? (
                     <View style={styles.metaLine}>
@@ -394,6 +398,12 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
                     <Pressable onPress={goThere} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Y aller : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
                       <Ionicons name="navigate" size={13} color={THEME.blue} />
                       <Text style={[type.caption, { color: THEME.blue }]}>Y aller</Text>
+                    </Pressable>
+                  ) : null}
+                  {card ? (
+                    <Pressable onPress={() => onShowDriver(card)} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Montrer l'adresse au chauffeur : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
+                      <Ionicons name="car-outline" size={14} color={THEME.blue} />
+                      <Text style={[type.caption, { color: THEME.blue }]}>Montrer</Text>
                     </Pressable>
                   ) : null}
                 </View>

@@ -8,6 +8,7 @@ import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { splitTitlePlace } from "../lib/script";
 import { directionsUrl } from "../lib/map";
+import { driverCard } from "../lib/driverCard";
 import { isPdfDoc, openDocumentFile } from "../lib/documents";
 import { getTrip, toggleActivityDone } from "../lib/trips";
 import { tripStatus, tripRange, formatFullDate, formatShortDate, daysUntilLabel, isoDate } from "../lib/dates";
@@ -158,7 +159,7 @@ export default function TodayScreen({ route, navigation }) {
           />
         ) : null}
 
-        {next ? <NextCard step={next} trip={trip} countdown={countdown} busy={busy} onGo={() => goThere(next)} onDone={() => markDone(next)} onEdit={() => editStep(next)} /> : null}
+        {next ? <NextCard step={next} trip={trip} countdown={countdown} busy={busy} onGo={() => goThere(next)} onDone={() => markDone(next)} onEdit={() => editStep(next)} onShowDriver={(card) => navigation.navigate("ShowDriver", card)} /> : null}
 
         {allDone ? (
           <View style={styles.finished} accessible accessibilityLabel="Journée terminée, tout est fait">
@@ -254,10 +255,11 @@ export default function TodayScreen({ route, navigation }) {
 }
 
 // The step to do now: the time it is due at, how far away that is, and the two things to do about it.
-function NextCard({ step, trip, countdown, busy, onGo, onDone, onEdit }) {
+function NextCard({ step, trip, countdown, busy, onGo, onDone, onEdit, onShowDriver }) {
   const t = TYPES[step.type] || TYPES.activite;
   const { name, place } = stepText(step);
   const canGo = !!directionsUrl(step, Platform.OS);
+  const card = driverCard(step);
   const hasPrice = step.price != null;
   const label = `Prochaine étape : ${step.title}${step.time ? ", " + step.time : ""}${countdown ? ", " + countdown.label : ""}`;
   return (
@@ -310,6 +312,11 @@ function NextCard({ step, trip, countdown, busy, onGo, onDone, onEdit }) {
           style={canGo ? styles.actionDone : styles.actionGo}
         />
       </View>
+      {card ? (
+        <View style={styles.showRow}>
+          <Button title="Montrer l'adresse au chauffeur" icon="car-outline" variant="secondary" size="sm" full onPress={() => onShowDriver(card)} accessibilityLabel={`Montrer l'adresse au chauffeur : ${step.title}`} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -359,6 +366,7 @@ const styles = themedStyles(() => ({
   actions: { flexDirection: "row", gap: space.sm, paddingHorizontal: space.lg, paddingBottom: space.lg },
   actionGo: { flex: 1.4 },
   actionDone: { flex: 1 },
+  showRow: { paddingHorizontal: space.lg, paddingBottom: space.lg, marginTop: -space.sm },
 
   finished: { alignItems: "center", gap: space.sm, paddingVertical: space.xl },
 

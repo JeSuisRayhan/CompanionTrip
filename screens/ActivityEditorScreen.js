@@ -25,6 +25,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
   const [price, setPrice] = useState(activity?.price != null ? String(activity.price) : "");
   const [note, setNote] = useState(activity?.note || "");
   const [address, setAddress] = useState(activity?.address || "");
+  const [localAddress, setLocalAddress] = useState(activity?.localAddress || "");
   const [confirmationCode, setConfirmationCode] = useState(activity?.confirmationCode || "");
   const [transportMode, setTransportMode] = useState(activity?.transportMode || null);
   const [outdoor, setOutdoor] = useState(!!activity?.outdoor);
@@ -80,6 +81,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
         price: !isNaN(parsedPrice) ? parsedPrice : null,
         note: note.trim(),
         address: address.trim() || null,
+        localAddress: localAddress.trim() || null,
         confirmationCode: confirmationCode.trim() || null,
         transportMode: type === "transport" ? transportMode : null,
         outdoor: type === "activite" || type === "repas" ? outdoor : false,
@@ -198,6 +200,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
           )}
 
           <Field label="Adresse (optionnel)" value={address} onChangeText={setAddress} placeholder="12 rue de la Paix, Paris" />
+          <Field label="Adresse en langue locale, à montrer à un chauffeur (optionnel)" value={localAddress} onChangeText={setLocalAddress} placeholder="東京都新宿区歌舞伎町1-19-1" />
 
           {(type === "activite" || type === "repas") && (
             <Group style={styles.toggleGroup}>
