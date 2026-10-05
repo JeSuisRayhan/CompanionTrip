@@ -10,10 +10,10 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha } from "../lib/theme";
-import { getTrip, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
-import { resolveDayDate, formatDateLabel, formatDayLabel, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
+import { getTrip, addExpense, updateExpense, removeExpense, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
+import { resolveDayDate, formatDateLabel, formatDayLabel, formatShortDate, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
-import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, formatMoney, convertAmount } from "../lib/budget";
+import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, expensesTotal, expensesByCategory, expenseCategory, EXPENSE_CATEGORIES, formatMoney, convertAmount } from "../lib/budget";
 import { pickImage, pickPdfFile, openDocumentFile, isPdfDoc, addDocument, removeDocument, setDocumentCategory, DOCUMENT_CATEGORIES, documentCategory, suggestDocumentCategory } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
@@ -190,7 +190,7 @@ export default function TripScreen({ route, navigation }) {
       )}
       {tab === "ideas" && hasIdeasTab && <IdeasTab trip={trip} navigation={navigation} onChange={refresh} />}
       {tab === "attractions" && isParkTrip && <AttractionsTab trip={trip} navigation={navigation} onChange={refresh} />}
-      {tab === "budget" && <BudgetTab trip={trip} />}
+      {tab === "budget" && <BudgetTab trip={trip} onChange={refresh} />}
       {tab === "checklists" && <ChecklistsTab trip={trip} onChange={refresh} />}
       {tab === "documents" && (
         <DocumentsTab
@@ -651,9 +651,13 @@ const BUDGET_CATEGORIES = [
   { key: "other", label: "Autres dépenses", icon: "pricetag", tone: "pink" },
 ];
 
-function BudgetTab({ trip }) {
+function BudgetTab({ trip, onChange }) {
   const [converterOpen, setConverterOpen] = useState(false);
+  const [expenseSheet, setExpenseSheet] = useState(null); // null | { expense } (expense null = a new one)
   const total = tripActivityTotal(trip);
+  const spent = expensesTotal(trip);
+  const spentBy = expensesByCategory(trip);
+  const expenses = [...(trip.expenses || [])].reverse().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
   const showConverter = trip.currency && trip.homeCurrency && trip.currency !== trip.homeCurrency;
   const values = {
     transport: transportTotal(trip),
@@ -674,6 +678,18 @@ function BudgetTab({ trip }) {
         {inHome && <Text style={type.numeralSmall}>≈ {formatMoney(convertAmount(total, trip.rate), trip.homeCurrency)}</Text>}
         {showConverter && <Button title="Convertisseur rapide" icon="swap-horizontal" variant="secondary" size="sm" onPress={() => setConverterOpen(true)} style={{ marginTop: space.md }} />}
       </View>
+      {spent > 0 ? (
+        <View style={styles.spentBlock} accessible accessibilityLabel={`Dépensé ${formatMoney(spent, trip.currency)} sur ${formatMoney(total, trip.currency)} prévus`}>
+          <View style={styles.spentRow}>
+            <Txt variant="subhead">Dépensé</Txt>
+            <Text style={[type.numeral, spent > total && { color: THEME.stamp }]}>{formatMoney(spent, trip.currency)}</Text>
+          </View>
+          <ProgressBar value={total > 0 ? Math.min(spent / total, 1) : 1} tone={spent > total ? "stamp" : "teal"} height={6} style={{ backgroundColor: THEME.surfaceSunk }} />
+          <Text style={[type.caption, spent > total && { color: THEME.stamp }]}>
+            {spent > total ? `Dépassé de ${formatMoney(spent - total, trip.currency)} sur le prévu` : `Reste ${formatMoney(total - spent, trip.currency)} sur le prévu`}
+          </Text>
+        </View>
+      ) : null}
       <Group>
         {categories.map((c) => {
           const target = trip.budgetTargets && trip.budgetTargets[c.key];
@@ -689,6 +705,7 @@ function BudgetTab({ trip }) {
                 <View style={styles.amountCol}>
                   <Text style={[type.numeral, overTarget && { color: THEME.stamp }]}>{formatMoney(c.value, trip.currency)}</Text>
                   {inHome && c.value > 0 ? <Text style={type.caption}>≈ {formatMoney(spentInHome, trip.homeCurrency)}</Text> : null}
+                  {spentBy[c.key] > 0 ? <Text style={[type.caption, { color: THEME.teal }]}>dépensé {formatMoney(spentBy[c.key], trip.currency)}</Text> : null}
                 </View>
               }
             >
@@ -704,8 +721,104 @@ function BudgetTab({ trip }) {
           );
         })}
       </Group>
+
+      <SectionTitle title="Dépenses" count={expenses.length > 0 ? expenses.length : undefined} style={styles.expensesTitle} action={expenses.length > 0 ? { label: "Ajouter", onPress: () => setExpenseSheet({ expense: null }) } : undefined} />
+      {expenses.length === 0 ? (
+        <View style={styles.starter}>
+          <Txt variant="subhead">Notez ce que vous dépensez sur place : le total se compare au prévu.</Txt>
+          <Button title="Ajouter une dépense" icon="add" variant="secondary" size="sm" style={{ alignSelf: "flex-start" }} onPress={() => setExpenseSheet({ expense: null })} />
+        </View>
+      ) : (
+        <Group>
+          {expenses.map((e) => {
+            const cat = EXPENSE_CATEGORIES.find((c) => c.key === expenseCategory(e));
+            return (
+              <Row
+                key={e.id}
+                icon={cat.icon}
+                tone={cat.tone}
+                title={e.label}
+                subtitle={[cat.label, e.date ? formatShortDate(e.date) : null].filter(Boolean).join(" · ")}
+                accessibilityLabel={`${e.label}, ${formatMoney(e.amount, trip.currency)}`}
+                onPress={() => setExpenseSheet({ expense: e })}
+                right={
+                  <View style={styles.amountCol}>
+                    <Text style={type.numeral}>{formatMoney(e.amount, trip.currency)}</Text>
+                    {inHome ? <Text style={type.caption}>≈ {formatMoney(convertAmount(e.amount, trip.rate), trip.homeCurrency)}</Text> : null}
+                  </View>
+                }
+              />
+            );
+          })}
+        </Group>
+      )}
+
+      <ExpenseSheet
+        visible={!!expenseSheet}
+        expense={expenseSheet ? expenseSheet.expense : null}
+        currency={trip.currency}
+        onClose={() => setExpenseSheet(null)}
+        onSave={async (values) => {
+          if (expenseSheet.expense) await updateExpense(trip.id, expenseSheet.expense.id, values);
+          else await addExpense(trip.id, { ...values, date: isoToday() });
+          setExpenseSheet(null);
+          onChange();
+        }}
+        onDelete={async () => {
+          await removeExpense(trip.id, expenseSheet.expense.id);
+          setExpenseSheet(null);
+          onChange();
+        }}
+      />
       <CurrencyConverterModal visible={converterOpen} onClose={() => setConverterOpen(false)} trip={trip} />
     </TripScroll>
+  );
+}
+
+// Add or edit one expense: what, how much, which kind. Deleting is offered when editing.
+function ExpenseSheet({ visible, expense, currency, onClose, onSave, onDelete }) {
+  const [label, setLabel] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("repas");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setLabel(expense ? expense.label : "");
+    setAmount(expense ? String(expense.amount).replace(".", ",") : "");
+    setCategory(expense ? expenseCategory(expense) : "repas");
+    setError("");
+    setBusy(false);
+  }, [visible, expense]);
+
+  async function save() {
+    const n = parseFloat(String(amount).replace(/\s/g, "").replace(",", "."));
+    if (!(n > 0)) return setError("Indiquez un montant.");
+    setBusy(true);
+    try {
+      await onSave({ label, amount: n, category });
+    } catch (e) {
+      setError("Échec de l'enregistrement.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet visible={visible} onClose={onClose} title={expense ? "Modifier la dépense" : "Nouvelle dépense"}>
+      <Field label={`Montant (${currency})`} value={amount} onChangeText={setAmount} placeholder="0" keyboardType="decimal-pad" error={error || undefined} />
+      <Field label="Description (optionnel)" value={label} onChangeText={setLabel} placeholder="Ex : ramen, taxi, souvenirs" />
+      <Text style={[type.caption, { marginBottom: space.sm }]}>Catégorie</Text>
+      <View style={styles.categoryChips}>
+        {EXPENSE_CATEGORIES.map((c) => (
+          <Chip key={c.key} label={c.label} icon={c.icon} tone={c.tone} selected={category === c.key} onPress={() => setCategory(c.key)} />
+        ))}
+      </View>
+      <View style={styles.sheetButtons}>
+        {expense ? <Button title="Supprimer" variant="secondary" tone="stamp" disabled={busy} style={{ flex: 1 }} onPress={onDelete} /> : <Button title="Annuler" variant="secondary" disabled={busy} style={{ flex: 1 }} onPress={onClose} />}
+        <Button title="Enregistrer" loading={busy} style={{ flex: 1 }} onPress={save} />
+      </View>
+    </Sheet>
   );
 }
 
@@ -1290,6 +1403,9 @@ const styles = themedStyles(() => ({
   tileTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
 
   totalBlock: { alignItems: "center", gap: space.xs, paddingTop: space.md, paddingBottom: space.xl },
+  spentBlock: { gap: space.sm, marginBottom: space.xl },
+  spentRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  expensesTitle: { marginTop: space.xl },
   amountCol: { alignItems: "flex-end", gap: 2 },
   totalValue: { ...type.numeralLarge, color: THEME.gold },
 
