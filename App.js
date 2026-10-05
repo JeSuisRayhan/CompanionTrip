@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, useSyncExternalStore } from "react";
-import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { View } from "react-native";
+import { View, AppState, Linking } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
+import * as Notifications from "expo-notifications";
 import { SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
@@ -15,6 +16,9 @@ import { loadPalette } from "./lib/appearance";
 import { installErrorHandlers } from "./lib/errorLog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { hasPin } from "./lib/pin";
+import { onTripsSaved } from "./lib/storage";
+import { scheduleStepReminderSync } from "./lib/notifications";
+import { targetFromResponse } from "./lib/stepReminders";
 import SplashOverlay, { SPLASH_BACKGROUND } from "./components/SplashOverlay";
 // imported here so the park alert task is defined whenever the app starts, even in the background
 import { syncParkAlertTask } from "./lib/parkAlertsTask";
@@ -61,6 +65,10 @@ const buildNavTheme = () => ({
 // splash to control: the calls then do nothing.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Lets a tapped notification open a screen from outside the navigator.
+const navigationRef = createNavigationContainerRef();
+let lastHandledNotification = null;
+
 export default function App() {
   const [ready, setReady] = useState(false);
   const [overlay, setOverlay] = useState(true);
@@ -100,6 +108,45 @@ function AppContent({ onReady }) {
     })();
   }, []);
 
+  // Reminders before each step: planned again whenever the trips change and whenever the app comes back to the
+  // front; a tap on one opens the day (or the maps app, from its "Y aller" button).
+  const pendingTarget = useRef(null);
+  useEffect(() => {
+    onTripsSaved(() => scheduleStepReminderSync());
+    scheduleStepReminderSync(3000);
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state === "active") scheduleStepReminderSync(1000);
+    });
+    const open = (response) => {
+      const key = response && response.notification ? `${response.notification.request.identifier}:${response.actionIdentifier}` : null;
+      if (key && key === lastHandledNotification) return;
+      const target = targetFromResponse(response);
+      if (!target) return;
+      lastHandledNotification = key;
+      if (target.type === "url") {
+        Linking.openURL(target.url).catch(() => {});
+      } else if (navigationRef.isReady()) {
+        navigationRef.navigate(target.screen, target.params);
+      } else {
+        pendingTarget.current = target; // the app was closed: opened once the navigator is up
+      }
+    };
+    let sub = null;
+    try {
+      sub = Notifications.addNotificationResponseReceivedListener(open);
+      Notifications.getLastNotificationResponseAsync()
+        .then((response) => response && open(response))
+        .catch(() => {});
+    } catch (e) {
+      // a build without notifications: no reminders to open
+    }
+    return () => {
+      onTripsSaved(null);
+      appState.remove();
+      if (sub) sub.remove();
+    };
+  }, []);
+
   const ready = !checking && fontsLoaded;
   useEffect(() => {
     if (ready) onReady();
@@ -116,6 +163,14 @@ function AppContent({ onReady }) {
       <ErrorBoundary>
         <NavigationContainer
           key={themeVersion}
+          ref={navigationRef}
+          onReady={() => {
+            const target = pendingTarget.current;
+            if (target) {
+              pendingTarget.current = null;
+              navigationRef.navigate(target.screen, target.params);
+            }
+          }}
           theme={buildNavTheme()}
           initialState={navState.current}
           onStateChange={(state) => {
