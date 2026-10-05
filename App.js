@@ -17,7 +17,7 @@ import { installErrorHandlers } from "./lib/errorLog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PaperGrain from "./components/PaperGrain";
 import { hasPin } from "./lib/pin";
-import { onTripsSaved } from "./lib/storage";
+import { onTripsSaved, removeSetting } from "./lib/storage";
 import { scheduleStepReminderSync } from "./lib/notifications";
 import { targetFromResponse } from "./lib/stepReminders";
 import { useSharedContent } from "./lib/useSharedContent";
@@ -110,6 +110,7 @@ function AppContent({ onReady }) {
   useEffect(() => {
     (async () => {
       await loadPalette();
+      removeSetting("anthropicApiKey").catch(() => {}); // the app no longer uses an AI: a key saved by an older version is erased
       syncParkAlertTask(); // registers or removes the background check to match the trips' settings
       const pinSet = await hasPin();
       setLocked(pinSet);

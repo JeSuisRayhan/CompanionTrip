@@ -6,10 +6,9 @@ import * as Clipboard from "expo-clipboard";
 
 import { THEME, space, layout, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
-import { getSetting } from "../lib/storage";
 import { getTrip, addConfirmationSteps } from "../lib/trips";
-import { readConfirmation } from "../lib/confirmation";
-import { MAX_FILES, pickScreenshots, pickPdf, loadFiles } from "../lib/confirmationFiles";
+import { readConfirmations } from "../lib/confirmation";
+import { MAX_FILES, pickScreenshots, pickPdf, readFiles } from "../lib/confirmationFiles";
 import { addDocument } from "../lib/documents";
 import { resolveDayDate, formatDayLabel, formatShortDate, formatDateRange, addDaysISO } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
@@ -30,42 +29,54 @@ function summarize(stats) {
 // The icon of a step read: its mode of transport when it has one.
 const MODE_ICON = { avion: "airplane", train: "train", bus: "bus", bateau: "boat" };
 
-function errorText(e, hasFiles) {
-  if (e && e.code === "NO_API_KEY") return "Une capture ou un PDF se lit avec l'IA : ajoutez votre clé Anthropic dans les Réglages.";
-  if (e && (e.code === "TOO_BIG" || e.code === "UNREADABLE")) return e.message;
-  return hasFiles ? "La lecture avec l'IA a échoué. Vérifiez la connexion, la clé des Réglages et que les fichiers sont lisibles." : "La lecture avec l'IA a échoué. Vérifiez la connexion et la clé des Réglages.";
+// A file that could not be read says why (our own errors carry a message made for the person).
+function errorText(e) {
+  if (e && e.code && e.message) return e.message;
+  return "La lecture a échoué. Vérifiez que les fichiers sont lisibles.";
+}
+
+// Nothing was recognised: say what happened to each file read, or what the text lacks.
+function nothingText(files) {
+  const empty = files.filter((f) => !f.text.trim());
+  if (empty.length) {
+    return empty
+      .map((f) =>
+        f.kind === "pdf"
+          ? `« ${f.name} » ne contient pas de texte (c'est un scan) : ouvrez-le et faites-en une capture d'écran.`
+          : `Aucun texte reconnu dans « ${f.name} » : vérifiez que la capture montre toute la confirmation, bien nette.`
+      )
+      .join(" ");
+  }
+  if (files.length) return "Le texte est lu (ci-dessus) mais aucune réservation n'y est reconnue. Corrigez-le si besoin, il faut au moins le nom et la date, puis relancez la lecture.";
+  return "Aucune réservation reconnue. Le texte doit contenir au moins le nom et la date.";
 }
 
 // A booking confirmation pasted from an email: what is read from it is shown first, with the day each step goes
 // to, and only what the person keeps is added.
 export default function ImportConfirmationScreen({ route, navigation }) {
-  // initialText / initialFiles: what another app shared; autoRead: read it right away (a text can be read without the key,
-  // pictures and PDFs need it)
+  // initialText / initialFiles: what another app shared; autoRead: read it right away
   const { tripId, initialText, initialFiles, autoRead } = route.params;
   const [trip, setTrip] = useState(null);
-  const [hasKey, setHasKey] = useState(null); // null until the settings are read
   const [text, setText] = useState(initialText || "");
   const [files, setFiles] = useState(initialFiles || []); // [{ uri, name, kind, mime }]
   const [keepOriginal, setKeepOriginal] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [items, setItems] = useState(null); // the steps read: { ...step, include, dayId }
-  const [source, setSource] = useState("local");
   const [done, setDone] = useState(null);
   const autoStarted = useRef(false);
 
   useEffect(() => {
     (async () => {
       setTrip(await getTrip(tripId));
-      setHasKey(!!(await getSetting("anthropicApiKey")));
     })();
   }, [tripId]);
 
   useEffect(() => {
-    if (!autoRead || autoStarted.current || !trip || hasKey == null) return;
+    if (!autoRead || autoStarted.current || !trip) return;
     autoStarted.current = true;
-    if (files.length ? hasKey : !!text.trim()) read();
-  }, [trip, hasKey]);
+    if (text.trim() || files.length) read();
+  }, [trip]);
 
   const close = () => navigation.goBack();
 
@@ -99,8 +110,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
     }
   }
 
-  function show(steps, from) {
-    setSource(from);
+  function show(steps) {
     setItems(steps.map((s) => ({ ...s, include: !!s.date, dayId: null })));
   }
 
@@ -108,15 +118,20 @@ export default function ImportConfirmationScreen({ route, navigation }) {
     setError("");
     setBusy(true);
     try {
-      const key = await getSetting("anthropicApiKey");
-      const loaded = files.length ? await loadFiles(files) : [];
-      const res = await readConfirmation({ text, files: loaded, trip, apiKey: key || null });
-      if (res.steps.length) show(res.steps, res.source);
-      else if (files.length) setError("Aucune réservation reconnue dans ces fichiers. Vérifiez qu'ils montrent bien la confirmation.");
-      else if (!key) setError("Aucune réservation reconnue. Le texte doit contenir au moins le nom et la date. Pour les mises en page plus rares, ajoutez votre clé Anthropic dans les Réglages : la lecture se fera alors avec l'IA.");
-      else setError("Aucune réservation reconnue, même avec l'IA. Vérifiez que le texte est bien celui de la confirmation.");
+      const fromFiles = files.length ? await readFiles(files) : [];
+      const steps = readConfirmations([text, ...fromFiles.map((f) => f.text)].filter((t) => t.trim()), { trip });
+      if (steps.length) {
+        show(steps);
+      } else {
+        // what was read in the files goes into the field: the person can correct it (a misread letter) and read again
+        if (fromFiles.some((f) => f.text.trim())) {
+          setText([text.trim(), ...fromFiles.map((f) => f.text)].filter(Boolean).join("\n\n"));
+          setFiles([]);
+        }
+        setError(nothingText(fromFiles));
+      }
     } catch (e) {
-      setError(errorText(e, files.length > 0));
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }
@@ -192,7 +207,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
         <ModalHeader title="Ce qui a été lu" left={{ label: "Retour", onPress: () => setItems(null) }} />
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <Txt variant="subhead" style={styles.intro}>
-            {source === "ai" ? "Lu avec l'IA. " : ""}Vérifiez, décochez ce qui ne va pas : seul ce qui est coché est ajouté. Vous pourrez tout modifier ensuite.
+            Vérifiez, décochez ce qui ne va pas : seul ce qui est coché est ajouté. Vous pourrez tout modifier ensuite.
           </Txt>
           {items.map((it, index) => {
             const t = TYPES[it.type] || TYPES.activite;
@@ -293,14 +308,9 @@ export default function ImportConfirmationScreen({ route, navigation }) {
           />
           <View style={styles.actions}>
             <Button title="Coller" icon="clipboard-outline" variant="secondary" size="sm" onPress={pasteFromClipboard} />
-            <Button title="Capture d'écran" icon="image-outline" variant="secondary" size="sm" disabled={!hasKey || files.length >= MAX_FILES} onPress={chooseScreenshots} />
-            <Button title="PDF" icon="document-outline" variant="secondary" size="sm" disabled={!hasKey || files.length >= MAX_FILES} onPress={choosePdf} />
+            <Button title="Capture d'écran" icon="image-outline" variant="secondary" size="sm" disabled={files.length >= MAX_FILES} onPress={chooseScreenshots} />
+            <Button title="PDF" icon="document-outline" variant="secondary" size="sm" disabled={files.length >= MAX_FILES} onPress={choosePdf} />
           </View>
-          {hasKey === false ? (
-            <Txt variant="caption" color="inkFaint" style={styles.keyHint}>
-              Les captures d'écran et les PDF se lisent avec l'IA : ajoutez votre clé Anthropic dans les Réglages.
-            </Txt>
-          ) : null}
           {files.length ? (
             <Group style={styles.files}>
               {files.map((f) => (
@@ -326,7 +336,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
             <Row icon="restaurant-outline" tone="gold" title="Restaurant ou billet" subtitle="Le jour, l'heure, l'adresse et le code." accessibilityLabel="Restaurant ou billet : le jour, l'heure, l'adresse et le code" />
           </Group>
           <Txt variant="caption" color="inkFaint" style={styles.note}>
-            Avec votre clé Anthropic (Réglages), l'IA lit le texte et les fichiers, qui lui sont envoyés. Sans clé, seuls les textes aux mises en page courantes sont lus, sur le téléphone. Seuls les prix en euros sont lus.
+            La lecture se fait sur le téléphone, rien n'est envoyé. Les captures sont lues par la reconnaissance de texte du téléphone : plus elles sont nettes, meilleur est le résultat. Seuls les prix en euros sont lus.
           </Txt>
         </ScrollView>
         <View style={styles.footer}>
@@ -344,7 +354,6 @@ const styles = themedStyles(() => ({
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxl },
   intro: { marginBottom: space.lg },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
-  keyHint: { marginTop: space.sm },
   files: { marginTop: space.md },
   error: { marginTop: space.md },
   address: { marginTop: 2 },
