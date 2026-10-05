@@ -355,6 +355,28 @@ function TodayCard({ plan, onPress }) {
   );
 }
 
+// The way into the summary once the trip is over.
+function RecapCard({ trip, onPress }) {
+  const photos = (trip.souvenirs || []).length;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Voir le bilan du voyage et les souvenirs"
+      style={({ pressed }) => [styles.todayCard, round("lg"), pressed && { opacity: 0.85 }]}
+    >
+      <View style={styles.todayIcon}>
+        <Ionicons name="images" size={22} color={THEME.onGold} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={type.caption}>Voyage terminé</Text>
+        <Text style={type.name} numberOfLines={2}>{photos > 0 ? `Bilan et ${photos} photo${photos > 1 ? "s" : ""} souvenir${photos > 1 ? "s" : ""}` : "Voir le bilan et ajouter des souvenirs"}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={THEME.inkFaint} />
+    </Pressable>
+  );
+}
+
 function DayTicket({ day, index, date, state, isPark, trip, onPress, onMenu, onLive }) {
   const count = day.activities.length;
   const kinds = new Set(day.activities.map((a) => a.type));
@@ -427,8 +449,10 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
   }
   function chooseDocuments() {
     const count = (trip.documents || []).length;
-    if (!count) return sendTripFile(false);
-    Alert.alert("Joindre les documents ?", `${count} document${count > 1 ? "s" : ""} (photos de billets, réservations…). Ne les envoyez qu'à des personnes de confiance.`, [
+    const photos = (trip.souvenirs || []).length;
+    if (!count && !photos) return sendTripFile(false);
+    const parts = [count ? `${count} document${count > 1 ? "s" : ""} (photos de billets, réservations…)` : null, photos ? `${photos} photo${photos > 1 ? "s" : ""} souvenir${photos > 1 ? "s" : ""}` : null].filter(Boolean);
+    Alert.alert("Joindre les documents ?", `${parts.join(" et ")}. Ne les envoyez qu'à des personnes de confiance.`, [
       { text: "Avec les documents", onPress: () => sendTripFile(true) },
       { text: "Sans", onPress: () => sendTripFile(false) },
       { text: "Annuler", style: "cancel" },
@@ -507,6 +531,7 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
           { icon: "calendar-outline", title: "Décaler les dates", subtitle: "Tout le voyage, d'un nombre de jours", onPress: onShiftDates },
           { icon: "document-text-outline", title: "Importer un script", subtitle: "Prix, hôtels et étapes d'un programme collé", onPress: () => navigation.navigate("ImportScript", { tripId: trip.id }) },
           { icon: "mail-outline", title: "Coller une confirmation", subtitle: "Vol, train, hôtel, restaurant ou billet", onPress: () => navigation.navigate("ImportConfirmation", { tripId: trip.id }) },
+          { icon: "images-outline", title: "Bilan et souvenirs", subtitle: "Ce qui a été fait, le budget, les photos", onPress: () => navigation.navigate("TripRecap", { tripId: trip.id }) },
           { icon: "share-outline", title: "Partager", subtitle: "En texte, ou en fichier à importer", onPress: shareTrip },
           { icon: "download-outline", title: "Exporter vers un calendrier", subtitle: "Fichier .ics", onPress: () => shareTripAsICS(trip) },
           !isPark && { icon: "partly-sunny-outline", title: "Réorganiser selon la météo", subtitle: "Déplacer les sorties en extérieur", onPress: () => navigation.navigate("WeatherReorg", { tripId: trip.id }) },
@@ -518,6 +543,8 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
         const plan = todayPlan(trip, today, new Date());
         return plan ? <TodayCard plan={plan} onPress={() => navigation.navigate("Today", { tripId: trip.id })} /> : null;
       })() : null}
+
+      {!isPark && !q && tripStatus(trip, today) === "past" ? <RecapCard trip={trip} onPress={() => navigation.navigate("TripRecap", { tripId: trip.id })} /> : null}
 
       {(() => {
         const filtered = trip.days

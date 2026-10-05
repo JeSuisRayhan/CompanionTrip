@@ -219,7 +219,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
             <Row icon="restaurant-outline" tone="gold" title="Restaurant ou billet" subtitle="Le jour, l'heure, l'adresse et le code." accessibilityLabel="Restaurant ou billet : le jour, l'heure, l'adresse et le code" />
           </Group>
           <Txt variant="caption" color="inkFaint" style={styles.note}>
-            Lecture faite sur le téléphone, sans envoyer le texte nulle part. Seuls les prix en euros sont lus.
+            Lecture faite sur le téléphone. Seuls les prix en euros sont lus. Si rien n'est reconnu et que votre clé Anthropic est dans les Réglages, le texte est envoyé à l'IA pour être lu.
           </Txt>
         </ScrollView>
         <View style={styles.footer}>

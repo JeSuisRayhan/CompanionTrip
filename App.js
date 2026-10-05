@@ -43,6 +43,7 @@ import PlanGeneratorScreen from "./screens/PlanGeneratorScreen";
 import ImportIdeasScreen from "./screens/ImportIdeasScreen";
 import ImportScriptScreen from "./screens/ImportScriptScreen";
 import ImportConfirmationScreen from "./screens/ImportConfirmationScreen";
+import RecapScreen from "./screens/RecapScreen";
 import LockScreen from "./screens/LockScreen";
 import ErrorLogScreen from "./screens/ErrorLogScreen";
 
@@ -224,6 +225,7 @@ function AppContent({ onReady }) {
             <Stack.Screen name="ImportIdeas" component={ImportIdeasScreen} options={{ headerShown: false, presentation: "modal" }} />
             <Stack.Screen name="ImportScript" component={ImportScriptScreen} options={{ headerShown: false, presentation: "modal" }} />
             <Stack.Screen name="ImportConfirmation" component={ImportConfirmationScreen} options={{ headerShown: false, presentation: "modal" }} />
+            <Stack.Screen name="TripRecap" component={RecapScreen} options={{ headerShown: false }} />
           </Stack.Navigator>
         </NavigationContainer>
       </ErrorBoundary>
