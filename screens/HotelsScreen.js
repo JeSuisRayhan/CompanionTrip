@@ -8,6 +8,7 @@ import { getTrip, listHotelStays } from "../lib/trips";
 import { saveHotelStay, deleteHotelStay } from "../lib/ideas";
 import { addDaysISO, formatDateRange } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
+import { driverCard } from "../lib/driverCard";
 import { Txt, Button, IconButton, Group, Row, Field, EmptyState, Sheet, BackHeader, Fab } from "../components/ui";
 import DateField from "../components/DateField";
 
@@ -92,7 +93,19 @@ export default function HotelsScreen({ route, navigation }) {
                   }
                   accessibilityLabel={`${stay.name}, modifier`}
                   onPress={() => setEditing(stay)}
-                  right={<IconButton icon="trash-outline" label={`Supprimer ${stay.name}`} size={18} onPress={() => confirmDelete(stay)} />}
+                  right={
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      {driverCard({ title: stay.name, address: stay.address, localAddress: stay.localAddress }) ? (
+                        <IconButton
+                          icon="car-outline"
+                          label={`Montrer l'adresse de ${stay.name} au chauffeur`}
+                          size={18}
+                          onPress={() => navigation.navigate("ShowDriver", driverCard({ title: stay.name, address: stay.address, localAddress: stay.localAddress }))}
+                        />
+                      ) : null}
+                      <IconButton icon="trash-outline" label={`Supprimer ${stay.name}`} size={18} onPress={() => confirmDelete(stay)} />
+                    </View>
+                  }
                   style={styles.stayRow}
                 >
                   {stay.address ? (

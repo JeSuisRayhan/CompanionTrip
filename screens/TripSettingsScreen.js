@@ -7,11 +7,12 @@ import { useFocusEffect } from "@react-navigation/native";
 import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { CURRENCY_PRESETS, suggestRate, BUDGET_TYPES } from "../lib/constants";
 import { getTrip, updateTripSettings } from "../lib/trips";
+import { reminderSettings, REMINDER_MINUTES } from "../lib/stepReminders";
 import { fetchRate } from "../lib/rates";
 import { formatShortDate } from "../lib/dates";
-import { scheduleDailySummaries, scheduleDepartureReminder } from "../lib/notifications";
+import { scheduleDailySummaries, scheduleDepartureReminder, requestNotificationPermission } from "../lib/notifications";
 import { requestGeofencingPermissions, scheduleHotelProximityAlerts, stopHotelProximityAlerts, isHotelProximityActiveForTrip, hotelStops } from "../lib/geofencing";
-import { Txt, Button, Group, Row, SectionTitle, Field, ModalHeader, Sheet } from "../components/ui";
+import { Txt, Button, Chip, Group, Row, SectionTitle, Field, ModalHeader, Sheet } from "../components/ui";
 
 const CATEGORY_LABELS = { transport: "Transport", hotel: "Hébergement", repas: "Repas" };
 
@@ -34,6 +35,8 @@ export default function TripSettingsScreen({ route, navigation }) {
   const [geofenceBusy, setGeofenceBusy] = useState(false);
   const [geofenceStatus, setGeofenceStatus] = useState("");
   const [geofenceEnabled, setGeofenceEnabled] = useState(false);
+  const [stepRem, setStepRem] = useState({ on: false, minutes: 30 });
+  const [stepRemStatus, setStepRemStatus] = useState("");
 
   useFocusEffect(
     useCallback(() => {
@@ -59,6 +62,7 @@ export default function TripSettingsScreen({ route, navigation }) {
           hotel: t.budgetTargets?.hotel != null ? String(t.budgetTargets.hotel) : "",
           repas: t.budgetTargets?.repas != null ? String(t.budgetTargets.repas) : "",
         });
+        setStepRem(reminderSettings(t));
         setLoading(false);
         setGeofenceEnabled(await isHotelProximityActiveForTrip(tripId));
       })();
@@ -87,6 +91,21 @@ export default function TripSettingsScreen({ route, navigation }) {
     } finally {
       setRateBusy(false);
     }
+  }
+
+  // The reminder before each step: saved at once; the notifications follow on their own (the app plans them
+  // again whenever the trips are saved).
+  async function changeStepReminders(next) {
+    setStepRemStatus("");
+    if (next.on) {
+      const permission = await requestNotificationPermission();
+      if (permission !== "granted") {
+        setStepRemStatus("Autorisation refusée : activez les notifications dans les réglages du téléphone.");
+        return;
+      }
+    }
+    setStepRem(next);
+    await updateTripSettings(tripId, { stepReminders: { enabled: next.on, minutes: next.minutes } });
   }
 
   async function scheduleReminders() {
@@ -275,6 +294,48 @@ export default function TripSettingsScreen({ route, navigation }) {
           <Field label="Notes" value={emergency.notes} onChangeText={(v) => setEmergency((e) => ({ ...e, notes: v }))} multiline style={styles.fieldTight} />
         </Section>
 
+        <Section title="Rappel avant chaque étape">
+          <Txt variant="subhead" style={styles.intro}>
+            Une notification quelques minutes avant chaque étape qui a une heure, avec un bouton « Y aller » quand elle a une adresse. Les 30 prochaines étapes sont programmées et la liste se met à jour toute seule.
+          </Txt>
+          <Group>
+            <Row
+              icon="notifications-outline"
+              tone={stepRem.on ? "teal" : "neutral"}
+              title="Rappel d'étape"
+              subtitle={stepRem.on ? `${stepRem.minutes} min avant` : "Désactivé"}
+              right={
+                <Switch
+                  value={stepRem.on}
+                  onValueChange={(on) => changeStepReminders({ ...stepRem, on })}
+                  accessibilityLabel="Rappel avant chaque étape"
+                  trackColor={{ false: THEME.bgRaised, true: THEME.teal }}
+                  thumbColor={THEME.ink}
+                  ios_backgroundColor={THEME.bgRaised}
+                />
+              }
+            />
+          </Group>
+          {stepRem.on ? (
+            <View style={styles.chipRow}>
+              {REMINDER_MINUTES.map((m) => (
+                <Chip
+                  key={m}
+                  label={`${m} min avant`}
+                  selected={stepRem.minutes === m}
+                  tone="teal"
+                  onPress={() => changeStepReminders({ ...stepRem, minutes: m })}
+                />
+              ))}
+            </View>
+          ) : null}
+          {stepRemStatus ? (
+            <Txt variant="caption" color="stamp" style={styles.note} accessibilityLiveRegion="polite">
+              {stepRemStatus}
+            </Txt>
+          ) : null}
+        </Section>
+
         <Section title="Rappels">
           <Txt variant="subhead" style={styles.intro}>
             Programme un résumé chaque matin du voyage (8h) et un rappel de la checklist avant-départ 3 jours avant. À relancer si vous modifiez beaucoup le programme.
@@ -383,6 +444,7 @@ const styles = themedStyles(() => ({
   section: { marginTop: space.xxl },
   intro: { marginBottom: space.lg },
   note: { marginTop: space.md },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.md },
   fieldTight: { marginBottom: 0 },
   numericInput: { ...type.numeral },
   rateRow: { flexDirection: "row", alignItems: "flex-end", gap: space.md },

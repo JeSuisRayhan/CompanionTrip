@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useContext } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking, Alert, Platform } from "react-native";
 import { SafeAreaView, SafeAreaInsetsContext } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
@@ -9,15 +9,20 @@ import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { scopedId } from "../lib/parkDay";
 import { splitTitlePlace } from "../lib/script";
+import { directionsUrl } from "../lib/map";
+import { driverCard } from "../lib/driverCard";
+import { isPdfDoc } from "../lib/documents";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
+import { dayLegs } from "../lib/travelTime";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import { fetchQueueTimes, liveByRideId } from "../lib/queueTimes";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
 import UndoToast from "../components/UndoToast";
 import WaitBadge from "../components/WaitBadge";
 import QueueTimesCredit from "../components/QueueTimesCredit";
+import LegLine from "../components/LegLine";
 import { Txt, Button, IconButton, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
@@ -134,6 +139,8 @@ export default function DayDetailScreen({ route, navigation }) {
     if (!b.time) return -1;
     return a.time.localeCompare(b.time);
   });
+  // how far each step is from the one before it (not on a park day: the park has its own walking times)
+  const legs = trip.tripType === "park" || day.dayType === "park" ? null : dayLegs(trip, sorted);
   // Steps of a normal day can be located from the map; a park day only has its attractions' positions.
   const hasMapPin = day.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng)) || (trip.tripType !== "park" && day.dayType !== "park" && day.activities.length > 0);
   const doneCount = day.activities.filter((a) => a.done).length;
@@ -263,17 +270,20 @@ export default function DayDetailScreen({ route, navigation }) {
         ) : (
           <View>
             {sorted.map((a, i) => (
-              <ActivityRow
-                key={a.id}
-                activity={a}
-                trip={trip}
-                idea={parkIdeaOf(a)}
-                ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
-                isCurrent={i === firstUndoneIndex}
-                onToggleDone={() => onToggleDone(a.id)}
-                onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
-                onDeleteWithUndo={() => onDeleteWithUndo(a)}
-              />
+              <React.Fragment key={a.id}>
+                {legs && legs.get(a.id) ? <LegLine compact leg={legs.get(a.id)} arriveAt={a.time} /> : null}
+                <ActivityRow
+                  activity={a}
+                  trip={trip}
+                  idea={parkIdeaOf(a)}
+                  ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
+                  isCurrent={i === firstUndoneIndex}
+                  onToggleDone={() => onToggleDone(a.id)}
+                  onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
+                  onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
+                  onDeleteWithUndo={() => onDeleteWithUndo(a)}
+                />
+              </React.Fragment>
             ))}
           </View>
         )}
@@ -327,7 +337,7 @@ const WAIT_NOTE = /^Attente estimée : (\d+) min$/;
 // One step of the day, as a small ticket: a stub with the time and the kind of
 // step, then the name with what matters under it. Next (first undone) = gold
 // stub and outline; done = teal, softened. The round box on the right marks it done.
-function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPress, onDeleteWithUndo }) {
+function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPress, onShowDriver, onDeleteWithUndo }) {
   const t = TYPES[activity.type] || TYPES.activite;
   const done = !!activity.done;
   const hasPrice = activity.price != null;
@@ -346,6 +356,11 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
   // the usual "activité" pin says nothing: an icon only for the other kinds, or when there is no time to show
   const showIcon = !activity.time || activity.type !== "activite";
   const label = `${activity.title}${activity.time ? ", " + activity.time : ""}${done ? ", fait" : isCurrent ? ", à suivre" : ""}`;
+  // a step that is not done yet and has an address or a position can be gone to
+  const goUrl = done ? null : directionsUrl(activity, Platform.OS);
+  const goThere = () => Linking.openURL(goUrl).catch(() => Alert.alert("Impossible d'ouvrir l'application de cartes"));
+  // the address held out to a driver: for a step with a place that is not done yet
+  const card = done || idea ? null : driverCard(activity);
 
   return (
     <View style={styles.stepWrap}>
@@ -373,7 +388,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
               <View style={styles.stepTitleRow}>
                 <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{name}</Text>
               </View>
-              {place || liveWait || estimate || activity.confirmationCode || hasPrice ? (
+              {place || liveWait || estimate || activity.confirmationCode || hasPrice || goUrl || card ? (
                 <View style={styles.detailLine}>
                   {place ? (
                     <View style={styles.metaLine}>
@@ -385,6 +400,18 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
                   {estimate ? <Badge label={`~${estimate} min`} icon="hourglass-outline" tone="neutral" /> : null}
                   {activity.confirmationCode ? <Badge label={activity.confirmationCode} icon="key-outline" tone="neutral" /> : null}
                   {hasPrice ? <Text style={styles.stepPrice}>{formatMoney(activity.price, trip.currency)}</Text> : null}
+                  {goUrl ? (
+                    <Pressable onPress={goThere} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Y aller : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
+                      <Ionicons name="navigate" size={13} color={THEME.blue} />
+                      <Text style={[type.caption, { color: THEME.blue }]}>Y aller</Text>
+                    </Pressable>
+                  ) : null}
+                  {card ? (
+                    <Pressable onPress={() => onShowDriver(card)} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Montrer l'adresse au chauffeur : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
+                      <Ionicons name="car-outline" size={14} color={THEME.blue} />
+                      <Text style={[type.caption, { color: THEME.blue }]}>Montrer</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
               {note ? <Text style={[type.subhead, done && { color: THEME.inkFaint }]}>{note}</Text> : null}
@@ -521,7 +548,7 @@ function TicketsBlock({ docs, hasRoute, onScan, onGallery, onOpen, onEdit }) {
           {docs.map((doc) => (
             <Row
               key={doc.id}
-              lead={<Thumb uri={doc.uri} icon="document-text" size={44} />}
+              lead={isPdfDoc(doc) ? <Thumb icon="document-text" tone="stamp" size={44} /> : <Thumb uri={doc.uri} icon="document-text" size={44} />}
               title={doc.title}
               subtitle={doc.scannedCode ? <Text style={type.numeralSmall} numberOfLines={1}>{doc.scannedCode}</Text> : undefined}
               chevron
@@ -708,6 +735,7 @@ const styles = themedStyles(() => ({
   detailLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.md, rowGap: space.xs + 2 },
   metaLine: { flexShrink: 1, flexDirection: "row", alignItems: "flex-start", gap: space.xs + 2 },
   metaText: { flexShrink: 1 },
+  goPill: { flexDirection: "row", alignItems: "center", gap: space.xs, paddingHorizontal: space.md, minHeight: 28, borderRadius: radius.full, backgroundColor: THEME.blueDim },
   checkHit: { width: 52, alignItems: "center", paddingTop: space.md - 2 },
   check: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: THEME.hairStrong, alignItems: "center", justifyContent: "center" },
   checkDone: { backgroundColor: THEME.teal, borderColor: THEME.teal },
