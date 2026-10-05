@@ -13,9 +13,11 @@ import { isPdfDoc, openDocumentFile } from "../lib/documents";
 import { getTrip, toggleActivityDone } from "../lib/trips";
 import { tripStatus, tripRange, formatFullDate, formatShortDate, daysUntilLabel, isoDate } from "../lib/dates";
 import { todayPlan, minutesUntil, countdownInfo } from "../lib/today";
+import { dayLegs } from "../lib/travelTime";
 import { formatMoney } from "../lib/budget";
 import { WeatherBadge } from "./DayDetailScreen";
 import { Txt, Button, Badge, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, BackHeader, round } from "../components/ui";
+import LegLine from "../components/LegLine";
 
 const REFRESH_MS = 30000; // the countdown moves with the clock
 
@@ -95,6 +97,9 @@ export default function TodayScreen({ route, navigation }) {
   }
 
   const { day, next, later, done, total, allDone, countdown, docs, tomorrow } = plan;
+  // how far the next step is from the one before it (not on a park day: the park has its own walking times)
+  const legs = trip.tripType === "park" || day.dayType === "park" ? null : dayLegs(trip, plan.steps);
+  const nextLeg = next && legs ? legs.get(next.id) || null : null;
   const dayId = day.id;
   const doneCount = done.length;
 
@@ -159,7 +164,7 @@ export default function TodayScreen({ route, navigation }) {
           />
         ) : null}
 
-        {next ? <NextCard step={next} trip={trip} countdown={countdown} busy={busy} onGo={() => goThere(next)} onDone={() => markDone(next)} onEdit={() => editStep(next)} onShowDriver={(card) => navigation.navigate("ShowDriver", card)} /> : null}
+        {next ? <NextCard step={next} trip={trip} countdown={countdown} leg={nextLeg} now={now} busy={busy} onGo={() => goThere(next)} onDone={() => markDone(next)} onEdit={() => editStep(next)} onShowDriver={(card) => navigation.navigate("ShowDriver", card)} /> : null}
 
         {allDone ? (
           <View style={styles.finished} accessible accessibilityLabel="Journée terminée, tout est fait">
@@ -255,7 +260,7 @@ export default function TodayScreen({ route, navigation }) {
 }
 
 // The step to do now: the time it is due at, how far away that is, and the two things to do about it.
-function NextCard({ step, trip, countdown, busy, onGo, onDone, onEdit, onShowDriver }) {
+function NextCard({ step, trip, countdown, leg, now, busy, onGo, onDone, onEdit, onShowDriver }) {
   const t = TYPES[step.type] || TYPES.activite;
   const { name, place } = stepText(step);
   const canGo = !!directionsUrl(step, Platform.OS);
@@ -298,6 +303,7 @@ function NextCard({ step, trip, countdown, busy, onGo, onDone, onEdit, onShowDri
             {hasPrice ? <Badge label={formatMoney(step.price, trip.currency)} icon="pricetag-outline" tone="neutral" /> : null}
           </View>
           {step.note ? <Text style={type.subhead} numberOfLines={4}>{step.note}</Text> : null}
+          {leg ? <LegLine leg={leg} arriveAt={step.time} now={now} fromName={stepText({ title: leg.fromTitle }).name} /> : null}
         </View>
       </Pressable>
       <View style={styles.actions}>

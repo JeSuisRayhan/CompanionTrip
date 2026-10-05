@@ -15,12 +15,14 @@ import { isPdfDoc } from "../lib/documents";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
+import { dayLegs } from "../lib/travelTime";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import { fetchQueueTimes, liveByRideId } from "../lib/queueTimes";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
 import UndoToast from "../components/UndoToast";
 import WaitBadge from "../components/WaitBadge";
 import QueueTimesCredit from "../components/QueueTimesCredit";
+import LegLine from "../components/LegLine";
 import { Txt, Button, IconButton, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
@@ -137,6 +139,8 @@ export default function DayDetailScreen({ route, navigation }) {
     if (!b.time) return -1;
     return a.time.localeCompare(b.time);
   });
+  // how far each step is from the one before it (not on a park day: the park has its own walking times)
+  const legs = trip.tripType === "park" || day.dayType === "park" ? null : dayLegs(trip, sorted);
   // Steps of a normal day can be located from the map; a park day only has its attractions' positions.
   const hasMapPin = day.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng)) || (trip.tripType !== "park" && day.dayType !== "park" && day.activities.length > 0);
   const doneCount = day.activities.filter((a) => a.done).length;
@@ -266,18 +270,20 @@ export default function DayDetailScreen({ route, navigation }) {
         ) : (
           <View>
             {sorted.map((a, i) => (
-              <ActivityRow
-                key={a.id}
-                activity={a}
-                trip={trip}
-                idea={parkIdeaOf(a)}
-                ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
-                isCurrent={i === firstUndoneIndex}
-                onToggleDone={() => onToggleDone(a.id)}
-                onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
-                onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
-                onDeleteWithUndo={() => onDeleteWithUndo(a)}
-              />
+              <React.Fragment key={a.id}>
+                {legs && legs.get(a.id) ? <LegLine compact leg={legs.get(a.id)} arriveAt={a.time} /> : null}
+                <ActivityRow
+                  activity={a}
+                  trip={trip}
+                  idea={parkIdeaOf(a)}
+                  ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
+                  isCurrent={i === firstUndoneIndex}
+                  onToggleDone={() => onToggleDone(a.id)}
+                  onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
+                  onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
+                  onDeleteWithUndo={() => onDeleteWithUndo(a)}
+                />
+              </React.Fragment>
             ))}
           </View>
         )}
