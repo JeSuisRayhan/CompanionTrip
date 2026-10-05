@@ -10,6 +10,7 @@ import { TYPES } from "../lib/constants";
 import { scopedId } from "../lib/parkDay";
 import { splitTitlePlace } from "../lib/script";
 import { directionsUrl } from "../lib/map";
+import { isPdfDoc } from "../lib/documents";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
@@ -531,7 +532,7 @@ function TicketsBlock({ docs, hasRoute, onScan, onGallery, onOpen, onEdit }) {
           {docs.map((doc) => (
             <Row
               key={doc.id}
-              lead={<Thumb uri={doc.uri} icon="document-text" size={44} />}
+              lead={isPdfDoc(doc) ? <Thumb icon="document-text" tone="stamp" size={44} /> : <Thumb uri={doc.uri} icon="document-text" size={44} />}
               title={doc.title}
               subtitle={doc.scannedCode ? <Text style={type.numeralSmall} numberOfLines={1}>{doc.scannedCode}</Text> : undefined}
               chevron

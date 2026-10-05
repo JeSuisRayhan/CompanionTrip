@@ -14,7 +14,7 @@ import { getTrip, addChecklistItem, addChecklistItems, toggleChecklistItem, remo
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
 import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, formatMoney, convertAmount } from "../lib/budget";
-import { pickImage, addDocument, removeDocument, setDocumentCategory, DOCUMENT_CATEGORIES, documentCategory, suggestDocumentCategory } from "../lib/documents";
+import { pickImage, pickPdfFile, openDocumentFile, isPdfDoc, addDocument, removeDocument, setDocumentCategory, DOCUMENT_CATEGORIES, documentCategory, suggestDocumentCategory } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
 import { exportTripFile } from "../lib/backup";
@@ -827,6 +827,7 @@ function ChecklistSection({ title, trip, listKey, onChange }) {
 function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncomingScan, incomingAction, onConsumeIncomingAction }) {
   const [pendingUri, setPendingUri] = useState(null);
   const [pendingScannedCode, setPendingScannedCode] = useState(null);
+  const [pendingKind, setPendingKind] = useState("image"); // "image" or "pdf"
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -907,7 +908,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
     if (!incomingAction) return;
     if (incomingAction.viewDocId) {
       const doc = docs.find((d) => d.id === incomingAction.viewDocId);
-      if (doc) setViewingDoc(doc);
+      if (doc) openDoc(doc);
     } else if (incomingAction.addFrom) {
       setForDayId(incomingAction.dayId || null);
       setTimeout(() => pick(incomingAction.addFrom), 350); // let the screen finish opening
@@ -915,8 +916,15 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
     onConsumeIncomingAction();
   }, [incomingAction]);
 
+  // A photo opens in the viewer; a PDF goes to the phone's own readers.
+  function openDoc(doc) {
+    if (!isPdfDoc(doc)) return setViewingDoc(doc);
+    openDocumentFile(doc).catch(() => setError("Impossible d'ouvrir ce PDF depuis l'application."));
+  }
+
   function closePending() {
     setPendingUri(null);
+    setPendingKind("image");
     setPendingScannedCode(null);
     setForDayId(null);
     setChosenCategory(null);
@@ -929,11 +937,26 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
     setAddMenuOpen(true);
   }
 
+  async function pickPdf() {
+    try {
+      const file = await pickPdfFile();
+      if (!file) return setForDayId(null);
+      setPendingKind("pdf");
+      setTitle(file.title);
+      setPendingUri(file.uri);
+    } catch (e) {
+      setForDayId(null);
+      setError("Échec de la sélection du PDF.");
+    }
+  }
+
   async function pick(source) {
     try {
       const uri = await pickImage(source);
-      if (uri) setPendingUri(uri);
-      else setForDayId(null);
+      if (uri) {
+        setPendingKind("image");
+        setPendingUri(uri);
+      } else setForDayId(null);
     } catch (e) {
       setForDayId(null);
       setError(e && e.code === "PERMISSION_DENIED" ? "Autorisation refusée. Activez l'accès à la caméra/aux photos dans les réglages du téléphone." : "Échec de la sélection.");
@@ -943,7 +966,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
   async function confirmAdd() {
     setBusy(true);
     try {
-      await addDocument(trip.id, { title, category, tempUri: pendingUri, scannedCode: pendingScannedCode, dayId: forDayId });
+      await addDocument(trip.id, { title, category, tempUri: pendingUri, scannedCode: pendingScannedCode, dayId: forDayId, kind: pendingKind });
       const backToDay = forDayId;
       openCategory(category);
       closePending();
@@ -1001,10 +1024,11 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
                 ? list.map((doc) => (
                     <Row
                       key={doc.id}
-                      lead={<Thumb uri={doc.uri} icon="document-text" size={44} />}
+                      lead={isPdfDoc(doc) ? <Thumb icon="document-text" tone="stamp" size={44} /> : <Thumb uri={doc.uri} icon="document-text" size={44} />}
                       title={doc.title}
-                      subtitle={doc.dayId && trip.days.find((d) => d.id === doc.dayId) ? trip.days.find((d) => d.id === doc.dayId).title : undefined}
-                      onPress={() => setViewingDoc(doc)}
+                      subtitle={[isPdfDoc(doc) ? "PDF" : null, doc.dayId && trip.days.find((d) => d.id === doc.dayId) ? trip.days.find((d) => d.id === doc.dayId).title : null].filter(Boolean).join(" · ") || undefined}
+                      accessibilityLabel={isPdfDoc(doc) ? `${doc.title}, PDF` : doc.title}
+                      onPress={() => openDoc(doc)}
                       right={<IconButton icon="ellipsis-horizontal" label={`Options de ${doc.title}`} size={20} onPress={() => setDocMenu(doc)} />}
                       style={{ paddingRight: space.xs }}
                     />
@@ -1069,6 +1093,17 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
               setTimeout(() => pick("library"), 350);
             }}
           />
+          <Row
+            icon="document-attach-outline"
+            tone="teal"
+            title="Importer un PDF"
+            subtitle="Réservation, billet électronique…"
+            chevron
+            onPress={() => {
+              setAddMenuOpen(false);
+              setTimeout(pickPdf, 350);
+            }}
+          />
         </Group>
       </Sheet>
 
@@ -1091,7 +1126,14 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
       </Modal>
 
       <Sheet visible={!!pendingUri} onClose={closePending} title="Nouveau document">
-        {pendingUri && <Image source={{ uri: pendingUri }} style={[styles.previewImage, round("md")]} />}
+        {pendingUri && pendingKind === "pdf" ? (
+          <View style={[styles.pdfPreview, round("md")]}>
+            <Ionicons name="document-text" size={40} color={THEME.stamp} />
+            <Text style={type.label}>PDF</Text>
+          </View>
+        ) : pendingUri ? (
+          <Image source={{ uri: pendingUri }} style={[styles.previewImage, round("md")]} />
+        ) : null}
         {pendingScannedCode && (
           <View style={styles.scannedCodeBadge}>
             <Ionicons name="qr-code-outline" size={14} color={THEME.teal} />
@@ -1261,6 +1303,7 @@ const styles = themedStyles(() => ({
   categoryChips: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginBottom: space.lg },
   sheetButtons: { flexDirection: "row", gap: space.md, marginTop: space.xs },
   previewImage: { width: "100%", height: 200, backgroundColor: THEME.bgCardAlt },
+  pdfPreview: { width: "100%", height: 120, backgroundColor: THEME.bgCardAlt, alignItems: "center", justifyContent: "center", gap: space.sm },
   scannedCodeBadge: {
     flexDirection: "row",
     alignItems: "center",
