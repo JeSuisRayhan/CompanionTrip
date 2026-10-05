@@ -7,7 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
-import { SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk";
+import { BricolageGrotesque_500Medium, BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
 import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
 
@@ -53,6 +53,7 @@ const Stack = createNativeStackNavigator();
 
 const buildNavTheme = () => ({
   ...DefaultTheme,
+  dark: !THEME.light,
   colors: {
     ...DefaultTheme.colors,
     background: THEME.bg,
@@ -91,9 +92,9 @@ function AppContent({ onReady }) {
   const themeVersion = useSyncExternalStore(subscribeTheme, getThemeVersion);
   const navState = useRef(undefined);
   const [fontsLoaded] = useFonts({
-    SpaceGrotesk_500Medium,
-    SpaceGrotesk_600SemiBold,
-    SpaceGrotesk_700Bold,
+    BricolageGrotesque_500Medium,
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
@@ -180,7 +181,7 @@ function AppContent({ onReady }) {
             navState.current = state;
           }}
         >
-          <StatusBar style="light" />
+          <StatusBar style={THEME.light ? "dark" : "light"} />
           <Stack.Navigator
             initialRouteName="Home"
             screenOptions={{

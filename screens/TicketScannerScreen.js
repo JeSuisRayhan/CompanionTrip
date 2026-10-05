@@ -131,7 +131,7 @@ const styles = themedStyles(() => ({
   overlay: { ...StyleSheet.absoluteFillObject, justifyContent: "space-between" },
   topBar: { flexDirection: "row", justifyContent: "flex-end", padding: space.lg },
   frameBox: { alignItems: "center", paddingHorizontal: layout.gutter },
-  hint: { backgroundColor: THEME.scrim, paddingHorizontal: space.lg, paddingVertical: space.sm },
+  hint: { backgroundColor: THEME.veil, paddingHorizontal: space.lg, paddingVertical: space.sm },
   hintText: { ...type.subhead, color: THEME.ink, textAlign: "center" },
   manualShutter: {
     alignSelf: "center",

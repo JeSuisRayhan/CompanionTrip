@@ -9,7 +9,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha, paperEdge } from "../lib/theme";
 import { getTrip, addExpense, updateExpense, removeExpense, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatShortDate, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
@@ -20,7 +20,7 @@ import { todayPlan } from "../lib/today";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
 import { exportTripFile } from "../lib/backup";
 import DonutChart from "../components/DonutChart";
-import { Txt, Button, IconButton, Badge, Chip, Group, Row, Thumb, SectionTitle, Field, ProgressBar, EmptyState, Sheet, ActionSheet, round } from "../components/ui";
+import { Txt, Button, IconButton, Badge, Stamp, Chip, Group, Row, Thumb, SectionTitle, Field, ProgressBar, EmptyState, Sheet, ActionSheet, round } from "../components/ui";
 import TripScroll, { TripChromeContext } from "../components/TripScroll";
 import IdeasTab from "./IdeasTab";
 import AttractionsTab from "./AttractionsTab";
@@ -245,7 +245,7 @@ function TripHeader({ trip, start, end, status, onBack, onSettings, onMap }) {
         </Txt>
         <View style={styles.headerMeta}>
           {start ? <Txt variant="subhead">{formatDateRange(start, end)}</Txt> : <Txt variant="subhead">Pas encore daté</Txt>}
-          {status === "current" ? <Badge label="En cours" tone="teal" solid icon="radio-button-on" /> : null}
+          {status === "current" ? <Stamp label="En cours" tone="teal" icon="radio-button-on" /> : null}
         </View>
       </View>
     </>
@@ -315,7 +315,7 @@ function DayNode({ state, number }) {
   if (state === "done") {
     return (
       <View style={[styles.node, styles.nodeDone]}>
-        <Ionicons name="checkmark" size={15} color={THEME.onGold} />
+        <Ionicons name="checkmark" size={15} color={THEME.onAccent} />
       </View>
     );
   }
@@ -1439,9 +1439,9 @@ const styles = themedStyles(() => ({
   routeMeta: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
 
   dayList: { gap: space.md },
-  todayCard: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: THEME.bgCard, borderWidth: 1.5, borderColor: THEME.gold, padding: space.md, marginBottom: space.lg },
-  todayIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: THEME.gold, alignItems: "center", justifyContent: "center" },
-  dayTicket: { flexDirection: "row", alignItems: "stretch", backgroundColor: THEME.bgCard, borderWidth: 1, borderColor: THEME.hairStrong },
+  todayCard: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: THEME.bgCard, ...paperEdge(), borderWidth: 1.5, borderColor: THEME.gold, padding: space.md, marginBottom: space.lg },
+  todayIcon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: THEME.goldFill, alignItems: "center", justifyContent: "center" },
+  dayTicket: { flexDirection: "row", alignItems: "stretch", backgroundColor: THEME.bgCard, borderWidth: 1, borderColor: THEME.hairStrong, ...paperEdge() },
   dayTicketToday: { borderWidth: 1.5, borderColor: THEME.gold },
   dayBody: { flex: 1, padding: space.lg, gap: space.xs },
   dayHead: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: 2 },
@@ -1455,14 +1455,14 @@ const styles = themedStyles(() => ({
 
   node: { width: NODE, height: NODE, borderRadius: NODE / 2, alignItems: "center", justifyContent: "center" },
   nodeNumber: { ...type.numeralSmall },
-  nodeToday: { backgroundColor: THEME.gold, boxShadow: "0 0 0 4px rgba(244, 183, 64, 0.24)" },
+  nodeToday: { backgroundColor: THEME.goldFill, boxShadow: `0 0 0 4px ${withAlpha(THEME.goldFill, 0.3)}` },
   nodeDone: { backgroundColor: THEME.teal },
-  nodePast: { borderWidth: 2, borderColor: "rgba(63, 214, 192, 0.45)" },
+  nodePast: { borderWidth: 2, borderColor: withAlpha(THEME.teal, 0.45) },
   nodeFuture: { borderWidth: 2, borderColor: THEME.hairStrong },
 
   dayGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.md },
   gridAdd: { width: "100%" },
-  tile: { width: "48%", backgroundColor: THEME.bgCard, padding: space.lg, borderWidth: 1.5, borderColor: "transparent" },
+  tile: { width: "48%", backgroundColor: THEME.bgCard, ...paperEdge(), padding: space.lg, borderWidth: 1.5, borderColor: THEME.light ? THEME.border : "transparent" },
   tileToday: { borderColor: THEME.gold },
   tileTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
 

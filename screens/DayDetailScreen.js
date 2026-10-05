@@ -351,7 +351,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
   // the queue of the moment when Queue-Times has it (a show has none), else the estimate; nothing once done
   const liveWait = !done && !!ride && (!ride.open || ride.wait != null) && !(idea && (idea.categoryId === "spectacle" || idea.showTime));
   const estimate = !done && !liveWait && waitMatch ? waitMatch[1] : null;
-  const stubBg = done ? THEME.bgCardAlt : isCurrent ? THEME.gold : t.dim;
+  const stubBg = done ? THEME.bgCardAlt : isCurrent ? THEME.goldFill : t.dim;
   const stubInk = done ? THEME.inkFaint : isCurrent ? THEME.onGold : t.color;
   // the usual "activité" pin says nothing: an icon only for the other kinds, or when there is no time to show
   const showIcon = !activity.time || activity.type !== "activite";
@@ -425,7 +425,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
             accessibilityLabel={`Fait : ${activity.title}`}
             style={({ pressed }) => [styles.checkHit, pressed && { opacity: 0.7 }]}
           >
-            <View style={[styles.check, done && styles.checkDone]}>{done ? <Ionicons name="checkmark" size={16} color={THEME.onGold} /> : null}</View>
+            <View style={[styles.check, done && styles.checkDone]}>{done ? <Ionicons name="checkmark" size={16} color={THEME.onAccent} /> : null}</View>
           </Pressable>
         </View>
       </Swipeable>
@@ -722,7 +722,7 @@ const styles = themedStyles(() => ({
 
   stepWrap: { marginBottom: space.sm },
   swipeContainer: { borderRadius: radius.md },
-  card: { flexDirection: "row", alignItems: "stretch", overflow: "hidden", borderRadius: radius.md, borderWidth: 1, borderColor: THEME.hair, backgroundColor: THEME.bgCard },
+  card: { flexDirection: "row", alignItems: "stretch", overflow: "hidden", borderRadius: radius.md, borderWidth: 1, borderColor: THEME.light ? THEME.border : THEME.hair, backgroundColor: THEME.bgCard },
   cardCurrent: { borderColor: THEME.gold, borderWidth: 1.5 },
   cardDone: { opacity: 0.65 },
   cardMain: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "stretch" },

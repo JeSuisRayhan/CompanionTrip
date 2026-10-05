@@ -8,7 +8,7 @@ import React, { useContext, useState } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator, Image, Modal, KeyboardAvoidingView, ScrollView, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaInsetsContext } from "react-native-safe-area-context";
-import { THEME, TONES, space, layout, radius, type, shadow, themedStyles } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, shadow, paperEdge, themedStyles } from "../lib/theme";
 
 // True inside surfaces that are themselves card-coloured (Group, Sheet), so a
 // Field there can step darker and stay visible.
@@ -34,10 +34,10 @@ export function Txt({ variant = "body", color, style, ...props }) {
 
 // ---------- Button ----------
 const buttonVariants = () => ({
-  primary: { bg: THEME.gold, fg: THEME.onGold },
-  secondary: { bg: THEME.bgCardAlt, fg: THEME.ink },
-  ghost: { bg: "transparent", fg: THEME.gold },
-  danger: { bg: THEME.stampDim, fg: THEME.stamp },
+  primary: { bg: THEME.goldFill, fg: THEME.onGold, edge: THEME.goldFill },
+  secondary: { bg: THEME.light ? THEME.bgCard : THEME.bgCardAlt, fg: THEME.ink, edge: THEME.light ? THEME.hairStrong : "transparent" },
+  ghost: { bg: "transparent", fg: THEME.gold, edge: "transparent" },
+  danger: { bg: THEME.stampDim, fg: THEME.stamp, edge: "transparent" },
 });
 const BUTTON_SIZES = {
   sm: { minHeight: 36, paddingHorizontal: space.md, gap: space.xs + 2, font: "caption", icon: 16 },
@@ -47,7 +47,11 @@ const BUTTON_SIZES = {
 
 export function Button({ title, icon, variant = "primary", tone, size = "md", loading, disabled, full, style, onPress, accessibilityLabel }) {
   const onRaised = useContext(OnRaisedContext);
-  const t = tone ? { bg: toneOf(tone).bg, fg: toneOf(tone).fg } : variant === "secondary" && onRaised ? { bg: THEME.bgRaised, fg: THEME.ink } : buttonVariants()[variant];
+  const t = tone
+    ? { bg: toneOf(tone).bg, fg: toneOf(tone).fg, edge: "transparent" }
+    : variant === "secondary" && onRaised
+      ? { bg: THEME.bgRaised, fg: THEME.ink, edge: THEME.light ? THEME.hairStrong : "transparent" }
+      : buttonVariants()[variant];
   const s = BUTTON_SIZES[size];
   const inactive = disabled || loading;
   return (
@@ -61,7 +65,7 @@ export function Button({ title, icon, variant = "primary", tone, size = "md", lo
       style={({ pressed }) => [
         styles.buttonBase,
         round("md"),
-        { backgroundColor: t.bg, minHeight: s.minHeight, paddingHorizontal: s.paddingHorizontal, gap: s.gap },
+        { backgroundColor: t.bg, borderColor: t.edge, minHeight: s.minHeight, paddingHorizontal: s.paddingHorizontal, gap: s.gap },
         full && { alignSelf: "stretch" },
         { opacity: inactive ? 0.45 : pressed ? 0.82 : 1 },
         pressed && !inactive && { transform: [{ scale: 0.98 }] },
@@ -119,7 +123,11 @@ export function Chip({ label, icon, selected, tone = "gold", count, onPress, onL
       hitSlop={4}
       style={({ pressed }) => [
         styles.chip,
-        selected ? { backgroundColor: t.bg, borderColor: tone === "neutral" ? THEME.hairStrong : t.fg } : { backgroundColor: THEME.bgCardAlt, borderColor: "transparent" },
+        selected
+          ? { backgroundColor: t.bg, borderColor: tone === "neutral" ? THEME.hairStrong : t.fg }
+          : THEME.light
+            ? { backgroundColor: THEME.bgCard, borderColor: THEME.hairStrong }
+            : { backgroundColor: THEME.bgCardAlt, borderColor: "transparent" },
         pressed && { opacity: 0.75 },
         style,
       ]}
@@ -138,10 +146,32 @@ export function Badge({ label, tone = "neutral", icon, solid, style }) {
   const t = toneOf(tone);
   return (
     <View style={[styles.badge, { backgroundColor: solid ? t.fg : t.bg }, style]}>
-      {icon ? <Ionicons name={icon} size={12} color={solid ? THEME.onGold : t.fg} /> : null}
-      <Text style={[type.caption, styles.badgeText, { color: solid ? THEME.onGold : t.fg }]} numberOfLines={1}>
+      {icon ? <Ionicons name={icon} size={12} color={solid ? THEME.onAccent : t.fg} /> : null}
+      <Text style={[type.caption, styles.badgeText, { color: solid ? THEME.onAccent : t.fg }]} numberOfLines={1}>
         {label}
       </Text>
+    </View>
+  );
+}
+
+// ---------- Stamp ----------
+// A status inked on a ticket: a double outline, slightly crooked, like a rubber stamp. The one decorative
+// touch of the app: for a status ("En cours", "J-46"), never for a plain label. Solid inside, so it stays
+// readable on a photo.
+export function Stamp({ label, tone = "stamp", icon, small, tilt = -3, style }) {
+  const t = toneOf(tone);
+  return (
+    <View
+      accessible
+      accessibilityLabel={label}
+      style={[styles.stampOuter, { borderColor: t.fg, transform: [{ rotate: `${tilt}deg` }] }, small && styles.stampOuterSmall, style]}
+    >
+      <View style={[styles.stampInner, { borderColor: t.fg }, small && styles.stampInnerSmall]}>
+        {icon ? <Ionicons name={icon} size={small ? 11 : 13} color={t.fg} /> : null}
+        <Text style={[small ? type.numeralSmall : type.caption, styles.stampText, { color: t.fg }]} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -155,7 +185,7 @@ export function Surface({ tone = "card", r = "lg", pad, style, children, ...prop
   return (
     <OnCardContext.Provider value={tone !== "sunk"}>
       <OnRaisedContext.Provider value={tone === "raised"}>
-        <View {...props} style={[round(r), { backgroundColor: bg, padding }, style]}>
+        <View {...props} style={[round(r), { backgroundColor: bg, padding }, tone !== "sunk" && styles.ticketEdge, style]}>
           {children}
         </View>
       </OnRaisedContext.Provider>
@@ -238,6 +268,7 @@ export function SectionTitle({ title, count, action, style }) {
         <Text style={type.heading} accessibilityRole="header">{title}</Text>
         {count != null ? <Text style={[type.numeralSmall, { color: THEME.inkFaint }]}>{count}</Text> : null}
       </View>
+      <View style={styles.sectionRule} />
       {action ? (
         <Pressable onPress={action.onPress} hitSlop={8} accessibilityRole="button" accessibilityLabel={action.label}>
           <Text style={[type.caption, { color: THEME.gold, fontFamily: type.label.fontFamily }]}>{action.label}</Text>
@@ -443,7 +474,7 @@ export function Fab({ label, icon = "add", onPress }) {
 }
 
 const styles = themedStyles(() => ({
-  buttonBase: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  buttonBase: { flexDirection: "row", alignItems: "center", justifyContent: "center", borderWidth: 1 },
   iconButton: { width: layout.minTouch, height: layout.minTouch, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
   chip: {
     flexDirection: "row",
@@ -455,16 +486,25 @@ const styles = themedStyles(() => ({
     borderWidth: 1.5,
   },
   chipText: { fontFamily: type.label.fontFamily, flexShrink: 1 },
-  badge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: space.xs, height: 24, paddingHorizontal: space.sm + 2, borderRadius: radius.full },
+  badge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: space.xs, height: 24, paddingHorizontal: space.sm + 2, borderRadius: radius.sm - 2, borderCurve: "continuous" },
   badgeText: { fontFamily: type.label.fontFamily, flexShrink: 1 },
-  group: { backgroundColor: THEME.bgCard, overflow: "hidden" },
+  stampOuter: { alignSelf: "flex-start", borderWidth: 2, borderRadius: 7, padding: 2, backgroundColor: THEME.bgCard },
+  stampOuterSmall: { borderWidth: 1.5, borderRadius: 6, padding: 1.5 },
+  stampInner: { flexDirection: "row", alignItems: "center", gap: space.xs, borderWidth: 1, borderRadius: 4, paddingHorizontal: space.sm, paddingVertical: 3 },
+  stampInnerSmall: { paddingHorizontal: space.xs + 2, paddingVertical: 1 },
+  stampText: { fontFamily: type.label.fontFamily, letterSpacing: 1.1, textTransform: "uppercase" },
+  // What makes a card a ticket on paper: a fine warm edge and a shadow like a sheet lying on a desk.
+  // On the dark palettes depth comes from the lighter surface alone.
+  ticketEdge: { ...paperEdge() },
+  group: { backgroundColor: THEME.bgCard, overflow: "hidden", ...paperEdge() },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: THEME.hairStrong },
   row: { flexDirection: "row", alignItems: "center", gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md, minHeight: 56 },
   rowTile: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   rowText: { flex: 1, gap: 2 },
   rowSubtitle: { color: THEME.inkMuted },
   thumb: { alignItems: "center", justifyContent: "center" },
-  sectionTitle: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: space.md },
+  sectionTitle: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.md },
+  sectionRule: { flex: 1, height: 1, marginTop: 3, backgroundColor: THEME.hair },
   sectionTitleLeft: { flexDirection: "row", alignItems: "baseline", gap: space.sm },
   field: { marginBottom: space.lg },
   fieldLabel: { marginBottom: space.sm - 2, color: THEME.inkMuted },
@@ -509,6 +549,6 @@ const styles = themedStyles(() => ({
     gap: space.sm,
     height: 56,
     paddingHorizontal: space.xl - 4,
-    backgroundColor: THEME.gold,
+    backgroundColor: THEME.goldFill,
   },
 }));

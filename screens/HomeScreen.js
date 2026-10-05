@@ -2,11 +2,10 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl, ImageBackground, Animated, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, radius, type, themedStyles, withAlpha } from "../lib/theme";
+import { THEME, space, layout, radius, type, themedStyles, withAlpha, paperEdge } from "../lib/theme";
 import { TRIP_TYPES } from "../lib/constants";
 import { loadTrips, storageStatus, acknowledgeRecovery } from "../lib/storage";
 import { backupReminder, snoozeBackupReminder } from "../lib/backupReminder";
@@ -17,7 +16,7 @@ import { tripRange, tripStatus, formatDateRange, isoDate, resolveDayDate } from 
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import UndoToast from "../components/UndoToast";
 import HomeNotices from "../components/HomeNotices";
-import { Txt, Badge, Group, Row, Thumb, SectionTitle, EmptyState, IconButton, Fab, round } from "../components/ui";
+import { Txt, Stamp, Group, Row, Thumb, SectionTitle, EmptyState, IconButton, Fab, round } from "../components/ui";
 
 function todayISO() {
   return isoDate(new Date());
@@ -201,7 +200,7 @@ export default function HomeScreen({ navigation }) {
             )}
 
             {current.map((trip) => (
-              <SwipeToDelete key={trip.id} trip={trip} onDeleteWithUndo={handleDeleteWithUndo} style={styles.ticketGap}>
+              <SwipeToDelete key={trip.id} trip={trip} onDeleteWithUndo={handleDeleteWithUndo} style={styles.ticketGap} room>
                 <TripTicket
                   mode="current"
                   trip={trip}
@@ -220,7 +219,7 @@ export default function HomeScreen({ navigation }) {
             ))}
 
             {featuredNext && (
-              <SwipeToDelete trip={featuredNext} onDeleteWithUndo={handleDeleteWithUndo} style={styles.ticketGap}>
+              <SwipeToDelete trip={featuredNext} onDeleteWithUndo={handleDeleteWithUndo} style={styles.ticketGap} room>
                 <TripTicket mode="next" trip={featuredNext} today={today} onPress={() => openTrip(featuredNext)} />
               </SwipeToDelete>
             )}
@@ -258,9 +257,13 @@ export default function HomeScreen({ navigation }) {
 }
 
 // `bg` fills the swiped row so the delete tile never shows through the text.
-function SwipeToDelete({ trip, onDeleteWithUndo, children, style, bg = THEME.bg }) {
+// `room`: the swipe container clips what leaves it, so a card with a shadow gets a margin to cast it into
+// (cancelled by a negative margin outside, so the layout does not move).
+const SHADOW_ROOM = 14;
+function SwipeToDelete({ trip, onDeleteWithUndo, children, style, bg = THEME.bg, room }) {
+  const pad = room && THEME.light ? SHADOW_ROOM : 0;
   return (
-    <View style={style}>
+    <View style={[style, pad ? { marginHorizontal: -pad, marginBottom: space.md - pad } : null]}>
       <Swipeable
         renderRightActions={() => (
           <Pressable
@@ -274,7 +277,7 @@ function SwipeToDelete({ trip, onDeleteWithUndo, children, style, bg = THEME.bg 
         )}
         overshootRight={false}
       >
-        <View style={{ backgroundColor: bg }}>{children}</View>
+        <View style={[{ backgroundColor: bg }, pad ? { padding: pad, paddingTop: 0 } : null]}>{children}</View>
       </Swipeable>
     </View>
   );
@@ -319,23 +322,19 @@ function TripTicket({ mode, trip, today, onPress, onPressToday }) {
   const weatherDate = isCurrent ? today : start;
   const diff = start ? dayDiff(start, today) : null;
 
-  const top = (
+  // The photo is a band on top of the ticket and the name sits on the ticket stock below it: ink on paper,
+  // whatever the photo is, and in full sun.
+  const band = (
     <>
-      {!cover?.url && <Ionicons name={meta.icon} size={120} color={THEME[tone]} style={styles.ticketWatermark} />}
-      <LinearGradient colors={["transparent", withAlpha(THEME.bg, 0.86)]} style={styles.ticketScrim} />
+      {!cover?.url && <Ionicons name={meta.icon} size={110} color={THEME[tone]} style={styles.ticketWatermark} />}
       <View style={styles.ticketBadgeRow}>
-        {isCurrent ? <Badge label="En cours" tone="teal" solid icon="radio-button-on" /> : <Badge label="Prochain départ" tone="gold" solid />}
+        {isCurrent ? <Stamp label="En cours" tone="teal" icon="radio-button-on" /> : <Stamp label="Prochain départ" tone="gold" />}
       </View>
-      <View style={styles.ticketTitleBlock}>
-        <Text style={[type.title, styles.ticketTitle]} numberOfLines={2}>
-          {trip.name}
+      {cover?.photographerName ? (
+        <Text style={styles.credit} numberOfLines={1}>
+          Photo : {cover.photographerName} / Unsplash
         </Text>
-        <View style={styles.ticketMetaRow}>
-          {start ? <Text style={styles.ticketDates}>{formatDateRange(start, end)}</Text> : null}
-          {weatherDate ? <HomeWeatherPreview day={weatherDay} dateISO={weatherDate} fallbackLocation={trip.defaultLocation} /> : null}
-        </View>
-      </View>
-      {cover?.photographerName ? <Text style={styles.credit}>Photo : {cover.photographerName} / Unsplash</Text> : null}
+      ) : null}
     </>
   );
 
@@ -346,11 +345,20 @@ function TripTicket({ mode, trip, today, onPress, onPressToday }) {
       <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Ouvrir ${trip.name}`}>
         {cover?.url ? (
           <ImageBackground source={{ uri: cover.url }} style={styles.ticketTop} imageStyle={{ resizeMode: "cover" }}>
-            {top}
+            {band}
           </ImageBackground>
         ) : (
-          <View style={[styles.ticketTop, { backgroundColor: tone === "teal" ? THEME.tealDim : tone === "pink" ? THEME.pinkDim : THEME.goldDim }]}>{top}</View>
+          <View style={[styles.ticketTop, { backgroundColor: tone === "teal" ? THEME.tealDim : tone === "pink" ? THEME.pinkDim : THEME.goldDim }]}>{band}</View>
         )}
+        <View style={styles.ticketTitleBlock}>
+          <Text style={[type.title, styles.ticketTitle]} numberOfLines={2}>
+            {trip.name}
+          </Text>
+          <View style={styles.ticketMetaRow}>
+            {start ? <Text style={styles.ticketDates}>{formatDateRange(start, end)}</Text> : null}
+            {weatherDate ? <HomeWeatherPreview day={weatherDay} dateISO={weatherDate} fallbackLocation={trip.defaultLocation} /> : null}
+          </View>
+        </View>
       </Pressable>
 
       <Perforation />
@@ -450,7 +458,7 @@ function UpcomingRow({ trip, today, onPress }) {
       lead={<Thumb uri={trip.coverImage?.url} icon={meta.icon} tone={tone} />}
       title={trip.name}
       subtitle={start ? formatDateRange(start, end) : "Pas encore daté"}
-      right={label ? <Text style={[type.numeral, { color: THEME[tone] }]}>{label}</Text> : null}
+      right={label ? <Stamp label={label} tone={tone} small /> : null}
       chevron
       onPress={onPress}
     />
@@ -484,19 +492,19 @@ const styles = themedStyles(() => ({
   section: { marginTop: space.xl },
   ticketGap: { marginBottom: space.md },
 
-  ticket: { backgroundColor: THEME.bgCard, overflow: "hidden" },
-  ticketTop: { height: 212, justifyContent: "space-between", padding: space.lg },
-  ticketWatermark: { position: "absolute", right: space.lg, top: space.xl, opacity: 0.16 },
-  ticketScrim: { position: "absolute", left: 0, right: 0, bottom: 0, top: 40 },
+  ticket: { backgroundColor: THEME.bgCard, overflow: "hidden", ...paperEdge() },
+  ticketTop: { height: 148, justifyContent: "space-between", padding: space.lg },
+  ticketWatermark: { position: "absolute", right: space.lg, top: space.lg, opacity: 0.22 },
   ticketBadgeRow: { flexDirection: "row" },
-  ticketTitleBlock: { gap: space.xs },
+  ticketTitleBlock: { gap: space.xs, paddingHorizontal: space.lg + 4, paddingTop: space.lg, paddingBottom: space.xs },
   ticketTitle: { color: THEME.ink },
   ticketMetaRow: { flexDirection: "row", alignItems: "center", gap: space.md },
-  ticketDates: { ...type.subhead, color: THEME.ink },
-  credit: { position: "absolute", right: space.md, top: space.md, ...type.caption, color: THEME.inkMuted },
+  ticketDates: { ...type.subhead, color: THEME.inkMuted },
+  // On the photo, a small label that reads on any picture.
+  credit: { position: "absolute", right: space.sm, bottom: space.sm, ...type.caption, fontSize: 11, color: THEME.onAccent, backgroundColor: withAlpha(THEME.ink, 0.6), borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, overflow: "hidden", maxWidth: "70%" },
   weatherRow: { flexDirection: "row", alignItems: "center", gap: space.xs + 2 },
   weatherEmoji: { fontSize: 15 },
-  weatherText: { ...type.numeralSmall, color: THEME.ink },
+  weatherText: { ...type.numeralSmall, color: THEME.inkMuted },
 
   perforation: { height: NOTCH, justifyContent: "center" },
   notch: { position: "absolute", width: NOTCH, height: NOTCH, borderRadius: NOTCH / 2, backgroundColor: THEME.bg },

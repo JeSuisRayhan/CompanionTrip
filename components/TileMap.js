@@ -251,11 +251,11 @@ function Pin({ pin, x, y, numbered, selected, onPress }) {
       <View
         style={[
           styles.pin,
-          { width: diameter, height: diameter, borderRadius: diameter / 2, backgroundColor: numbered ? THEME.gold : pin.color },
+          { width: diameter, height: diameter, borderRadius: diameter / 2, backgroundColor: numbered ? THEME.goldFill : pin.color },
           selected && styles.pinSelected,
         ]}
       >
-        {numbered ? <Text style={styles.pinNumber}>{pin.order}</Text> : <Ionicons name={pin.icon} size={selected ? 20 : 16} color={THEME.onGold} />}
+        {numbered ? <Text style={styles.pinNumber}>{pin.order}</Text> : <Ionicons name={pin.icon} size={selected ? 20 : 16} color={THEME.onAccent} />}
       </View>
       {!numbered && pin.dayIndex != null ? (
         <View style={styles.dayBadge}>
@@ -272,6 +272,7 @@ const styles = themedStyles(() => ({
   pin: { alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: THEME.bg, boxShadow: shadow.raised },
   pinSelected: { borderColor: THEME.ink, borderWidth: 3 },
   pinNumber: { ...type.numeral, color: THEME.onGold, lineHeight: 18 },
+  // (the numbered disc is gold: its number is `onGold`, the category icons on a tone are `onAccent`)
   dayBadge: {
     position: "absolute",
     top: 2,
@@ -294,7 +295,7 @@ const styles = themedStyles(() => ({
     gap: space.sm,
     paddingHorizontal: space.md,
     paddingVertical: space.sm,
-    backgroundColor: THEME.scrim,
+    backgroundColor: THEME.veil,
     borderRadius: radius.md,
   },
   gapText: { ...type.caption, flex: 1, color: THEME.ink },
@@ -304,7 +305,7 @@ const styles = themedStyles(() => ({
     bottom: space.sm,
     paddingHorizontal: space.sm,
     paddingVertical: space.xs,
-    backgroundColor: THEME.scrim,
+    backgroundColor: THEME.veil,
     borderRadius: radius.full,
   },
   attributionText: { ...type.caption, fontSize: 11, lineHeight: 14, color: THEME.ink },
