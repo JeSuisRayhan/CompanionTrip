@@ -118,7 +118,7 @@ export function CalendarSheet({ visible, title, value, min, max, optional, onPic
                   style={({ pressed }) => [
                     styles.day,
                     round("full"),
-                    selected && { backgroundColor: THEME.gold },
+                    selected && { backgroundColor: THEME.goldFill },
                     !selected && isToday && { borderWidth: 1.5, borderColor: THEME.gold },
                     pressed && !selected && { backgroundColor: THEME.bgCardAlt },
                   ]}

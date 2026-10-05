@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { THEME, space, radius, type, themedStyles } from "../lib/theme";
+import { THEME, space, radius, type, themedStyles, paperEdge } from "../lib/theme";
 import { checkPin } from "../lib/pin";
 import { Txt } from "../components/ui";
 
@@ -87,10 +87,10 @@ const styles = themedStyles(() => ({
   head: { alignItems: "center", gap: space.sm, marginBottom: space.xl },
   title: { textAlign: "center" },
   dots: { flexDirection: "row", gap: space.lg, marginBottom: space.xxl },
-  dot: { width: space.lg, height: space.lg, borderRadius: radius.full, backgroundColor: THEME.bgRaised },
+  dot: { width: space.lg, height: space.lg, borderRadius: radius.full, backgroundColor: THEME.light ? THEME.border : THEME.bgRaised },
   dotFilled: { backgroundColor: THEME.gold },
   dotError: { backgroundColor: THEME.stamp },
   keypad: { flexDirection: "row", flexWrap: "wrap", gap: space.lg, width: KEY * 3 + space.lg * 2 },
   key: { width: KEY, height: KEY, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },
-  keyFilled: { backgroundColor: THEME.bgCard },
+  keyFilled: { backgroundColor: THEME.bgCard, ...paperEdge() },
 }));

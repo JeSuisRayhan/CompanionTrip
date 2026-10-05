@@ -3,7 +3,7 @@ import { View, ScrollView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { space, layout, radius, THEME, PALETTES, PALETTE_IDS, currentPalette, themedStyles } from "../lib/theme";
+import { space, layout, radius, THEME, PALETTES, PALETTE_IDS, currentPalette, swatchOf, themedStyles } from "../lib/theme";
 import { choosePalette } from "../lib/appearance";
 import { getSetting, setSetting, removeSetting, loadTrips } from "../lib/storage";
 import { lastBackupAt, backupLabel } from "../lib/backupReminder";
@@ -196,7 +196,7 @@ export default function SettingsScreen({ navigation }) {
               return (
                 <Row
                   key={id}
-                  lead={<Swatch tokens={PALETTES[id].tokens} />}
+                  lead={<Swatch id={id} />}
                   title={PALETTES[id].label}
                   subtitle={PALETTES[id].hint}
                   selected={chosen}
@@ -390,11 +390,12 @@ export default function SettingsScreen({ navigation }) {
 }
 
 // A small preview of a palette: its background, a card on it, and the gold accent.
-function Swatch({ tokens }) {
+function Swatch({ id }) {
+  const s = swatchOf(id);
   return (
-    <View style={[styles.swatch, { backgroundColor: tokens.bg, borderColor: tokens.border }]}>
-      <View style={[styles.swatchDot, { backgroundColor: THEME.gold }]} />
-      <View style={[styles.swatchCard, { backgroundColor: tokens.bgCard }]} />
+    <View style={[styles.swatch, { backgroundColor: s.bg, borderColor: s.border }]}>
+      <View style={[styles.swatchDot, { backgroundColor: s.accent }]} />
+      <View style={[styles.swatchCard, { backgroundColor: s.card }]} />
     </View>
   );
 }

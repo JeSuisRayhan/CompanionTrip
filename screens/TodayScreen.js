@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, type, themedStyles } from "../lib/theme";
+import { THEME, space, layout, type, themedStyles, paperEdge } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { splitTitlePlace } from "../lib/script";
 import { directionsUrl } from "../lib/map";
@@ -283,7 +283,7 @@ function NextCard({ step, trip, countdown, leg, now, busy, onGo, onDone, onEdit,
           </View>
           {countdown ? (
             <View style={[styles.countdown, countdown.tone === "stamp" && { backgroundColor: THEME.stamp }]}>
-              <Text style={[styles.countdownText, countdown.tone === "stamp" && { color: THEME.onGold }]}>{countdown.label}</Text>
+              <Text style={[styles.countdownText, countdown.tone === "stamp" && { color: THEME.onAccent }]}>{countdown.label}</Text>
             </View>
           ) : (
             <Text style={styles.stubCaption}>{step.time ? "" : "Sans horaire"}</Text>
@@ -358,14 +358,14 @@ const styles = themedStyles(() => ({
   progress: { flexDirection: "row", alignItems: "center", gap: space.md },
   progressNumber: { ...type.numeral, fontSize: 12 },
 
-  next: { backgroundColor: THEME.bgCard, overflow: "hidden", marginBottom: space.xl },
-  stub: { backgroundColor: THEME.gold, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md },
+  next: { backgroundColor: THEME.bgCard, overflow: "hidden", marginBottom: space.xl, ...paperEdge() },
+  stub: { backgroundColor: THEME.goldFill, flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md },
   stubLeft: { gap: 2, flexShrink: 1 },
   stubCaption: { ...type.caption, color: THEME.onGold, opacity: 0.8 },
   stubTime: { ...type.numeralLarge, color: THEME.onGold },
   stubIcon: { height: 44, justifyContent: "center" },
   countdown: { backgroundColor: THEME.onGold, borderRadius: 999, paddingHorizontal: space.md, paddingVertical: space.xs + 2 },
-  countdownText: { ...type.label, fontSize: 14, color: THEME.gold },
+  countdownText: { ...type.label, fontSize: 14, color: THEME.goldFill },
   nextBody: { gap: space.sm, padding: space.lg },
   placeLine: { flexDirection: "row", alignItems: "flex-start", gap: space.xs + 2 },
   badges: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
