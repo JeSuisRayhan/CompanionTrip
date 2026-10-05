@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 
 import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { formatDayLabel } from "../lib/dates";
@@ -37,7 +37,7 @@ function SwapBadge() {
   return (
     <View style={styles.swapAnchor} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <View style={styles.swapBadge}>
-        <Ionicons name="swap-vertical" size={16} color={THEME.teal} />
+        <Icon name="swap-vertical" size={16} color={THEME.teal} />
       </View>
     </View>
   );
@@ -105,7 +105,7 @@ export default function WeatherReorgScreen({ route, navigation }) {
                     </Group>
                     {isDone ? (
                       <View style={[styles.doneNote, round("md")]} accessibilityRole="text">
-                        <Ionicons name="checkmark-circle" size={20} color={THEME.teal} />
+                        <Icon name="checkmark-circle" size={20} color={THEME.teal} />
                         <Text style={styles.doneText}>Appliqué</Text>
                       </View>
                     ) : (

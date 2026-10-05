@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import * as Clipboard from "expo-clipboard";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -394,7 +394,7 @@ export default function IdeaEditorScreen({ route, navigation }) {
               subtitle={moreOpen ? undefined : isHotel ? "Lien, note" : "Durée, prix, lien, note"}
               accessibilityLabel={`Plus d'options, ${moreOpen ? "ouvertes" : "fermées"}`}
               onPress={() => setMoreOpen(!moreOpen)}
-              right={<Ionicons name={moreOpen ? "chevron-up" : "chevron-down"} size={18} color={THEME.inkFaint} />}
+              right={<Icon name={moreOpen ? "chevron-up" : "chevron-down"} size={18} color={THEME.inkFaint} />}
             />
           </Group>
 

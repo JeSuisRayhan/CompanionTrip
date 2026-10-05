@@ -5,10 +5,12 @@
 // Keep this file small: a view is promoted here only when two or more screens
 // use it and it has a nameable role.
 import React, { useContext, useState } from "react";
-import { View, Text, TextInput, Pressable, ActivityIndicator, Image, Modal, KeyboardAvoidingView, ScrollView, StyleSheet, Platform } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, TextInput, Pressable, ActivityIndicator, Image, Modal, KeyboardAvoidingView, ScrollView, StyleSheet, Platform, Animated } from "react-native";
+import Icon from "./Icon";
 import { SafeAreaInsetsContext } from "react-native-safe-area-context";
 import { THEME, TONES, space, layout, radius, type, shadow, paperEdge, themedStyles } from "../lib/theme";
+import { useThump } from "../lib/motion";
+import TicketArt from "./TicketArt";
 
 // True inside surfaces that are themselves card-coloured (Group, Sheet), so a
 // Field there can step darker and stay visible.
@@ -25,6 +27,9 @@ function toneOf(tone) {
   return TONES[tone] || TONES.neutral;
 }
 
+// On paper, gold is kept for "today / what comes next": a control that asks for the gold tone is drawn in ink.
+const goldOnPaper = (tone) => tone === "gold" && THEME.light;
+
 // ---------- Text ----------
 // The only way screens set type: pick a ramp step, optionally a colour
 // (a THEME key or a literal colour).
@@ -34,9 +39,9 @@ export function Txt({ variant = "body", color, style, ...props }) {
 
 // ---------- Button ----------
 const buttonVariants = () => ({
-  primary: { bg: THEME.goldFill, fg: THEME.onGold, edge: THEME.goldFill },
+  primary: { bg: THEME.action, fg: THEME.onAction, edge: THEME.action },
   secondary: { bg: THEME.light ? THEME.bgCard : THEME.bgCardAlt, fg: THEME.ink, edge: THEME.light ? THEME.hairStrong : "transparent" },
-  ghost: { bg: "transparent", fg: THEME.gold, edge: "transparent" },
+  ghost: { bg: "transparent", fg: THEME.mark, edge: "transparent" },
   danger: { bg: THEME.stampDim, fg: THEME.stamp, edge: "transparent" },
 });
 const BUTTON_SIZES = {
@@ -47,7 +52,7 @@ const BUTTON_SIZES = {
 
 export function Button({ title, icon, variant = "primary", tone, size = "md", loading, disabled, full, style, onPress, accessibilityLabel }) {
   const onRaised = useContext(OnRaisedContext);
-  const t = tone
+  const t = tone && !goldOnPaper(tone)
     ? { bg: toneOf(tone).bg, fg: toneOf(tone).fg, edge: "transparent" }
     : variant === "secondary" && onRaised
       ? { bg: THEME.bgRaised, fg: THEME.ink, edge: THEME.light ? THEME.hairStrong : "transparent" }
@@ -76,7 +81,7 @@ export function Button({ title, icon, variant = "primary", tone, size = "md", lo
         <ActivityIndicator size="small" color={t.fg} />
       ) : (
         <>
-          {icon ? <Ionicons name={icon} size={s.icon} color={t.fg} /> : null}
+          {icon ? <Icon name={icon} size={s.icon} color={t.fg} /> : null}
           <Text style={[type[s.font], { color: t.fg, fontFamily: type.label.fontFamily }, full && { flexShrink: 1, textAlign: "center" }]} numberOfLines={full ? 2 : 1}>
             {title}
           </Text>
@@ -88,7 +93,8 @@ export function Button({ title, icon, variant = "primary", tone, size = "md", lo
 
 // Icon-only control with a 44pt touch target. `label` is required (screen readers).
 export function IconButton({ icon, label, onPress, tone, filled, size = 22, disabled, style }) {
-  const fg = tone ? toneOf(tone).fg : THEME.inkMuted;
+  const ink = goldOnPaper(tone);
+  const fg = ink ? (filled ? THEME.onAction : THEME.ink) : tone ? toneOf(tone).fg : THEME.inkMuted;
   return (
     <Pressable
       accessibilityRole="button"
@@ -98,12 +104,12 @@ export function IconButton({ icon, label, onPress, tone, filled, size = 22, disa
       onPress={onPress}
       style={({ pressed }) => [
         styles.iconButton,
-        filled && { backgroundColor: tone ? toneOf(tone).bg : THEME.bgCardAlt },
+        filled && { backgroundColor: ink ? THEME.action : tone ? toneOf(tone).bg : THEME.bgCardAlt },
         { opacity: disabled ? 0.4 : pressed ? 0.7 : 1 },
         style,
       ]}
     >
-      <Ionicons name={icon} size={size} color={fg} />
+      <Icon name={icon} size={size} color={fg} />
     </Pressable>
   );
 }
@@ -111,7 +117,8 @@ export function IconButton({ icon, label, onPress, tone, filled, size = 22, disa
 // ---------- Chip (selectable) ----------
 export function Chip({ label, icon, selected, tone = "gold", count, onPress, onLongPress, style, accessibilityLabel }) {
   const t = toneOf(tone);
-  const selectedFg = tone === "neutral" ? THEME.ink : t.fg;
+  const ink = goldOnPaper(tone); // selected = an ink-filled tab, readable at a glance
+  const selectedFg = ink ? THEME.onAction : tone === "neutral" ? THEME.ink : t.fg;
   const fg = selected ? selectedFg : THEME.inkMuted;
   return (
     <Pressable
@@ -124,7 +131,9 @@ export function Chip({ label, icon, selected, tone = "gold", count, onPress, onL
       style={({ pressed }) => [
         styles.chip,
         selected
-          ? { backgroundColor: t.bg, borderColor: tone === "neutral" ? THEME.hairStrong : t.fg }
+          ? ink
+            ? { backgroundColor: THEME.action, borderColor: THEME.action }
+            : { backgroundColor: t.bg, borderColor: tone === "neutral" ? THEME.hairStrong : t.fg }
           : THEME.light
             ? { backgroundColor: THEME.bgCard, borderColor: THEME.hairStrong }
             : { backgroundColor: THEME.bgCardAlt, borderColor: "transparent" },
@@ -132,7 +141,7 @@ export function Chip({ label, icon, selected, tone = "gold", count, onPress, onL
         style,
       ]}
     >
-      {icon ? <Ionicons name={icon} size={15} color={fg} /> : null}
+      {icon ? <Icon name={icon} size={15} color={fg} /> : null}
       <Text style={[type.caption, styles.chipText, { color: selected ? selectedFg : THEME.ink }]} numberOfLines={1}>
         {label}
       </Text>
@@ -146,7 +155,7 @@ export function Badge({ label, tone = "neutral", icon, solid, style }) {
   const t = toneOf(tone);
   return (
     <View style={[styles.badge, { backgroundColor: solid ? t.fg : t.bg }, style]}>
-      {icon ? <Ionicons name={icon} size={12} color={solid ? THEME.onAccent : t.fg} /> : null}
+      {icon ? <Icon name={icon} size={12} color={solid ? THEME.onAccent : t.fg} /> : null}
       <Text style={[type.caption, styles.badgeText, { color: solid ? THEME.onAccent : t.fg }]} numberOfLines={1}>
         {label}
       </Text>
@@ -158,21 +167,32 @@ export function Badge({ label, tone = "neutral", icon, solid, style }) {
 // A status inked on a ticket: a double outline, slightly crooked, like a rubber stamp. The one decorative
 // touch of the app: for a status ("En cours", "J-46"), never for a plain label. Solid inside, so it stays
 // readable on a photo.
-export function Stamp({ label, tone = "stamp", icon, small, tilt = -3, style }) {
+// `thump`: it comes down on the ticket when it shows (after `delay` ms); `large` is for a stamp on its own
+// (the day that is finished).
+export function Stamp({ label, tone = "stamp", icon, small, large, tilt = -3, decorative, thump, delay, style }) {
   const t = toneOf(tone);
+  const k = useThump(thump, delay);
   return (
-    <View
-      accessible
-      accessibilityLabel={label}
-      style={[styles.stampOuter, { borderColor: t.fg, transform: [{ rotate: `${tilt}deg` }] }, small && styles.stampOuterSmall, style]}
+    <Animated.View
+      accessible={!decorative}
+      accessibilityLabel={decorative ? undefined : label}
+      accessibilityElementsHidden={!!decorative}
+      importantForAccessibility={decorative ? "no-hide-descendants" : "auto"}
+      style={[
+        styles.stampOuter,
+        { borderColor: t.fg, transform: [{ rotate: `${tilt}deg` }, { scale: k.scale }], opacity: k.opacity },
+        small && styles.stampOuterSmall,
+        large && styles.stampOuterLarge,
+        style,
+      ]}
     >
-      <View style={[styles.stampInner, { borderColor: t.fg }, small && styles.stampInnerSmall]}>
-        {icon ? <Ionicons name={icon} size={small ? 11 : 13} color={t.fg} /> : null}
-        <Text style={[small ? type.numeralSmall : type.caption, styles.stampText, { color: t.fg }]} numberOfLines={1}>
+      <View style={[styles.stampInner, { borderColor: t.fg }, small && styles.stampInnerSmall, large && styles.stampInnerLarge]}>
+        {icon ? <Icon name={icon} size={large ? 22 : small ? 11 : 13} color={t.fg} /> : null}
+        <Text style={[small ? type.numeralSmall : large ? type.heading : type.caption, styles.stampText, { color: t.fg }]} numberOfLines={1}>
           {label}
         </Text>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -217,7 +237,7 @@ export function Row({ icon, tone = "neutral", lead, title, subtitle, right, chev
     <>
       {lead ? lead : icon ? (
         <View style={[styles.rowTile, round("sm"), { backgroundColor: t.bg }]}>
-          <Ionicons name={icon} size={20} color={t.fg} />
+          <Icon name={icon} size={20} color={t.fg} />
         </View>
       ) : null}
       <View style={styles.rowText}>
@@ -226,7 +246,7 @@ export function Row({ icon, tone = "neutral", lead, title, subtitle, right, chev
         {children}
       </View>
       {right ? right : null}
-      {chevron ? <Ionicons name="chevron-forward" size={18} color={THEME.inkFaint} /> : null}
+      {chevron ? <Icon name="chevron-forward" size={18} color={THEME.inkFaint} /> : null}
     </>
   );
   if (!onPress && !onLongPress) {
@@ -255,7 +275,7 @@ export function Thumb({ uri, icon = "location", tone = "neutral", size = 48 }) {
   const t = toneOf(tone);
   return (
     <View style={[{ width: size, height: size, backgroundColor: t.bg, overflow: "hidden" }, round("sm"), styles.thumb]}>
-      {uri ? <Image source={{ uri }} style={{ width: size, height: size }} /> : <Ionicons name={icon} size={Math.round(size * 0.46)} color={t.fg} />}
+      {uri ? <Image source={{ uri }} style={{ width: size, height: size }} /> : <Icon name={icon} size={Math.round(size * 0.46)} color={t.fg} />}
     </View>
   );
 }
@@ -271,7 +291,7 @@ export function SectionTitle({ title, count, action, style }) {
       <View style={styles.sectionRule} />
       {action ? (
         <Pressable onPress={action.onPress} hitSlop={8} accessibilityRole="button" accessibilityLabel={action.label}>
-          <Text style={[type.caption, { color: THEME.gold, fontFamily: type.label.fontFamily }]}>{action.label}</Text>
+          <Text style={[type.caption, { color: THEME.mark, fontFamily: type.label.fontFamily, textDecorationLine: THEME.light ? "underline" : "none" }]}>{action.label}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -283,7 +303,7 @@ export function SectionTitle({ title, count, action, style }) {
 // content. Field puts a text input in it; DateField puts a button.
 export function FieldFrame({ label, hint, error, multiline, active, style, children }) {
   const onCard = useContext(OnCardContext);
-  const borderColor = error ? THEME.stamp : active ? THEME.gold : THEME.hairStrong;
+  const borderColor = error ? THEME.stamp : active ? THEME.mark : THEME.hairStrong;
   return (
     <View style={[styles.field, style]}>
       {label ? <Text style={[type.caption, styles.fieldLabel]}>{label}</Text> : null}
@@ -301,8 +321,8 @@ export function Field({ label, hint, error, multiline, style, inputStyle, left, 
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={THEME.placeholder}
-        selectionColor={THEME.gold}
-        cursorColor={THEME.gold}
+        selectionColor={THEME.mark}
+        cursorColor={THEME.mark}
         multiline={multiline}
         {...inputProps}
         onFocus={(e) => {
@@ -358,7 +378,7 @@ export function ModalHeader({ title, left, right }) {
             accessibilityState={{ disabled: !!right.disabled }}
             style={[styles.modalHeaderAction, right.disabled && { opacity: 0.4 }]}
           >
-            <Text style={[type.label, { color: THEME.gold }]}>{right.label}</Text>
+            <Text style={[type.label, { color: THEME.mark }]}>{right.label}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -381,13 +401,11 @@ export function BackHeader({ title, subtitle, onBack, right, numberOfLines = 1 }
 }
 
 // ---------- Empty state ----------
+// A ticket with the icon on it, a title, one line of help and at most one main action.
 export function EmptyState({ icon = "compass-outline", tone = "neutral", title, text, action, style }) {
-  const t = toneOf(tone);
   return (
     <View style={[styles.empty, style]}>
-      <View style={[styles.emptyIcon, { backgroundColor: t.bg }]}>
-        <Ionicons name={icon} size={28} color={t.fg} />
-      </View>
+      <TicketArt icon={icon} tone={goldOnPaper(tone) ? "neutral" : tone} />
       <Text style={[type.heading, { textAlign: "center" }]}>{title}</Text>
       {text ? <Text style={[type.subhead, { textAlign: "center", maxWidth: 300 }]}>{text}</Text> : null}
       {action ? <Button title={action.label} icon={action.icon} onPress={action.onPress} style={{ marginTop: space.sm }} /> : null}
@@ -467,8 +485,8 @@ export function Fab({ label, icon = "add", onPress }) {
         pressed && { transform: [{ scale: 0.97 }], opacity: 0.9 },
       ]}
     >
-      <Ionicons name={icon} size={22} color={THEME.onGold} />
-      <Text style={[type.label, { color: THEME.onGold }]}>{label}</Text>
+      <Icon name={icon} size={22} color={THEME.onAction} />
+      <Text style={[type.label, { color: THEME.onAction }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -492,6 +510,8 @@ const styles = themedStyles(() => ({
   stampOuterSmall: { borderWidth: 1.5, borderRadius: 6, padding: 1.5 },
   stampInner: { flexDirection: "row", alignItems: "center", gap: space.xs, borderWidth: 1, borderRadius: 4, paddingHorizontal: space.sm, paddingVertical: 3 },
   stampInnerSmall: { paddingHorizontal: space.xs + 2, paddingVertical: 1 },
+  stampOuterLarge: { borderWidth: 3, borderRadius: 10, padding: 3 },
+  stampInnerLarge: { gap: space.sm, paddingHorizontal: space.lg, paddingVertical: space.sm, borderRadius: 6 },
   stampText: { fontFamily: type.label.fontFamily, letterSpacing: 1.1, textTransform: "uppercase" },
   // What makes a card a ticket on paper: a fine warm edge and a shadow like a sheet lying on a desk.
   // On the dark palettes depth comes from the lighter surface alone.
@@ -526,7 +546,6 @@ const styles = themedStyles(() => ({
   modalHeaderTitle: { flex: 2, textAlign: "center" },
   backHeader: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: layout.gutter, paddingTop: space.sm, paddingBottom: space.md },
   empty: { alignItems: "center", gap: space.sm, paddingVertical: space.xxl, paddingHorizontal: layout.gutter },
-  emptyIcon: { width: 64, height: 64, borderRadius: radius.full, alignItems: "center", justifyContent: "center", marginBottom: space.sm },
   sheetRoot: { flex: 1, justifyContent: "flex-end" },
   sheetScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: THEME.scrim },
   sheet: {
@@ -549,6 +568,6 @@ const styles = themedStyles(() => ({
     gap: space.sm,
     height: 56,
     paddingHorizontal: space.xl - 4,
-    backgroundColor: THEME.goldFill,
+    backgroundColor: THEME.action,
   },
 }));

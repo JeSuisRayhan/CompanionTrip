@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "./Icon";
 
 import { THEME, space, type, themedStyles } from "../lib/theme";
 import { isoDate, isValidISODate, monthGrid, monthTitle, shiftMonth, formatFullDate, formatShortDate, WEEKDAYS_MONDAY_FIRST } from "../lib/dates";
@@ -24,7 +24,7 @@ export default function DateField({ label, value, onChange, optional, min, max, 
           accessibilityLabel={valid ? `${label} : ${formatFullDate(valid)}. Modifier` : `${label} : choisir une date`}
           style={styles.button}
         >
-          <Ionicons name="calendar-outline" size={20} color={valid ? THEME.gold : THEME.inkMuted} />
+          <Icon name="calendar-outline" size={20} color={valid ? THEME.mark : THEME.inkMuted} />
           <Text style={[type.body, styles.text, !valid && { color: THEME.placeholder }]} numberOfLines={2}>
             {shown || placeholder}
           </Text>
@@ -56,7 +56,7 @@ function viewOf(iso) {
   return { year: parseInt(iso.slice(0, 4), 10), month: parseInt(iso.slice(5, 7), 10) - 1 };
 }
 
-// The month grid in a bottom sheet. Monday first, the chosen day in gold, today
+// The month grid in a bottom sheet. Monday first, the chosen day filled, today
 // ringed. Picking a day closes the sheet.
 export function CalendarSheet({ visible, title, value, min, max, optional, onPick, onClear, onClose }) {
   const today = isoDate(new Date());
@@ -118,12 +118,12 @@ export function CalendarSheet({ visible, title, value, min, max, optional, onPic
                   style={({ pressed }) => [
                     styles.day,
                     round("full"),
-                    selected && { backgroundColor: THEME.goldFill },
-                    !selected && isToday && { borderWidth: 1.5, borderColor: THEME.gold },
+                    selected && { backgroundColor: THEME.action },
+                    !selected && isToday && { borderWidth: 1.5, borderColor: THEME.mark },
                     pressed && !selected && { backgroundColor: THEME.bgCardAlt },
                   ]}
                 >
-                  <Text style={[type.numeral, selected && { color: THEME.onGold }, off && { color: THEME.inkFaint, opacity: 0.45 }]}>{parseInt(iso.slice(8, 10), 10)}</Text>
+                  <Text style={[type.numeral, selected && { color: THEME.onAction }, off && { color: THEME.inkFaint, opacity: 0.45 }]}>{parseInt(iso.slice(8, 10), 10)}</Text>
                 </Pressable>
               </View>
             );

@@ -1,15 +1,14 @@
 import React, { useState, useCallback, useEffect, useContext, useRef } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal, Alert, Image, ImageBackground, LayoutAnimation, Platform, UIManager, Dimensions } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Modal, Alert, Image, LayoutAnimation, Platform, UIManager, Dimensions } from "react-native";
 import { SafeAreaView, SafeAreaInsetsContext } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
+import Icon from "../components/Icon";
 import { useFocusEffect } from "@react-navigation/native";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha, paperEdge } from "../lib/theme";
+import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha, paperEdge, shadow } from "../lib/theme";
 import { getTrip, addExpense, updateExpense, removeExpense, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatShortDate, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
@@ -22,6 +21,7 @@ import { exportTripFile } from "../lib/backup";
 import DonutChart from "../components/DonutChart";
 import { Txt, Button, IconButton, Badge, Stamp, Chip, Group, Row, Thumb, SectionTitle, Field, ProgressBar, EmptyState, Sheet, ActionSheet, round } from "../components/ui";
 import TripScroll, { TripChromeContext } from "../components/TripScroll";
+import TripCover from "../components/TripCover";
 import IdeasTab from "./IdeasTab";
 import AttractionsTab from "./AttractionsTab";
 
@@ -226,42 +226,37 @@ export default function TripScreen({ route, navigation }) {
   );
 }
 
-// Trip name, dates and status. The cover photo (when there is one) sits behind it.
+// The cover (a drawing, or the photo of the trip) runs under the status bar with the round buttons on it; the
+// name, dates and status sit on a paper label that overlaps its lower edge.
+const HERO = 176;
 function TripHeader({ trip, start, end, status, onBack, onSettings, onMap }) {
   const insets = useContext(SafeAreaInsetsContext);
-  const cover = trip.coverImage;
-  const body = (
-    <>
-      <View style={[styles.headerBar, { paddingTop: space.xs + (insets ? insets.top : 0) }]}>
-        <IconButton icon="chevron-back" label="Retour" filled onPress={onBack} />
-        <View style={styles.headerActions}>
-          {onMap ? <IconButton icon="map-outline" label="Voir le voyage sur la carte" filled onPress={onMap} /> : null}
-          <IconButton icon="options-outline" label="Réglages du voyage" filled onPress={onSettings} />
+  const top = insets ? insets.top : 0;
+  return (
+    <View>
+      <TripCover trip={trip} height={HERO + top} photoUri={trip.coverImage?.url} postmarkStyle={{ top: top + 52 }}>
+        <View style={[styles.headerBar, { paddingTop: space.xs + top }]}>
+          <IconButton icon="chevron-back" label="Retour" filled style={styles.heroButton} onPress={onBack} />
+          <View style={styles.headerActions}>
+            {onMap ? <IconButton icon="map-outline" label="Voir le voyage sur la carte" filled style={styles.heroButton} onPress={onMap} /> : null}
+            <IconButton icon="options-outline" label="Réglages du voyage" filled style={styles.heroButton} onPress={onSettings} />
+          </View>
         </View>
-      </View>
-      <View style={[styles.headerTitleBlock, cover?.url && { paddingTop: space.xl }]}>
+      </TripCover>
+      <View style={[styles.headerLabel, round("lg")]}>
         <Txt variant="display" numberOfLines={2} accessibilityRole="header">
           {trip.name}
         </Txt>
         <View style={styles.headerMeta}>
           {start ? <Txt variant="subhead">{formatDateRange(start, end)}</Txt> : <Txt variant="subhead">Pas encore daté</Txt>}
-          {status === "current" ? <Stamp label="En cours" tone="teal" icon="radio-button-on" /> : null}
+          {status === "current" ? <Stamp label="En cours" tone="teal" icon="radio-button-on" thump delay={200} /> : null}
         </View>
       </View>
-    </>
+    </View>
   );
-  if (cover?.url) {
-    return (
-      <ImageBackground source={{ uri: cover.url }} style={styles.headerPhoto} imageStyle={{ resizeMode: "cover" }}>
-        <LinearGradient colors={[withAlpha(THEME.bg, 0.25), withAlpha(THEME.bg, 0.75), THEME.bg]} locations={[0, 0.55, 1]} style={StyleSheet.absoluteFill} />
-        {body}
-      </ImageBackground>
-    );
-  }
-  return <View>{body}</View>;
 }
 
-// Underlined text tabs. The active tab is ink + a gold rule; no pills.
+// Underlined text tabs. The active tab is ink + a rule; no pills.
 function TabBar({ tabs, value, onChange }) {
   const scrollRef = useRef(null);
   return (
@@ -286,7 +281,7 @@ function TabBar({ tabs, value, onChange }) {
               style={styles.tab}
             >
               <Text style={[type.label, { color: active ? THEME.ink : THEME.inkMuted, fontFamily: active ? type.label.fontFamily : type.body.fontFamily }]}>{t.label}</Text>
-              <View style={[styles.tabRule, active && { backgroundColor: THEME.gold }]} />
+              <View style={[styles.tabRule, active && { backgroundColor: THEME.mark }]} />
             </Pressable>
           );
         })}
@@ -315,7 +310,7 @@ function DayNode({ state, number }) {
   if (state === "done") {
     return (
       <View style={[styles.node, styles.nodeDone]}>
-        <Ionicons name="checkmark" size={15} color={THEME.onAccent} />
+        <Icon name="checkmark" size={15} color={THEME.onAccent} />
       </View>
     );
   }
@@ -326,7 +321,6 @@ function DayNode({ state, number }) {
   );
 }
 
-// A day as a ticket: its number, title, date and what it holds on the left; the options on the stub, behind the perforation.
 // The way into "Aujourd'hui" while the trip is under way: what is next, at a glance.
 function TodayCard({ plan, onPress }) {
   const { next, countdown, total, done, allDone } = plan;
@@ -343,14 +337,14 @@ function TodayCard({ plan, onPress }) {
       style={({ pressed }) => [styles.todayCard, round("lg"), pressed && { opacity: 0.85 }]}
     >
       <View style={styles.todayIcon}>
-        <Ionicons name={allDone ? "checkmark-done" : "today"} size={22} color={THEME.onGold} />
+        <Icon name={allDone ? "checkmark-done" : "today"} size={22} color={THEME.onGold} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={type.caption}>{`Aujourd'hui · jour ${plan.dayNumber}${total ? ` · ${done.length}/${total} faites` : ""}`}</Text>
         <Text style={type.name} numberOfLines={2}>{subtitle}</Text>
         {countdown && !allDone ? <Text style={[type.caption, { color: countdown.tone === "stamp" ? THEME.stamp : THEME.gold }]}>{countdown.label}</Text> : null}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={THEME.inkFaint} />
+      <Icon name="chevron-forward" size={18} color={THEME.inkFaint} />
     </Pressable>
   );
 }
@@ -366,57 +360,79 @@ function RecapCard({ trip, onPress }) {
       style={({ pressed }) => [styles.todayCard, round("lg"), pressed && { opacity: 0.85 }]}
     >
       <View style={styles.todayIcon}>
-        <Ionicons name="images" size={22} color={THEME.onGold} />
+        <Icon name="images" size={22} color={THEME.onGold} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text style={type.caption}>Voyage terminé</Text>
         <Text style={type.name} numberOfLines={2}>{photos > 0 ? `Bilan et ${photos} photo${photos > 1 ? "s" : ""} souvenir${photos > 1 ? "s" : ""}` : "Voir le bilan et ajouter des souvenirs"}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={THEME.inkFaint} />
+      <Icon name="chevron-forward" size={18} color={THEME.inkFaint} />
     </Pressable>
   );
 }
 
-function DayTicket({ day, index, date, state, isPark, trip, onPress, onMenu, onLive }) {
+// The rail of the day list: the day number, big, on a vertical line that links the days. Today is an amber
+// disc, a finished day is faded, the others are plain ink. The line is decoration: the card says it all.
+function DayRail({ state, number, first, last, ending }) {
+  const big = String(number).length > 1;
+  const color = state === "today" ? THEME.onGold : state === "done" ? withAlpha(THEME.teal, 0.6) : state === "past" ? THEME.inkMuted : THEME.ink;
+  // the line runs from the middle of this number to the middle of the next one (or stops at the last number)
+  const line = [styles.railLine, { top: first ? RAIL_NODE / 2 : 0 }, last && !ending ? { height: first ? 0 : RAIL_NODE / 2 } : { bottom: -DAY_GAP }];
+  return (
+    <View style={styles.rail} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {first && last && !ending ? null : <View style={[line, state === "done" && { backgroundColor: withAlpha(THEME.teal, 0.4) }]} />}
+      <View style={[styles.railNode, state === "today" && styles.railNodeToday]}>
+        <Text style={[styles.railNumber, big && styles.railNumberBig, state === "today" && styles.railNumberToday, { color }]}>{number}</Text>
+      </View>
+    </View>
+  );
+}
+
+// A day as a ticket: its title, date and what it holds on the left; the options on the stub, behind the perforation.
+function DayTicket({ day, index, date, state, isPark, trip, first, last, ending, onPress, onMenu, onLive }) {
   const count = day.activities.length;
   const kinds = new Set(day.activities.map((a) => a.type));
+  const note = state === "today" ? ", aujourd'hui" : state === "done" ? ", fait" : "";
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${day.title}${date ? ", " + formatDayLabel(date) : ""}, ${count} étape${count !== 1 ? "s" : ""}`}
-      style={({ pressed }) => [styles.dayTicket, round("lg"), state === "today" && styles.dayTicketToday, pressed && { backgroundColor: THEME.pressed }]}
-    >
-      <View style={styles.dayBody}>
-        <View style={styles.dayHead}>
-          <Badge label={`J${index + 1}`} tone="gold" />
-          {state === "today" ? <Badge label="Aujourd'hui" tone="gold" solid /> : null}
-          {state === "done" ? <Badge label="Fait" tone="teal" icon="checkmark" /> : null}
-        </View>
-        <View style={styles.routeTitleRow}>
-          <Text style={[type.heading, { flexShrink: 1 }]} numberOfLines={2}>
-            {day.title}
-          </Text>
-          {day.dayType === "flight" && <Ionicons name="airplane" size={15} color={THEME.blue} />}
-          {day.dayType === "park" && <Ionicons name="sparkles" size={15} color={THEME.pink} />}
-        </View>
-        {date ? (
-          <View style={styles.routeMeta}>
-            <Text style={type.subhead}>{formatDayLabel(date)}</Text>
-            <WeatherBadge day={day} dateISO={date} compact fallbackLocation={trip.defaultLocation} />
+    <View style={styles.dayRow}>
+      <DayRail state={state} number={index + 1} first={first} last={last} ending={ending} />
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Jour ${index + 1}, ${day.title}${date ? ", " + formatDayLabel(date) : ""}${note}, ${count} étape${count !== 1 ? "s" : ""}`}
+        style={({ pressed }) => [styles.dayTicket, round("lg"), state === "today" && styles.dayTicketToday, pressed && { backgroundColor: THEME.pressed, transform: [{ scale: 0.985 }] }]}
+      >
+        <View style={styles.dayBody}>
+          {state === "today" || state === "done" ? (
+            <View style={styles.dayHead}>
+              {state === "today" ? <Badge label="Aujourd'hui" tone="gold" solid /> : <Stamp label="Fait" tone="teal" icon="checkmark" small decorative />}
+            </View>
+          ) : null}
+          <View style={[styles.dayText, state === "done" && styles.dayTextDone]}>
+            <View style={styles.routeTitleRow}>
+              <Text style={[type.heading, { flexShrink: 1 }]} numberOfLines={2}>
+                {day.title}
+              </Text>
+              {day.dayType === "flight" && <Icon name="airplane" size={15} color={THEME.blue} />}
+              {day.dayType === "park" && <Icon name="sparkles" size={15} color={THEME.pink} />}
+            </View>
+            {date ? (
+              <View style={styles.routeMeta}>
+                <Text style={type.subhead}>{formatDayLabel(date)}</Text>
+                <WeatherBadge day={day} dateISO={date} compact fallbackLocation={trip.defaultLocation} />
+              </View>
+            ) : null}
+            <View style={styles.dayTags}>
+              <Text style={[type.caption, { color: THEME.inkFaint }]}>
+                {count === 0 ? "Aucune étape" : isPark ? `${day.activities.filter((a) => a.done).length}/${count} faites` : `${count} étape${count !== 1 ? "s" : ""}`}
+              </Text>
+              {kinds.has("hotel") ? <Text style={[type.caption, { color: THEME.stamp }]}>hôtel</Text> : null}
+              {kinds.has("transport") ? <Text style={[type.caption, { color: THEME.blue }]}>transport</Text> : null}
+            </View>
           </View>
-        ) : null}
-        <View style={styles.dayTags}>
-          <Text style={[type.caption, { color: THEME.inkFaint }]}>
-            {count === 0 ? "Aucune étape" : isPark ? `${day.activities.filter((a) => a.done).length}/${count} faites` : `${count} étape${count !== 1 ? "s" : ""}`}
-          </Text>
-          {kinds.has("hotel") ? <Text style={[type.caption, { color: THEME.stamp }]}>hôtel</Text> : null}
-          {kinds.has("transport") ? <Text style={[type.caption, { color: THEME.blue }]}>transport</Text> : null}
+          {onLive ? <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel={`Suivre ${day.title} en direct`} style={styles.dayLive} onPress={onLive} /> : null}
         </View>
-        {onLive ? <Button title="Jour J" icon="play" size="sm" tone="teal" accessibilityLabel={`Suivre ${day.title} en direct`} style={styles.dayLive} onPress={onLive} /> : null}
-      </View>
-      {onMenu ? (
-        <>
+        {onMenu ? (
           <View style={styles.dayStub}>
             <View style={styles.perfDots} pointerEvents="none">
               {Array.from({ length: 9 }).map((_, i) => (
@@ -425,11 +441,9 @@ function DayTicket({ day, index, date, state, isPark, trip, onPress, onMenu, onL
             </View>
             <IconButton icon="ellipsis-horizontal" label={`Options de ${day.title}`} onPress={onMenu} size={20} />
           </View>
-          <View style={[styles.dayNotch, { top: -NOTCH / 2 }]} pointerEvents="none" />
-          <View style={[styles.dayNotch, { bottom: -NOTCH / 2 }]} pointerEvents="none" />
-        </>
-      ) : null}
-    </Pressable>
+        ) : null}
+      </Pressable>
+    </View>
   );
 }
 
@@ -512,11 +526,11 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
           style={{ marginBottom: space.md }}
           accessibilityLabel="Rechercher"
           autoFocus
-          left={<Ionicons name="search" size={18} color={THEME.inkFaint} style={{ marginRight: space.sm }} />}
+          left={<Icon name="search" size={18} color={THEME.inkFaint} style={{ marginRight: space.sm }} />}
           right={
             searchQuery ? (
               <Pressable onPress={() => onSearchChange("")} hitSlop={10} accessibilityRole="button" accessibilityLabel="Effacer la recherche">
-                <Ionicons name="close-circle" size={18} color={THEME.inkFaint} />
+                <Icon name="close-circle" size={18} color={THEME.inkFaint} />
               </Pressable>
             ) : null
           }
@@ -591,8 +605,8 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
                   >
                     <View style={styles.tileTop}>
                       <DayNode state={state} number={index + 1} />
-                      {day.dayType === "flight" && <Ionicons name="airplane" size={15} color={THEME.blue} />}
-                      {day.dayType === "park" && <Ionicons name="sparkles" size={15} color={THEME.pink} />}
+                      {day.dayType === "flight" && <Icon name="airplane" size={15} color={THEME.blue} />}
+                      {day.dayType === "park" && <Icon name="sparkles" size={15} color={THEME.pink} />}
                     </View>
                     <Text style={[type.label, { marginTop: space.md }]} numberOfLines={2}>
                       {day.title}
@@ -615,7 +629,7 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
 
         return (
           <View style={styles.dayList}>
-            {filtered.map(({ day, index }) => {
+            {filtered.map(({ day, index }, i) => {
               const date = resolveDayDate(trip, day, index);
               const state = dayState(day, date, today);
               return (
@@ -625,6 +639,9 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
                   index={index}
                   date={date}
                   state={state}
+                  first={i === 0}
+                  last={i === filtered.length - 1}
+                  ending={!q}
                   isPark={isPark}
                   trip={trip}
                   onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })}
@@ -634,10 +651,17 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
               );
             })}
             {!q && (
-              <Pressable onPress={onAddDay} accessibilityRole="button" accessibilityLabel="Ajouter un jour" style={({ pressed }) => [styles.dayAdd, round("lg"), pressed && { backgroundColor: THEME.pressed }]}>
-                <Ionicons name="add" size={18} color={THEME.inkMuted} />
-                <Text style={[type.label, { color: THEME.inkMuted, fontFamily: type.body.fontFamily }]}>Ajouter un jour</Text>
-              </Pressable>
+              <View style={styles.dayRow}>
+                <View style={styles.rail} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                  <View style={[styles.railLine, { top: 0, height: ADD_H / 2 }]} />
+                  <View style={styles.railAdd}>
+                    <Icon name="add" size={16} color={THEME.inkFaint} />
+                  </View>
+                </View>
+                <Pressable onPress={onAddDay} accessibilityRole="button" accessibilityLabel="Ajouter un jour" style={({ pressed }) => [styles.dayAdd, round("lg"), pressed && { backgroundColor: THEME.pressed }]}>
+                  <Text style={[type.label, { color: THEME.inkMuted, fontFamily: type.body.fontFamily }]}>Ajouter un jour</Text>
+                </Pressable>
+              </View>
             )}
           </View>
         );
@@ -960,7 +984,7 @@ function ChecklistSection({ title, trip, listKey, onChange }) {
           {items.map((item) => (
             <Row
               key={item.id}
-              lead={<Ionicons name={item.checked ? "checkmark-circle" : "ellipse-outline"} size={24} color={item.checked ? THEME.teal : THEME.inkFaint} />}
+              lead={<Icon name={item.checked ? "checkmark-circle" : "ellipse-outline"} size={24} color={item.checked ? THEME.teal : THEME.inkFaint} />}
               title={<Text style={[type.body, item.checked && styles.checkedLabel]}>{item.label}</Text>}
               accessibilityLabel={`${item.label}, ${item.checked ? "fait" : "à faire"}`}
               onPress={async () => {
@@ -1192,7 +1216,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
                 subtitle={countText}
                 accessibilityLabel={`${c.label}, ${countText}, ${open ? "ouvert" : "fermé"}`}
                 onPress={() => setOpenCats((o) => ({ ...o, [c.key]: !open }))}
-                right={<Ionicons name={open ? "chevron-up" : "chevron-down"} size={18} color={THEME.inkFaint} />}
+                right={<Icon name={open ? "chevron-up" : "chevron-down"} size={18} color={THEME.inkFaint} />}
               />
               {open && list.length === 0 ? <Row subtitle="Aucun document pour l'instant." /> : null}
               {open
@@ -1287,7 +1311,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
           {viewingDoc && <Image source={{ uri: viewingDoc.uri }} style={styles.viewerImage} resizeMode="contain" />}
           {viewingDoc?.scannedCode && (
             <View style={[styles.scannedCodeBadge, { position: "absolute", bottom: 90, left: 20, right: 20 }]}>
-              <Ionicons name="qr-code-outline" size={14} color={THEME.teal} />
+              <Icon name="qr-code-outline" size={14} color={THEME.teal} />
               <Text style={styles.scannedCodeText} numberOfLines={1}>
                 {viewingDoc.scannedCode}
               </Text>
@@ -1303,7 +1327,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
       <Sheet visible={!!pendingUri} onClose={closePending} title="Nouveau document">
         {pendingUri && pendingKind === "pdf" ? (
           <View style={[styles.pdfPreview, round("md")]}>
-            <Ionicons name="document-text" size={40} color={THEME.stamp} />
+            <Icon name="document-text" size={40} color={THEME.stamp} />
             <Text style={type.label}>PDF</Text>
           </View>
         ) : pendingUri ? (
@@ -1311,7 +1335,7 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
         ) : null}
         {pendingScannedCode && (
           <View style={styles.scannedCodeBadge}>
-            <Ionicons name="qr-code-outline" size={14} color={THEME.teal} />
+            <Icon name="qr-code-outline" size={14} color={THEME.teal} />
             <Text style={styles.scannedCodeText} numberOfLines={1}>
               {pendingScannedCode}
             </Text>
@@ -1412,17 +1436,21 @@ function ShiftDatesModal({ visible, onClose, onConfirm }) {
 }
 
 const NODE = 30;
-const NOTCH = 18; // the half circles cut into a day ticket at the perforation
+const NOTCH = 14; // the perforation of a day ticket stops this far from its edges
+const DAY_GAP = space.lg; // between two days of the list
+const RAIL = 52; // width of the column that holds the day numbers
+const RAIL_NODE = 48; // height of a number's box: the line joins their middles
+const ADD_H = 56;
 const STUB = 56; // width of the ticket stub that holds the options button
 
 const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  headerPhoto: { width: "100%" },
   headerBar: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: space.md },
   headerActions: { flexDirection: "row", gap: space.sm },
-  headerTitleBlock: { paddingHorizontal: layout.gutter, paddingTop: space.sm, paddingBottom: space.lg, gap: space.sm },
+  heroButton: { backgroundColor: THEME.veil, boxShadow: shadow.raised },
+  headerLabel: { marginTop: -space.xl - space.xs, marginHorizontal: layout.gutter, marginBottom: space.lg, padding: space.lg, gap: space.sm, backgroundColor: THEME.bgCard, ...paperEdge() },
   headerMeta: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
 
   tabBarWrap: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: THEME.hairStrong, backgroundColor: THEME.bg },
@@ -1438,20 +1466,30 @@ const styles = themedStyles(() => ({
   routeTitleRow: { flexDirection: "row", alignItems: "center", gap: space.sm, flexWrap: "wrap" },
   routeMeta: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
 
-  dayList: { gap: space.md },
+  dayList: { gap: DAY_GAP },
+  dayRow: { flexDirection: "row", alignItems: "stretch", gap: space.sm },
+  rail: { width: RAIL, alignItems: "center" },
+  railLine: { position: "absolute", left: RAIL / 2 - 1, width: 2, borderRadius: 1, backgroundColor: THEME.hairStrong },
+  railNode: { width: RAIL, height: RAIL_NODE, alignItems: "center", justifyContent: "center", borderRadius: RAIL_NODE / 2 },
+  railNodeToday: { width: RAIL_NODE, backgroundColor: THEME.goldFill, boxShadow: `0 0 0 4px ${withAlpha(THEME.goldFill, 0.3)}` },
+  railNumber: { ...type.display, fontSize: 30, lineHeight: 34, letterSpacing: -1, backgroundColor: THEME.bg, paddingHorizontal: 4 },
+  railNumberBig: { fontSize: 26, letterSpacing: -1.5 },
+  railNumberToday: { backgroundColor: "transparent", fontSize: 28, paddingHorizontal: 0 },
+  railAdd: { width: 28, height: 28, borderRadius: 14, marginTop: ADD_H / 2 - 14, alignItems: "center", justifyContent: "center", backgroundColor: THEME.bg, borderWidth: 1.5, borderStyle: "dashed", borderColor: THEME.hairStrong },
   todayCard: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: THEME.bgCard, ...paperEdge(), borderWidth: 1.5, borderColor: THEME.gold, padding: space.md, marginBottom: space.lg },
   todayIcon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: THEME.goldFill, alignItems: "center", justifyContent: "center" },
-  dayTicket: { flexDirection: "row", alignItems: "stretch", backgroundColor: THEME.bgCard, borderWidth: 1, borderColor: THEME.hairStrong, ...paperEdge() },
+  dayTicket: { flex: 1, flexDirection: "row", alignItems: "stretch", backgroundColor: THEME.bgCard, borderWidth: 1, borderColor: THEME.hairStrong, ...paperEdge() },
   dayTicketToday: { borderWidth: 1.5, borderColor: THEME.gold },
   dayBody: { flex: 1, padding: space.lg, gap: space.xs },
-  dayHead: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: 2 },
+  dayHead: { flexDirection: "row", alignItems: "center", gap: space.sm, marginBottom: space.xs },
+  dayText: { gap: space.xs },
+  dayTextDone: { opacity: 0.6 },
   dayTags: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap", marginTop: 2 },
   dayLive: { alignSelf: "flex-start", marginTop: space.sm },
   dayStub: { width: STUB, alignItems: "center", justifyContent: "center" },
   perfDots: { position: "absolute", left: 0, top: NOTCH, bottom: NOTCH, width: 2, alignItems: "center", justifyContent: "space-evenly" },
   perfDot: { width: 2, height: 4, borderRadius: 1, backgroundColor: THEME.hairStrong },
-  dayNotch: { position: "absolute", right: STUB - NOTCH / 2, width: NOTCH, height: NOTCH, borderRadius: NOTCH / 2, backgroundColor: THEME.bg },
-  dayAdd: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: 56, borderWidth: 1.5, borderStyle: "dashed", borderColor: THEME.hairStrong },
+  dayAdd: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.sm, minHeight: ADD_H, borderWidth: 1.5, borderStyle: "dashed", borderColor: THEME.hairStrong },
 
   node: { width: NODE, height: NODE, borderRadius: NODE / 2, alignItems: "center", justifyContent: "center" },
   nodeNumber: { ...type.numeralSmall },
@@ -1471,7 +1509,7 @@ const styles = themedStyles(() => ({
   spentRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   expensesTitle: { marginTop: space.xl },
   amountCol: { alignItems: "flex-end", gap: 2 },
-  totalValue: { ...type.numeralLarge, color: THEME.gold },
+  totalValue: { ...type.numeralLarge, color: THEME.mark },
 
   checklistSection: { marginBottom: space.xl },
   starter: { gap: space.md, marginBottom: space.md },

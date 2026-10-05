@@ -74,5 +74,5 @@ const styles = themedStyles(() => ({
   },
   message: { ...type.subhead, color: THEME.ink, flex: 1, paddingVertical: space.sm },
   action: { minHeight: layout.minTouch, paddingHorizontal: space.md, justifyContent: "center" },
-  undoText: { ...type.label, color: THEME.gold },
+  undoText: { ...type.label, color: THEME.mark },
 }));

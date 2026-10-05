@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, TONES, space, layout, type, themedStyles } from "../lib/theme";
@@ -174,7 +174,7 @@ export default function ParkLiveScreen({ route, navigation }) {
           </View>
           <ProgressBar value={rides.length ? ridesDone / rides.length : 0} height={6} style={styles.bar} />
           <View style={styles.liveRow}>
-            {refreshing ? <ActivityIndicator size="small" color={THEME.teal} /> : <Ionicons name={error ? "cloud-offline-outline" : "pulse"} size={16} color={error ? THEME.stamp : THEME.teal} />}
+            {refreshing ? <ActivityIndicator size="small" color={THEME.teal} /> : <Icon name={error ? "cloud-offline-outline" : "pulse"} size={16} color={error ? THEME.stamp : THEME.teal} />}
             <Txt variant="caption" color={error ? "stamp" : undefined} style={styles.liveText} numberOfLines={3}>
               {error ? `${error} Estimation avec les attentes habituelles.` : qtId == null ? "Choisissez un parc dans l'onglet Attractions pour voir les attentes en direct." : updated ? `Attentes mises à jour ${updated}` : "Chargement des attentes…"}
             </Txt>

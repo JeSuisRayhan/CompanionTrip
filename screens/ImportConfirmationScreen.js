@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import * as Clipboard from "expo-clipboard";
 
 import { THEME, space, layout, themedStyles } from "../lib/theme";
@@ -153,7 +153,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
                     tone={it.type === "hotel" ? "stamp" : it.type === "repas" ? "gold" : it.type === "transport" ? "blue" : "teal"}
                     title={it.title}
                     subtitle={bits.join(" · ")}
-                    right={<Ionicons name={it.include && placeable ? "checkbox" : "square-outline"} size={24} color={it.include && placeable ? THEME.teal : THEME.inkFaint} />}
+                    right={<Icon name={it.include && placeable ? "checkbox" : "square-outline"} size={24} color={it.include && placeable ? THEME.teal : THEME.inkFaint} />}
                     onPress={() => placeable && patch(index, { include: !it.include })}
                     accessibilityLabel={`${it.title}, ${it.include && placeable ? "sélectionnée" : "ignorée"}`}
                   />

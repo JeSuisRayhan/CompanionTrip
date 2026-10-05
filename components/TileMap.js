@@ -8,7 +8,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { View, Text, Image, Pressable, PanResponder, Linking, StyleSheet } from "react-native";
 import Svg, { Polyline } from "react-native-svg";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "./Icon";
 
 import { THEME, space, radius, type, shadow, themedStyles, withAlpha } from "../lib/theme";
 import { getTileCache } from "../lib/tileStore";
@@ -218,7 +218,7 @@ export default function TileMap({ pins, route, selectedId, onSelect, fitKey, sty
 
       {gapCount > 0 ? (
         <View style={styles.gapNote} accessibilityLiveRegion="polite" pointerEvents="none">
-          <Ionicons name="cloud-offline-outline" size={16} color={THEME.gold} />
+          <Icon name="cloud-offline-outline" size={16} color={THEME.gold} />
           <Text style={styles.gapText}>Carte incomplète ici : pas de réseau, et cette zone n'a jamais été consultée.</Text>
         </View>
       ) : null}
@@ -255,7 +255,7 @@ function Pin({ pin, x, y, numbered, selected, onPress }) {
           selected && styles.pinSelected,
         ]}
       >
-        {numbered ? <Text style={styles.pinNumber}>{pin.order}</Text> : <Ionicons name={pin.icon} size={selected ? 20 : 16} color={THEME.onAccent} />}
+        {numbered ? <Text style={styles.pinNumber}>{pin.order}</Text> : <Icon name={pin.icon} size={selected ? 20 : 16} color={THEME.onAccent} />}
       </View>
       {!numbered && pin.dayIndex != null ? (
         <View style={styles.dayBadge}>

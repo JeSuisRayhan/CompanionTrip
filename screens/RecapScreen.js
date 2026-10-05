@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { View, Text, ScrollView, Pressable, Image, Modal, Share, Alert, ActivityIndicator, Dimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, space, layout, type, themedStyles } from "../lib/theme";
@@ -113,7 +113,7 @@ export default function RecapScreen({ route, navigation }) {
         <View style={styles.stats}>
           {stats.map((s) => (
             <Surface key={s.key} style={[styles.stat, { width: (Dimensions.get("window").width - layout.gutter * 2 - GAP) / 2 }]} accessible accessibilityLabel={`${s.value} ${s.label}`}>
-              <Ionicons name={s.icon} size={18} color={THEME.inkFaint} />
+              <Icon name={s.icon} size={18} color={THEME.inkFaint} />
               <Text style={type.numeralLarge}>{s.value}</Text>
               <Txt variant="caption">{s.label}</Txt>
             </Surface>

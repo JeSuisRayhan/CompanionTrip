@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { View, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 
 import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { TRIP_TYPES } from "../lib/constants";
@@ -380,7 +380,7 @@ function StepBar({ count, index }) {
       {Array.from({ length: count }).map((_, i) => (
         <View
           key={i}
-          style={[styles.stepSegment, { backgroundColor: i + 1 < index ? THEME.teal : i + 1 === index ? THEME.gold : THEME.bgCardAlt }]}
+          style={[styles.stepSegment, { backgroundColor: i + 1 < index ? THEME.teal : i + 1 === index ? THEME.mark : THEME.bgCardAlt }]}
         />
       ))}
     </View>
@@ -400,10 +400,10 @@ function ChoiceRow({ icon, tone, title, subtitle, selected, onPress }) {
       onPress={onPress}
       accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
       right={
-        <Ionicons
+        <Icon
           name={selected ? "checkmark-circle" : "radio-button-off"}
           size={24}
-          color={selected ? THEME.gold : THEME.inkFaint}
+          color={selected ? THEME.mark : THEME.inkFaint}
         />
       }
       style={[styles.choiceRow, selected && styles.choiceRowOn]}

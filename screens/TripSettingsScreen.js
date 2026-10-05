@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { View, Text, Switch, Pressable, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, space, layout, type, themedStyles } from "../lib/theme";
@@ -413,7 +413,7 @@ function PickerField({ label, value, onPress }) {
       style={({ pressed }) => (pressed ? styles.pressed : null)}
     >
       <View pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <Field label={label} value={value} editable={false} right={<Ionicons name="chevron-down" size={18} color={THEME.inkMuted} />} />
+        <Field label={label} value={value} editable={false} right={<Icon name="chevron-down" size={18} color={THEME.inkMuted} />} />
       </View>
     </Pressable>
   );
@@ -428,7 +428,7 @@ function CurrencyPickerModal({ visible, selected, onClose, onSelect }) {
             key={item.code}
             title={item.label}
             selected={item.code === selected}
-            right={item.code === selected ? <Ionicons name="checkmark" size={20} color={THEME.gold} /> : null}
+            right={item.code === selected ? <Icon name="checkmark" size={20} color={THEME.mark} /> : null}
             onPress={() => onSelect(item.code)}
           />
         ))}

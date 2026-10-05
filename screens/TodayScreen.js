@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking, Alert, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, space, layout, type, themedStyles, paperEdge } from "../lib/theme";
@@ -277,7 +277,7 @@ function NextCard({ step, trip, countdown, leg, now, busy, onGo, onDone, onEdit,
               <Text style={styles.stubTime}>{step.time}</Text>
             ) : (
               <View style={styles.stubIcon}>
-                <Ionicons name={t.icon} size={28} color={THEME.onGold} />
+                <Icon name={t.icon} size={28} color={THEME.onGold} />
               </View>
             )}
           </View>
@@ -293,7 +293,7 @@ function NextCard({ step, trip, countdown, leg, now, busy, onGo, onDone, onEdit,
           <Text style={type.title}>{name}</Text>
           {place ? (
             <View style={styles.placeLine}>
-              <Ionicons name="location-outline" size={16} color={THEME.inkFaint} />
+              <Icon name="location-outline" size={16} color={THEME.inkFaint} />
               <Text style={[type.subhead, { flex: 1 }]} numberOfLines={3}>{place}</Text>
             </View>
           ) : null}
@@ -335,7 +335,7 @@ function LaterRow({ step, now, onPress }) {
     <Row
       lead={
         <View style={[styles.laterStub, round("sm"), { backgroundColor: t.dim }]}>
-          {step.time ? <Text style={[styles.laterTime, { color: t.color }]}>{step.time}</Text> : <Ionicons name={t.icon} size={18} color={t.color} />}
+          {step.time ? <Text style={[styles.laterTime, { color: t.color }]}>{step.time}</Text> : <Icon name={t.icon} size={18} color={t.color} />}
         </View>
       }
       title={name}

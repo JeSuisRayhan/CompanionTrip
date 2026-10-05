@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 
 import { THEME, space, layout, type as ramp, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
@@ -130,7 +130,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
         {/* Pinned under the header so a validation message is never scrolled out of sight. */}
         {error ? (
           <View style={[styles.errorBanner, round("sm")]} accessibilityRole="alert" accessibilityLiveRegion="polite">
-            <Ionicons name="alert-circle" size={18} color={THEME.stamp} />
+            <Icon name="alert-circle" size={18} color={THEME.stamp} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
