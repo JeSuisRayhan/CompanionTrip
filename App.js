@@ -29,6 +29,7 @@ import TripScreen from "./screens/TripScreen";
 import DayDetailScreen from "./screens/DayDetailScreen";
 import TodayScreen from "./screens/TodayScreen";
 import ShowDriverScreen from "./screens/ShowDriverScreen";
+import ShowPhraseScreen from "./screens/ShowPhraseScreen";
 import ActivityEditorScreen from "./screens/ActivityEditorScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import TripSettingsScreen from "./screens/TripSettingsScreen";
@@ -199,6 +200,7 @@ function AppContent({ onReady }) {
             <Stack.Screen name="DayDetail" component={DayDetailScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Today" component={TodayScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ShowDriver" component={ShowDriverScreen} options={{ headerShown: false, presentation: "fullScreenModal" }} />
+            <Stack.Screen name="ShowPhrase" component={ShowPhraseScreen} options={{ headerShown: false, presentation: "fullScreenModal" }} />
             <Stack.Screen
               name="ActivityEditor"
               component={ActivityEditorScreen}

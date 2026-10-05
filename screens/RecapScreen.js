@@ -8,6 +8,7 @@ import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip } from "../lib/trips";
 import { tripStatus, formatDateRange, isoDate } from "../lib/dates";
 import { tripRecap, moneyVerdict, recapText } from "../lib/recap";
+import { journalEntries } from "../lib/journal";
 import { EXPENSE_CATEGORIES, formatMoney } from "../lib/budget";
 import { souvenirsOf, souvenirsLeft, pickSouvenirs, addSouvenirs, removeSouvenir, MAX_SOUVENIRS } from "../lib/souvenirs";
 import { Txt, Button, IconButton, Badge, Surface, Group, Row, SectionTitle, ProgressBar, EmptyState, BackHeader, round } from "../components/ui";
@@ -96,6 +97,7 @@ export default function RecapScreen({ route, navigation }) {
   const busiestText = recap.busiest
     ? [`Jour ${recap.busiest.dayNumber}`, /^jour\s*\d+$/i.test(recap.busiest.title.trim()) ? null : recap.busiest.title, `${recap.busiest.count} étapes faites`].filter(Boolean).join(" · ")
     : "";
+  const notes = journalEntries(trip);
   const spentRows = recap.money ? EXPENSE_CATEGORIES.filter((c) => recap.money.byCategory[c.key] > 0) : [];
 
   return (
@@ -166,6 +168,26 @@ export default function RecapScreen({ route, navigation }) {
                 ))}
               </Group>
             ) : null}
+          </View>
+        ) : null}
+
+        {notes.length > 0 ? (
+          <View style={styles.block}>
+            <SectionTitle title="Notes du soir" count={notes.length} />
+            <Group>
+              {notes.map((n) => (
+                <Row
+                  key={n.dayId}
+                  icon="moon-outline"
+                  tone="neutral"
+                  title={[`Jour ${n.dayNumber}`, /^jour\s*\d+$/i.test(n.title.trim()) ? null : n.title].filter(Boolean).join(" · ")}
+                  subtitle={n.text}
+                  chevron
+                  onPress={() => navigation.navigate("DayDetail", { tripId, dayId: n.dayId })}
+                  accessibilityLabel={`Jour ${n.dayNumber}, note du soir : ${n.text}`}
+                />
+              ))}
+            </Group>
           </View>
         ) : null}
 

@@ -5,17 +5,20 @@ import Icon from "../components/Icon";
 import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
+import { THEME, space, layout, radius, type, themedStyles, paperEdge } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { scopedId } from "../lib/parkDay";
 import { splitTitlePlace } from "../lib/script";
 import { directionsUrl } from "../lib/map";
 import { driverCard } from "../lib/driverCard";
 import { isPdfDoc } from "../lib/documents";
-import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
+import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal } from "../lib/trips";
+import { bookingOf, deadlineInfo } from "../lib/booking";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
-import { dayLegs } from "../lib/travelTime";
+import { dayLegs, formatDistance } from "../lib/travelTime";
+import { proximityOrder } from "../lib/dayOrder";
+import { journalOf, canWriteJournal, MAX_JOURNAL } from "../lib/journal";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import { fetchQueueTimes, liveByRideId } from "../lib/queueTimes";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
@@ -76,7 +79,9 @@ export default function DayDetailScreen({ route, navigation }) {
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [flightOpen, setFlightOpen] = useState(false);
-  const [toast, setToast] = useState({ visible: false, message: "", undoActivity: null });
+  const [toast, setToast] = useState({ visible: false, message: "", undoActivity: null, undoOrder: null });
+  const [orderOpen, setOrderOpen] = useState(false); // the preview of "réordonner par proximité"
+  const [journalOpen, setJournalOpen] = useState(false); // the note du soir
   const [dayDone, setDayDone] = useState(false); // "Journée faite" is showing
   const insets = useContext(SafeAreaInsetsContext);
 
@@ -137,12 +142,18 @@ export default function DayDetailScreen({ route, navigation }) {
 
   const date = resolveDayDate(trip, day, dayIndex);
   const sorted = [...day.activities].sort((a, b) => {
+    if (!a.time && !b.time) return 0; // two steps without a time keep the order they were put in
     if (!a.time) return 1;
     if (!b.time) return -1;
     return a.time.localeCompare(b.time);
   });
   // how far each step is from the one before it (not on a park day: the park has its own walking times)
   const legs = trip.tripType === "park" || day.dayType === "park" ? null : dayLegs(trip, sorted);
+  // A shorter way between the steps that have no time, when there is one (offered under the list)
+  const suggestion = proximityOrder(trip, day);
+  const offer = suggestion && suggestion.changed ? suggestion : null;
+  const journal = journalOf(day);
+  const mayWriteJournal = canWriteJournal(trip, day, dayIndex, isoDate(new Date()));
   // Steps of a normal day can be located from the map; a park day only has its attractions' positions.
   const hasMapPin = day.activities.some((a) => Number.isFinite(a.lat) && Number.isFinite(a.lng)) || (trip.tripType !== "park" && day.dayType !== "park" && day.activities.length > 0);
   const doneCount = day.activities.filter((a) => a.done).length;
@@ -165,15 +176,36 @@ export default function DayDetailScreen({ route, navigation }) {
     if (finishes) setDayDone(true);
   }
 
+  // One tap on "À réserver" says it is booked.
+  async function onBook(activity) {
+    await editActivity(tripId, dayId, activity.id, { booking: "done", bookBy: null });
+    refresh();
+  }
+
   async function onDeleteWithUndo(activity) {
     await deleteActivity(tripId, dayId, activity.id);
     await refresh();
-    setToast({ visible: true, message: `"${activity.title}" supprimée`, undoActivity: activity });
+    setToast({ visible: true, message: `"${activity.title}" supprimée`, undoActivity: activity, undoOrder: null });
+  }
+
+  // The steps without a time go in the order that shortens the way; one tap on "Annuler" puts the old order back.
+  async function onApplyOrder() {
+    if (!offer) return;
+    setOrderOpen(false);
+    await setActivityOrder(tripId, dayId, offer.ids);
+    await refresh();
+    setToast({ visible: true, message: "Journée réordonnée", undoActivity: null, undoOrder: offer.previousIds });
   }
 
   async function onUndoDelete() {
     const activity = toast.undoActivity;
-    setToast({ visible: false, message: "", undoActivity: null });
+    const order = toast.undoOrder;
+    setToast({ visible: false, message: "", undoActivity: null, undoOrder: null });
+    if (order) {
+      await setActivityOrder(tripId, dayId, order);
+      refresh();
+      return;
+    }
     if (activity) {
       const { id, ...rest } = activity;
       await addActivity(tripId, dayId, rest);
@@ -182,7 +214,7 @@ export default function DayDetailScreen({ route, navigation }) {
   }
 
   function onToastDismiss() {
-    setToast({ visible: false, message: "", undoActivity: null });
+    setToast({ visible: false, message: "", undoActivity: null, undoOrder: null });
   }
 
   // A bottom sheet, not Alert.alert: Android alerts show at most 3 buttons and we have 3 choices + cancel.
@@ -285,6 +317,7 @@ export default function DayDetailScreen({ route, navigation }) {
                   ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
                   isCurrent={i === firstUndoneIndex}
                   onToggleDone={() => onToggleDone(a.id)}
+                  onBook={() => onBook(a)}
                   onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
                   onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
                   onDeleteWithUndo={() => onDeleteWithUndo(a)}
@@ -294,7 +327,40 @@ export default function DayDetailScreen({ route, navigation }) {
           </View>
         )}
 
+        {offer ? (
+          <Group style={styles.orderOffer}>
+            <Row
+              icon="swap-vertical-outline"
+              tone="neutral"
+              title="Un autre ordre raccourcit la journée"
+              subtitle={`${formatDistance(offer.saved)} de moins entre les étapes sans heure`}
+              chevron
+              onPress={() => setOrderOpen(true)}
+              accessibilityLabel={`Un autre ordre raccourcit la journée de ${formatDistance(offer.saved)}. Voir`}
+            />
+          </Group>
+        ) : null}
+
         {sorted.length > 0 ? <Button title="Ajouter une étape" icon="add" variant="secondary" full onPress={addStep} style={styles.addStep} /> : null}
+
+        {journal ? (
+          <Pressable
+            onPress={() => setJournalOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`Note du soir : ${journal}. Modifier`}
+            style={({ pressed }) => [styles.journalCard, round("lg"), pressed && { opacity: 0.85 }]}
+          >
+            <View style={styles.journalHead}>
+              <Icon name="moon-outline" size={18} color={THEME.inkMuted} />
+              <Text style={type.caption}>Note du soir</Text>
+            </View>
+            <Text style={type.body}>{journal}</Text>
+          </Pressable>
+        ) : mayWriteJournal && sorted.length > 0 ? (
+          <Group style={styles.journalAdd}>
+            <Row icon="moon-outline" tone="neutral" title="Ajouter une note du soir" subtitle="Une phrase pour se souvenir de cette journée" chevron onPress={() => setJournalOpen(true)} accessibilityLabel="Ajouter une note du soir" />
+          </Group>
+        ) : null}
         {live && sorted.length > 0 ? <QueueTimesCredit /> : null}
       </ScrollView>
 
@@ -331,8 +397,29 @@ export default function DayDetailScreen({ route, navigation }) {
         </Group>
       </Sheet>
 
-      <UndoToast visible={toast.visible} message={toast.message} onUndo={onUndoDelete} onDismiss={onToastDismiss} />
-      {dayDone ? <DayDoneStamp onHide={() => setDayDone(false)} /> : null}
+      <JournalSheet
+        visible={journalOpen}
+        title={day.title}
+        initial={journal}
+        onClose={() => setJournalOpen(false)}
+        onSave={async (text) => {
+          setJournalOpen(false);
+          await setDayJournal(tripId, dayId, text);
+          refresh();
+        }}
+      />
+
+      <OrderSheet visible={orderOpen && !!offer} trip={trip} offer={offer} onClose={() => setOrderOpen(false)} onApply={onApplyOrder} />
+
+      <UndoToast visible={toast.visible} message={toast.message} onUndo={onUndoDelete} onDismiss={onToastDismiss} undoLabel={toast.undoOrder ? "Annuler le changement d'ordre" : undefined} />
+      {dayDone ? (
+        <DayDoneStamp
+          onHide={() => {
+            setDayDone(false);
+            if (!journal && mayWriteJournal) setJournalOpen(true); // the day is done: a line to remember it by
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -344,7 +431,7 @@ const WAIT_NOTE = /^Attente estimée : (\d+) min$/;
 // One step of the day, as a small ticket: a stub with the time and the kind of
 // step, then the name with what matters under it. Next (first undone) = gold
 // stub and outline; done = teal, softened. The round box on the right marks it done.
-function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPress, onShowDriver, onDeleteWithUndo }) {
+function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onBook, onPress, onShowDriver, onDeleteWithUndo }) {
   const t = TYPES[activity.type] || TYPES.activite;
   const done = !!activity.done;
   const hasPrice = activity.price != null;
@@ -368,6 +455,9 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
   const goThere = () => Linking.openURL(goUrl).catch(() => Alert.alert("Impossible d'ouvrir l'application de cartes"));
   // the address held out to a driver: for a step with a place that is not done yet
   const card = done || idea ? null : driverCard(activity);
+  // still to book (with the deadline when there is one), or booked
+  const bookState = done ? null : bookingOf(activity);
+  const bookInfo = bookState === "todo" && activity.bookBy ? deadlineInfo(activity.bookBy, isoDate(new Date())) : null;
 
   return (
     <View style={styles.stepWrap}>
@@ -395,7 +485,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
               <View style={styles.stepTitleRow}>
                 <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{name}</Text>
               </View>
-              {place || liveWait || estimate || activity.confirmationCode || hasPrice || goUrl || card ? (
+              {place || liveWait || estimate || activity.confirmationCode || hasPrice || goUrl || card || bookState ? (
                 <View style={styles.detailLine}>
                   {place ? (
                     <View style={styles.metaLine}>
@@ -405,6 +495,18 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
                   ) : null}
                   {liveWait ? <WaitBadge ride={ride} idea={idea} /> : null}
                   {estimate ? <Badge label={`~${estimate} min`} icon="hourglass-outline" tone="neutral" /> : null}
+                  {bookState === "todo" ? (
+                    <Pressable
+                      onPress={onBook}
+                      hitSlop={space.sm}
+                      accessibilityRole="button"
+                      accessibilityLabel={`À réserver${bookInfo ? ", " + bookInfo.text : ""}. Marquer comme réservé : ${activity.title}`}
+                      style={({ pressed }) => pressed && { opacity: 0.7 }}
+                    >
+                      <Badge label={bookInfo ? `À réserver · ${bookInfo.text}` : "À réserver"} icon="ticket-outline" tone={bookInfo && bookInfo.tone === "stamp" ? "stamp" : "neutral"} />
+                    </Pressable>
+                  ) : null}
+                  {bookState === "done" ? <Badge label="Réservé" icon="checkmark" tone="teal" /> : null}
                   {activity.confirmationCode ? <Badge label={activity.confirmationCode} icon="key-outline" tone="neutral" /> : null}
                   {hasPrice ? <Text style={styles.stepPrice}>{formatMoney(activity.price, trip.currency)}</Text> : null}
                   {goUrl ? (
@@ -579,6 +681,58 @@ function TicketsBlock({ docs, hasRoute, onScan, onGallery, onOpen, onEdit }) {
 }
 
 // The route of a flight or train day, typed by hand.
+// The note of the evening: a few lines about the day. Saving an empty text removes the note.
+function JournalSheet({ visible, title, initial, onClose, onSave }) {
+  const [text, setText] = useState("");
+  useEffect(() => {
+    if (visible) setText(initial || "");
+  }, [visible, initial]);
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Note du soir">
+      <Txt variant="subhead" style={styles.sheetHelp}>{title}</Txt>
+      <Field
+        label="Comment était cette journée ?"
+        value={text}
+        onChangeText={setText}
+        placeholder="Le meilleur moment, ce qu'on referait, ce qu'il faut retenir…"
+        multiline
+        maxLength={MAX_JOURNAL}
+      />
+      <View style={styles.sheetButtons}>
+        {initial ? <Button title="Supprimer" variant="secondary" tone="stamp" style={styles.sheetButton} onPress={() => onSave("")} /> : <Button title="Plus tard" variant="secondary" style={styles.sheetButton} onPress={onClose} />}
+        <Button title="Enregistrer" style={styles.sheetButton} onPress={() => onSave(text)} />
+      </View>
+    </Sheet>
+  );
+}
+
+// Preview of the shorter order: the steps in their new order, how far each is from the one before, the total.
+function OrderSheet({ visible, trip, offer, onClose, onApply }) {
+  if (!offer) return null;
+  const legs = dayLegs(trip, offer.anchor ? [offer.anchor, ...offer.order] : offer.order);
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Réordonner par proximité">
+      <Txt variant="subhead" style={styles.sheetHelp}>
+        Les étapes sans heure passent dans l'ordre qui réduit les trajets. Les autres ne bougent pas.
+        {offer.anchor ? ` On part de « ${splitTitlePlace(offer.anchor.title).title} ».` : ""}
+      </Txt>
+      <Group style={styles.typeGroup}>
+        {offer.order.map((step, i) => {
+          const leg = legs.get(step.id);
+          return <Row key={step.id} icon={TYPES[step.type] ? TYPES[step.type].icon : "location-outline"} tone="neutral" title={`${i + 1}. ${splitTitlePlace(step.title).title}`} subtitle={leg ? leg.text : undefined} />;
+        })}
+      </Group>
+      <Txt variant="caption" style={styles.sheetHelp}>
+        {`Entre ces étapes : ${formatDistance(offer.before)} aujourd'hui, ${formatDistance(offer.after)} dans ce nouvel ordre (à vol d'oiseau).`}
+      </Txt>
+      <View style={styles.sheetButtons}>
+        <Button title="Annuler" variant="secondary" style={styles.sheetButton} onPress={onClose} />
+        <Button title="Appliquer" style={styles.sheetButton} onPress={onApply} />
+      </View>
+    </Sheet>
+  );
+}
+
 function FlightSheet({ visible, initial, onClose, onSave }) {
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
@@ -755,6 +909,10 @@ const styles = themedStyles(() => ({
     justifyContent: "center",
   },
   addStep: { marginTop: space.xl },
+  orderOffer: { marginTop: space.lg },
+  journalCard: { gap: space.sm, backgroundColor: THEME.bgCard, ...paperEdge(), borderWidth: 1, borderColor: THEME.hairStrong, padding: space.md, marginTop: space.lg },
+  journalHead: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  journalAdd: { marginTop: space.lg },
 
   sheetHelp: { marginBottom: space.lg },
   typeGroup: { marginBottom: space.md },

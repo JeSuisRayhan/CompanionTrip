@@ -9,13 +9,17 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha, paperEdge, shadow } from "../lib/theme";
-import { getTrip, addExpense, updateExpense, removeExpense, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
+import { getTrip, editActivity, updateTripSettings, addExpense, addPhrases, updateExpense, removeExpense, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatShortDate, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
-import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, expensesTotal, expensesByCategory, expenseCategory, EXPENSE_CATEGORIES, formatMoney, convertAmount } from "../lib/budget";
+import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, expensesTotal, expensesByCategory, expenseCategory, EXPENSE_CATEGORIES, formatMoney, convertAmount, budgetOverview, budgetSummary, parseBudgetInput } from "../lib/budget";
 import { pickImage, pickPdfFile, openDocumentFile, isPdfDoc, addDocument, removeDocument, setDocumentCategory, DOCUMENT_CATEGORIES, documentCategory, suggestDocumentCategory } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
 import { todayPlan } from "../lib/today";
+import { pendingBookings } from "../lib/booking";
+import { PHRASE_LANGUAGES, packFor, missingFromPack } from "../lib/phrases";
+import { detectCountry } from "../lib/countries";
+import CountrySheet from "../components/CountrySheet";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
 import { exportTripFile } from "../lib/backup";
 import DonutChart from "../components/DonutChart";
@@ -168,6 +172,8 @@ export default function TripScreen({ route, navigation }) {
         <DaysTab
           trip={trip}
           navigation={navigation}
+          onChange={refresh}
+          onOpenTab={setTab}
           onShiftDates={() => setShiftModalOpen(true)}
           onDuplicateDay={async (dayId) => {
             await duplicateDay(trip.id, dayId);
@@ -204,7 +210,7 @@ export default function TripScreen({ route, navigation }) {
           onConsumeIncomingAction={() => setIncomingAction(null)}
         />
       )}
-      {tab === "phrases" && <PhrasesTab trip={trip} onChange={refresh} />}
+      {tab === "phrases" && <PhrasesTab trip={trip} navigation={navigation} onChange={refresh} country={detectCountry(trip)} />}
 
       <ShiftDatesModal
         visible={shiftModalOpen}
@@ -371,6 +377,57 @@ function RecapCard({ trip, onPress }) {
   );
 }
 
+// The steps still to book: a count and the nearest deadline; a tap opens the list.
+function BookingsCard({ items, onPress }) {
+  const first = items[0];
+  const urgent = items.some((i) => i.info && i.info.tone === "stamp");
+  const n = items.length;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${n} réservation${n !== 1 ? "s" : ""} à faire. Voir la liste`}
+      style={({ pressed }) => [styles.bookCard, round("lg"), pressed && { opacity: 0.85 }]}
+    >
+      <View style={[styles.bookIcon, urgent && { backgroundColor: THEME.stampDim }]}>
+        <Icon name="ticket-outline" size={22} color={urgent ? THEME.stamp : THEME.inkMuted} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={type.caption}>{`${n} réservation${n !== 1 ? "s" : ""} à faire`}</Text>
+        <Text style={type.name} numberOfLines={1}>{first.step.title}</Text>
+        {first.info ? <Text style={[type.caption, first.info.tone === "stamp" && { color: THEME.stamp }]}>{first.info.text}</Text> : null}
+      </View>
+      <Icon name="chevron-forward" size={18} color={THEME.inkFaint} />
+    </Pressable>
+  );
+}
+
+// Every step to book, the nearest deadline first. A row opens its day; the tick says it is booked.
+function BookingsSheet({ visible, items, onClose, onOpen, onBooked }) {
+  return (
+    <Sheet visible={visible} onClose={onClose} title="À réserver">
+      {items.length === 0 ? (
+        <Txt variant="subhead">Tout est réservé.</Txt>
+      ) : (
+        <Group style={{ marginBottom: space.md }}>
+          {items.map((it) => (
+            <Row
+              key={it.step.id}
+              icon="ticket-outline"
+              tone={it.info && it.info.tone === "stamp" ? "stamp" : "neutral"}
+              title={it.step.title}
+              subtitle={[it.dayTitle, it.info ? it.info.text : null].filter(Boolean).join(" · ")}
+              accessibilityLabel={`${it.step.title}, ${it.dayTitle}${it.info ? ", " + it.info.text : ""}`}
+              onPress={() => onOpen(it)}
+              right={<IconButton icon="checkmark" label={`Marquer comme réservé : ${it.step.title}`} size={20} filled onPress={() => onBooked(it)} />}
+            />
+          ))}
+        </Group>
+      )}
+    </Sheet>
+  );
+}
+
 // The rail of the day list: the day number, big, on a vertical line that links the days. Today is an amber
 // disc, a finished day is faded, the others are plain ink. The line is decoration: the card says it all.
 function DayRail({ state, number, first, last, ending }) {
@@ -447,10 +504,12 @@ function DayTicket({ day, index, date, state, isPark, trip, first, last, ending,
   );
 }
 
-function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, onAddDay, searchQuery, gridView, onSearchChange, onToggleGrid }) {
+function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplicateDay, onMoveDay, onAddDay, searchQuery, gridView, onSearchChange, onToggleGrid }) {
   const isPark = trip.tripType === "park";
   const [menuDay, setMenuDay] = useState(null); // { day, index } while the day menu sheet is open
   const [menuOpen, setMenuOpen] = useState(false); // the "Ce voyage" actions
+  const [bookingsOpen, setBookingsOpen] = useState(false); // the list of steps to book
+  const [countryOpen, setCountryOpen] = useState(false); // la fiche pays
   const [searchOpen, setSearchOpen] = useState(false);
 
   // "Partager": as text for a message, or as a file the companion imports in their own app.
@@ -482,6 +541,8 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
 
   const q = (searchQuery || "").trim().toLowerCase();
   const today = isoToday();
+  const bookings = pendingBookings(trip, today);
+  const country = detectCountry(trip);
   // The map has something to show once a step or an idea has a position.
   // The map opens as soon as there is something to put on it: a step or an idea, located or not (the map finds the positions).
   const hasMap = !isPark && (trip.days.some((d) => d.activities.length > 0) || (trip.ideas || []).length > 0);
@@ -545,6 +606,7 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
           { icon: "calendar-outline", title: "Décaler les dates", subtitle: "Tout le voyage, d'un nombre de jours", onPress: onShiftDates },
           { icon: "document-text-outline", title: "Importer un script", subtitle: "Prix, hôtels et étapes d'un programme collé", onPress: () => navigation.navigate("ImportScript", { tripId: trip.id }) },
           { icon: "mail-outline", title: "Coller une confirmation", subtitle: "Vol, train, hôtel, restaurant ou billet", onPress: () => navigation.navigate("ImportConfirmation", { tripId: trip.id }) },
+          { icon: "globe-outline", title: "Fiche pays", subtitle: country ? `${country.name} : monnaie, prises, urgences…` : "Monnaie, prises, urgences, décalage horaire", onPress: () => setCountryOpen(true) },
           { icon: "images-outline", title: "Bilan et souvenirs", subtitle: "Ce qui a été fait, le budget, les photos", onPress: () => navigation.navigate("TripRecap", { tripId: trip.id }) },
           { icon: "share-outline", title: "Partager", subtitle: "En texte, ou en fichier à importer", onPress: shareTrip },
           { icon: "download-outline", title: "Exporter vers un calendrier", subtitle: "Fichier .ics", onPress: () => shareTripAsICS(trip) },
@@ -557,6 +619,37 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
         const plan = todayPlan(trip, today, new Date());
         return plan ? <TodayCard plan={plan} onPress={() => navigation.navigate("Today", { tripId: trip.id })} /> : null;
       })() : null}
+
+      {!q && bookings.length > 0 ? <BookingsCard items={bookings} onPress={() => setBookingsOpen(true)} /> : null}
+
+      <CountrySheet
+        visible={countryOpen}
+        trip={trip}
+        country={country}
+        onClose={() => setCountryOpen(false)}
+        onPick={async (key) => {
+          await updateTripSettings(trip.id, { country: key });
+          if (onChange) onChange();
+        }}
+        onOpenPhrases={() => {
+          setCountryOpen(false);
+          if (onOpenTab) onOpenTab("phrases");
+        }}
+      />
+
+      <BookingsSheet
+        visible={bookingsOpen}
+        items={bookings}
+        onClose={() => setBookingsOpen(false)}
+        onOpen={(it) => {
+          setBookingsOpen(false);
+          navigation.navigate("DayDetail", { tripId: trip.id, dayId: it.dayId });
+        }}
+        onBooked={async (it) => {
+          await editActivity(trip.id, it.dayId, it.step.id, { booking: "done", bookBy: null });
+          if (onChange) onChange();
+        }}
+      />
 
       {!isPark && !q && tripStatus(trip, today) === "past" ? <RecapCard trip={trip} onPress={() => navigation.navigate("TripRecap", { tripId: trip.id })} /> : null}
 
@@ -740,6 +833,7 @@ const BUDGET_CATEGORIES = [
 function BudgetTab({ trip, onChange }) {
   const [converterOpen, setConverterOpen] = useState(false);
   const [expenseSheet, setExpenseSheet] = useState(null); // null | { expense } (expense null = a new one)
+  const [goalOpen, setGoalOpen] = useState(false); // the budget for the whole trip
   const total = tripActivityTotal(trip);
   const spent = expensesTotal(trip);
   const spentBy = expensesByCategory(trip);
@@ -754,6 +848,8 @@ function BudgetTab({ trip, onChange }) {
   const categories = BUDGET_CATEGORIES.map((c) => ({ ...c, value: values[c.key], color: TONES[c.tone].fg }));
 
   const inHome = trip.homeCurrency !== trip.currency;
+  const homeCode = trip.homeCurrency || trip.currency || "EUR";
+  const goal = budgetOverview(trip, isoToday());
 
   return (
     <TripScroll contentContainerStyle={styles.scrollContent}>
@@ -764,6 +860,7 @@ function BudgetTab({ trip, onChange }) {
         {inHome && <Text style={type.numeralSmall}>≈ {formatMoney(convertAmount(total, trip.rate), trip.homeCurrency)}</Text>}
         {showConverter && <Button title="Convertisseur rapide" icon="swap-horizontal" variant="secondary" size="sm" onPress={() => setConverterOpen(true)} style={{ marginTop: space.md }} />}
       </View>
+      <BudgetGoal overview={goal} code={homeCode} onPress={() => setGoalOpen(true)} />
       {spent > 0 ? (
         <View style={styles.spentBlock} accessible accessibilityLabel={`Dépensé ${formatMoney(spent, trip.currency)} sur ${formatMoney(total, trip.currency)} prévus`}>
           <View style={styles.spentRow}>
@@ -839,6 +936,17 @@ function BudgetTab({ trip, onChange }) {
         </Group>
       )}
 
+      <BudgetGoalSheet
+        visible={goalOpen}
+        current={goal ? goal.target : null}
+        code={homeCode}
+        onClose={() => setGoalOpen(false)}
+        onSave={async (value) => {
+          await updateTripSettings(trip.id, { budgetTotal: value });
+          setGoalOpen(false);
+          onChange();
+        }}
+      />
       <ExpenseSheet
         visible={!!expenseSheet}
         expense={expenseSheet ? expenseSheet.expense : null}
@@ -858,6 +966,87 @@ function BudgetTab({ trip, onChange }) {
       />
       <CurrencyConverterModal visible={converterOpen} onClose={() => setConverterOpen(false)} trip={trip} />
     </TripScroll>
+  );
+}
+
+// The budget for the whole trip: what is left, and what that makes per day. Empty: one line to set it.
+function BudgetGoal({ overview, code, onPress }) {
+  if (!overview) {
+    return (
+      <Group style={{ marginBottom: space.xl }}>
+        <Row icon="wallet-outline" tone="neutral" title="Définir un budget total" subtitle="Pour savoir combien dépenser par jour" chevron onPress={onPress} accessibilityLabel="Définir un budget total pour le voyage" />
+      </Group>
+    );
+  }
+  const sum = budgetSummary(overview, code);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Budget total ${formatMoney(overview.target, code)}. ${sum.spentLine}.${sum.perDayLine ? " " + sum.perDayLine + "." : ""} Modifier`}
+      style={({ pressed }) => [styles.goalCard, round("lg"), pressed && { opacity: 0.85 }]}
+    >
+      <View style={styles.spentRow}>
+        <Txt variant="subhead">Budget total</Txt>
+        <Text style={type.numeral}>{formatMoney(overview.target, code)}</Text>
+      </View>
+      <ProgressBar value={overview.ratio} tone={overview.over ? "stamp" : "teal"} height={6} style={{ backgroundColor: THEME.surfaceSunk }} />
+      <Text style={[type.name, overview.over && { color: THEME.stamp }]}>{sum.spentLine}</Text>
+      {sum.perDayLine ? <Text style={type.subhead}>{sum.perDayLine}</Text> : null}
+      {sum.todayLine ? <Text style={type.caption}>{sum.todayLine}</Text> : null}
+      {sum.plannedLine ? <Text style={[type.caption, sum.plannedOver && { color: THEME.stamp }]}>{sum.plannedLine}</Text> : null}
+    </Pressable>
+  );
+}
+
+// Set, change or remove the budget total (in the person's own currency).
+function BudgetGoalSheet({ visible, current, code, onClose, onSave }) {
+  const [amount, setAmount] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setAmount(current ? String(current).replace(".", ",") : "");
+    setError("");
+    setBusy(false);
+  }, [visible, current]);
+
+  async function save(value) {
+    setBusy(true);
+    try {
+      await onSave(value);
+    } catch (e) {
+      setError("Échec de l'enregistrement.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Budget total">
+      <Field
+        label={`Pour tout le voyage (${code})`}
+        value={amount}
+        onChangeText={setAmount}
+        placeholder="3000"
+        keyboardType="decimal-pad"
+        hint="Vols et hôtels compris. Le reste se calcule avec les dépenses que vous notez."
+        error={error || undefined}
+      />
+      <View style={styles.sheetButtons}>
+        {current ? <Button title="Supprimer" variant="secondary" tone="stamp" disabled={busy} style={{ flex: 1 }} onPress={() => save(null)} /> : <Button title="Annuler" variant="secondary" disabled={busy} style={{ flex: 1 }} onPress={onClose} />}
+        <Button
+          title="Enregistrer"
+          loading={busy}
+          style={{ flex: 1 }}
+          onPress={() => {
+            const value = parseBudgetInput(amount);
+            if (!value) return setError("Indiquez un montant.");
+            save(value);
+          }}
+        />
+      </View>
+    </Sheet>
   );
 }
 
@@ -1364,10 +1553,15 @@ function DocumentsTab({ trip, onChange, navigation, incomingScan, onConsumeIncom
   );
 }
 
-function PhrasesTab({ trip, onChange }) {
+function PhrasesTab({ trip, navigation, onChange, country }) {
   const [phrase, setPhrase] = useState("");
   const [translation, setTranslation] = useState("");
+  const [packOpen, setPackOpen] = useState(false);
+  const [notice, setNotice] = useState("");
   const phrases = trip.phrases || [];
+  // the language of the country of the trip comes first in the list
+  const suggested = country && country.phrases ? country.phrases : null;
+  const languages = [...PHRASE_LANGUAGES].sort((a, b) => (a.key === suggested ? -1 : 0) - (b.key === suggested ? -1 : 0));
 
   async function add() {
     if (!phrase.trim() || !translation.trim()) return;
@@ -1377,18 +1571,34 @@ function PhrasesTab({ trip, onChange }) {
     onChange();
   }
 
+  async function addPack(lang) {
+    setPackOpen(false);
+    const n = await addPhrases(trip.id, packFor(lang.key));
+    setNotice(n > 0 ? `${n} phrase${n > 1 ? "s" : ""} ajoutée${n > 1 ? "s" : ""} (${lang.label.toLowerCase()})` : "Ces phrases sont déjà dans la liste");
+    onChange();
+  }
+
+  const show = (index) => navigation.navigate("ShowPhrase", { phrases: phrases.map((p) => ({ phrase: p.phrase, translation: p.translation, reading: p.reading || null })), index });
+
   return (
     <TripScroll contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
       {phrases.length === 0 && (
-        <EmptyState icon="chatbubbles-outline" title="Aucune phrase" text="Les phrases qui sauvent : « où sont les toilettes ? », « c'est trop épicé »…" />
+        <EmptyState
+          icon="chatbubbles-outline"
+          title="Aucune phrase"
+          text="Les phrases qui sauvent : « où sont les toilettes ? », « c'est trop épicé »…"
+          action={{ label: "Ajouter les phrases de base", icon: "sparkles-outline", onPress: () => setPackOpen(true) }}
+        />
       )}
       {phrases.length > 0 && (
-        <Group style={{ marginBottom: space.xl }}>
-          {phrases.map((p) => (
+        <Group style={{ marginBottom: space.md }}>
+          {phrases.map((p, i) => (
             <Row
               key={p.id}
               title={p.phrase}
               subtitle={<Text style={[type.subhead, { color: THEME.teal }]}>{p.translation}</Text>}
+              accessibilityLabel={`${p.phrase}, ${p.translation}. Afficher en grand`}
+              onPress={() => show(i)}
               right={
                 <IconButton
                   icon="trash-outline"
@@ -1401,14 +1611,44 @@ function PhrasesTab({ trip, onChange }) {
                 />
               }
               style={{ paddingRight: space.xs }}
-            />
+            >
+              {p.reading ? <Text style={type.caption}>{p.reading}</Text> : null}
+            </Row>
           ))}
         </Group>
       )}
+      {phrases.length > 0 ? <Text style={[type.caption, { marginBottom: space.xl }]}>Touchez une phrase pour l'afficher en grand.</Text> : null}
+      {notice ? <Text style={[type.caption, { marginBottom: space.md, color: THEME.teal }]} accessibilityLiveRegion="polite">{notice}</Text> : null}
+      {phrases.length > 0 ? <Button title="Ajouter les phrases de base" icon="sparkles-outline" variant="secondary" full onPress={() => setPackOpen(true)} style={{ marginBottom: space.xl }} /> : null}
       <SectionTitle title="Ajouter une phrase" />
       <Field label="En français" value={phrase} onChangeText={setPhrase} placeholder="Où sont les toilettes ?" />
       <Field label="Traduction" value={translation} onChangeText={setTranslation} placeholder="Where is the toilet?" />
       <Button title="Ajouter" icon="add" disabled={!phrase.trim() || !translation.trim()} onPress={add} full />
+
+      <Sheet visible={packOpen} onClose={() => setPackOpen(false)} title="Phrases de base">
+        <Txt variant="subhead" style={{ marginBottom: space.lg }}>
+          Quinze phrases utiles (bonjour, merci, l'addition, un médecin…) dans la langue du voyage. Celles déjà dans la liste ne sont pas ajoutées deux fois.
+        </Txt>
+        <Group style={{ marginBottom: space.md }}>
+          {languages.map((l) => {
+            const left = missingFromPack(trip, l.key).length;
+            const hello = packFor(l.key)[0];
+            const forCountry = l.key === suggested ? `Pour ${country.name}` : null;
+            return (
+              <Row
+                key={l.key}
+                icon="language-outline"
+                tone="neutral"
+                title={l.label}
+                subtitle={left === 0 ? "Déjà toutes dans la liste" : [forCountry, hello ? hello.translation : null].filter(Boolean).join(" · ") || undefined}
+                chevron={left > 0}
+                onPress={left > 0 ? () => addPack(l) : undefined}
+                accessibilityLabel={left === 0 ? `${l.label}, déjà toutes dans la liste` : `Ajouter les phrases de base en ${l.label.toLowerCase()}`}
+              />
+            );
+          })}
+        </Group>
+      </Sheet>
     </TripScroll>
   );
 }
@@ -1477,6 +1717,8 @@ const styles = themedStyles(() => ({
   railNumberToday: { backgroundColor: "transparent", fontSize: 28, paddingHorizontal: 0 },
   railAdd: { width: 28, height: 28, borderRadius: 14, marginTop: ADD_H / 2 - 14, alignItems: "center", justifyContent: "center", backgroundColor: THEME.bg, borderWidth: 1.5, borderStyle: "dashed", borderColor: THEME.hairStrong },
   todayCard: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: THEME.bgCard, ...paperEdge(), borderWidth: 1.5, borderColor: THEME.gold, padding: space.md, marginBottom: space.lg },
+  bookCard: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: THEME.bgCard, ...paperEdge(), borderWidth: 1, borderColor: THEME.hairStrong, padding: space.md, marginBottom: space.lg },
+  bookIcon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: THEME.bgCardAlt, alignItems: "center", justifyContent: "center" },
   todayIcon: { width: 44, height: 44, borderRadius: radius.md, backgroundColor: THEME.goldFill, alignItems: "center", justifyContent: "center" },
   dayTicket: { flex: 1, flexDirection: "row", alignItems: "stretch", backgroundColor: THEME.bgCard, borderWidth: 1, borderColor: THEME.hairStrong, ...paperEdge() },
   dayTicketToday: { borderWidth: 1.5, borderColor: THEME.gold },
@@ -1506,6 +1748,7 @@ const styles = themedStyles(() => ({
 
   totalBlock: { alignItems: "center", gap: space.xs, paddingTop: space.md, paddingBottom: space.xl },
   spentBlock: { gap: space.sm, marginBottom: space.xl },
+  goalCard: { gap: space.sm, backgroundColor: THEME.bgCard, ...paperEdge(), borderWidth: 1, borderColor: THEME.hairStrong, padding: space.md, marginBottom: space.xl },
   spentRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   expensesTitle: { marginTop: space.xl },
   amountCol: { alignItems: "flex-end", gap: 2 },

@@ -12,7 +12,7 @@ const AUTO_DISMISS_MS = 5000;
 // if the user taps "Annuler" before the timer runs out.
 // It floats above the home indicator; screens leave `layout.tabBarClearance`
 // of empty space under their content so it never hides anything.
-export default function UndoToast({ visible, message, onUndo, onDismiss }) {
+export default function UndoToast({ visible, message, onUndo, onDismiss, undoLabel = "Annuler la suppression" }) {
   const translateY = useRef(new Animated.Value(80)).current;
   const timerRef = useRef(null);
   const insets = useContext(SafeAreaInsetsContext);
@@ -43,7 +43,7 @@ export default function UndoToast({ visible, message, onUndo, onDismiss }) {
       </Text>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Annuler la suppression"
+        accessibilityLabel={undoLabel}
         onPress={() => {
           if (timerRef.current) clearTimeout(timerRef.current);
           onUndo && onUndo();

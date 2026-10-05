@@ -14,7 +14,7 @@ import { getTrip, toggleActivityDone } from "../lib/trips";
 import { tripStatus, tripRange, formatFullDate, formatShortDate, daysUntilLabel, isoDate } from "../lib/dates";
 import { todayPlan, minutesUntil, countdownInfo } from "../lib/today";
 import { dayLegs } from "../lib/travelTime";
-import { formatMoney } from "../lib/budget";
+import { formatMoney, budgetOverview, budgetSummary } from "../lib/budget";
 import { WeatherBadge } from "./DayDetailScreen";
 import { Txt, Button, Badge, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, BackHeader, round } from "../components/ui";
 import LegLine from "../components/LegLine";
@@ -128,6 +128,8 @@ export default function TodayScreen({ route, navigation }) {
     }
   }
 
+  const budget = budgetOverview(trip, today);
+  const budgetText = budget ? budgetSummary(budget, trip.homeCurrency || trip.currency || "EUR") : null;
   const editStep = (step) => navigation.navigate("ActivityEditor", { tripId, dayId, activity: step });
   const openDay = () => navigation.navigate("DayDetail", { tripId, dayId });
 
@@ -183,6 +185,23 @@ export default function TodayScreen({ route, navigation }) {
               {later.map((step) => (
                 <LaterRow key={step.id} step={step} now={now} onPress={() => editStep(step)} />
               ))}
+            </Group>
+          </View>
+        ) : null}
+
+        {budget ? (
+          <View style={styles.section}>
+            <SectionTitle title="Budget" />
+            <Group>
+              <Row
+                icon="wallet-outline"
+                tone={budget.over ? "stamp" : "teal"}
+                title={budgetText.spentLine}
+                subtitle={[budgetText.perDayLine, budgetText.todayLine].filter(Boolean).join(" · ") || undefined}
+                chevron
+                onPress={() => openTripTab("budget")}
+                accessibilityLabel={`Budget : ${budgetText.spentLine}${budgetText.perDayLine ? ", " + budgetText.perDayLine : ""}. Ouvrir le budget`}
+              />
             </Group>
           </View>
         ) : null}
