@@ -35,6 +35,7 @@ import DayAttractionsScreen from "./screens/DayAttractionsScreen";
 import ParkLiveScreen from "./screens/ParkLiveScreen";
 import PlanGeneratorScreen from "./screens/PlanGeneratorScreen";
 import ImportIdeasScreen from "./screens/ImportIdeasScreen";
+import ImportScriptScreen from "./screens/ImportScriptScreen";
 import LockScreen from "./screens/LockScreen";
 import ErrorLogScreen from "./screens/ErrorLogScreen";
 
@@ -161,6 +162,7 @@ function AppContent({ onReady }) {
             <Stack.Screen name="ParkLive" component={ParkLiveScreen} options={{ headerShown: false }} />
             <Stack.Screen name="PlanGenerator" component={PlanGeneratorScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ImportIdeas" component={ImportIdeasScreen} options={{ headerShown: false, presentation: "modal" }} />
+            <Stack.Screen name="ImportScript" component={ImportScriptScreen} options={{ headerShown: false, presentation: "modal" }} />
           </Stack.Navigator>
         </NavigationContainer>
       </ErrorBoundary>
