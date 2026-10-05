@@ -209,7 +209,10 @@ export default function HomeScreen({ navigation }) {
                   onPress={() => openTrip(trip)}
                   onPressToday={
                     todayHasDay(trip, today)
-                      ? () => navigation.navigate("DayDetail", { tripId: trip.id, dayId: todayDayId(trip, today) })
+                      ? () =>
+                          trip.tripType === "park"
+                            ? navigation.navigate("DayDetail", { tripId: trip.id, dayId: todayDayId(trip, today) })
+                            : navigation.navigate("Today", { tripId: trip.id })
                       : null
                   }
                 />

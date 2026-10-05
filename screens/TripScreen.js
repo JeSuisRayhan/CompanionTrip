@@ -16,6 +16,7 @@ import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
 import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, expensesTotal, expensesByCategory, expenseCategory, EXPENSE_CATEGORIES, formatMoney, convertAmount } from "../lib/budget";
 import { pickImage, pickPdfFile, openDocumentFile, isPdfDoc, addDocument, removeDocument, setDocumentCategory, DOCUMENT_CATEGORIES, documentCategory, suggestDocumentCategory } from "../lib/documents";
 import { WeatherBadge } from "./DayDetailScreen";
+import { todayPlan } from "../lib/today";
 import { shareTripAsText, shareTripAsICS } from "../lib/share";
 import { exportTripFile } from "../lib/backup";
 import DonutChart from "../components/DonutChart";
@@ -326,6 +327,34 @@ function DayNode({ state, number }) {
 }
 
 // A day as a ticket: its number, title, date and what it holds on the left; the options on the stub, behind the perforation.
+// The way into "Aujourd'hui" while the trip is under way: what is next, at a glance.
+function TodayCard({ plan, onPress }) {
+  const { next, countdown, total, done, allDone } = plan;
+  const subtitle = allDone
+    ? `${total} étape${total !== 1 ? "s" : ""} faite${total !== 1 ? "s" : ""}`
+    : next
+      ? `${next.time ? next.time + " · " : ""}${next.title}`
+      : "Journée libre";
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Aujourd'hui, jour ${plan.dayNumber}. ${allDone ? "Journée terminée" : next ? "Prochaine étape : " + next.title : "Journée libre"}`}
+      style={({ pressed }) => [styles.todayCard, round("lg"), pressed && { opacity: 0.85 }]}
+    >
+      <View style={styles.todayIcon}>
+        <Ionicons name={allDone ? "checkmark-done" : "today"} size={22} color={THEME.onGold} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={type.caption}>{`Aujourd'hui · jour ${plan.dayNumber}${total ? ` · ${done.length}/${total} faites` : ""}`}</Text>
+        <Text style={type.name} numberOfLines={2}>{subtitle}</Text>
+        {countdown && !allDone ? <Text style={[type.caption, { color: countdown.tone === "stamp" ? THEME.stamp : THEME.gold }]}>{countdown.label}</Text> : null}
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={THEME.inkFaint} />
+    </Pressable>
+  );
+}
+
 function DayTicket({ day, index, date, state, isPark, trip, onPress, onMenu, onLive }) {
   const count = day.activities.length;
   const kinds = new Set(day.activities.map((a) => a.type));
@@ -483,6 +512,11 @@ function DaysTab({ trip, navigation, onShiftDates, onDuplicateDay, onMoveDay, on
           hasMap && { icon: "map-outline", title: "Voir sur la carte", onPress: () => navigation.navigate("TripMap", { tripId: trip.id }) },
         ]}
       />
+
+      {!isPark && !q && tripStatus(trip, today) === "current" ? (() => {
+        const plan = todayPlan(trip, today, new Date());
+        return plan ? <TodayCard plan={plan} onPress={() => navigation.navigate("Today", { tripId: trip.id })} /> : null;
+      })() : null}
 
       {(() => {
         const filtered = trip.days
@@ -1377,6 +1411,8 @@ const styles = themedStyles(() => ({
   routeMeta: { flexDirection: "row", alignItems: "center", gap: space.md, flexWrap: "wrap" },
 
   dayList: { gap: space.md },
+  todayCard: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: THEME.bgCard, borderWidth: 1.5, borderColor: THEME.gold, padding: space.md, marginBottom: space.lg },
+  todayIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: THEME.gold, alignItems: "center", justifyContent: "center" },
   dayTicket: { flexDirection: "row", alignItems: "stretch", backgroundColor: THEME.bgCard, borderWidth: 1, borderColor: THEME.hairStrong },
   dayTicketToday: { borderWidth: 1.5, borderColor: THEME.gold },
   dayBody: { flex: 1, padding: space.lg, gap: space.xs },
