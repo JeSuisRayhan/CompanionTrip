@@ -21,7 +21,7 @@ import { onTripsSaved } from "./lib/storage";
 import { scheduleStepReminderSync } from "./lib/notifications";
 import { targetFromResponse } from "./lib/stepReminders";
 import { useSharedContent } from "./lib/useSharedContent";
-import { sharedTextOf } from "./lib/shareIntake";
+import { sharedContentOf } from "./lib/shareIntake";
 import SplashOverlay, { SPLASH_BACKGROUND } from "./components/SplashOverlay";
 // imported here so the park alert task is defined whenever the app starts, even in the background
 import { syncParkAlertTask } from "./lib/parkAlertsTask";
@@ -156,17 +156,17 @@ function AppContent({ onReady }) {
     };
   }, []);
 
-  // A link or a place shared from another app ("Partager") opens the choice of the trip it is for, once the app is
-  // unlocked and its screens are up.
+  // A link, a place, a confirmation (text, screenshot, PDF) shared from another app ("Partager") opens the choice of the
+  // trip it is for, once the app is unlocked and its screens are up.
   const { hasShareIntent, shareIntent, resetShareIntent } = useSharedContent();
   const pendingShare = useRef(null);
   useEffect(() => {
     if (!hasShareIntent) return;
-    const text = sharedTextOf(shareIntent);
+    const shared = sharedContentOf(shareIntent);
     resetShareIntent();
-    if (!text) return;
-    if (navigationRef.isReady()) navigationRef.navigate("ShareTarget", { text });
-    else pendingShare.current = text;
+    if (!shared) return;
+    if (navigationRef.isReady()) navigationRef.navigate("ShareTarget", shared);
+    else pendingShare.current = shared;
   }, [hasShareIntent, shareIntent]);
 
   const ready = !checking && fontsLoaded;
@@ -195,7 +195,7 @@ function AppContent({ onReady }) {
             const shared = pendingShare.current;
             if (shared) {
               pendingShare.current = null;
-              navigationRef.navigate("ShareTarget", { text: shared });
+              navigationRef.navigate("ShareTarget", shared);
             }
           }}
           theme={buildNavTheme()}

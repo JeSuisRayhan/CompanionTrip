@@ -39,7 +39,8 @@ function errorText(e, hasFiles) {
 // A booking confirmation pasted from an email: what is read from it is shown first, with the day each step goes
 // to, and only what the person keeps is added.
 export default function ImportConfirmationScreen({ route, navigation }) {
-  // initialText / initialFiles: what another app shared; autoRead: read it right away (when the key is there)
+  // initialText / initialFiles: what another app shared; autoRead: read it right away (a text can be read without the key,
+  // pictures and PDFs need it)
   const { tripId, initialText, initialFiles, autoRead } = route.params;
   const [trip, setTrip] = useState(null);
   const [hasKey, setHasKey] = useState(null); // null until the settings are read
@@ -63,7 +64,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
   useEffect(() => {
     if (!autoRead || autoStarted.current || !trip || hasKey == null) return;
     autoStarted.current = true;
-    if (hasKey && (text.trim() || files.length)) read();
+    if (files.length ? hasKey : !!text.trim()) read();
   }, [trip, hasKey]);
 
   const close = () => navigation.goBack();

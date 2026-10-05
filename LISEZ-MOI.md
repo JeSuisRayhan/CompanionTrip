@@ -121,17 +121,30 @@ du code qu'il ne sait pas exécuter.
 `preview` (celles de l'étape précédente : `EXPO_PUBLIC_AVIATIONSTACK_API_KEY`,
 `EXPO_PUBLIC_UNSPLASH_ACCESS_KEY`), comme le fait le build : rien de plus à faire.
 
-## Envoyer un lien ou un lieu vers l'app (Partager)
+## Envoyer vers l'app (Partager)
 
-Depuis TikTok, YouTube, Google Maps ou le navigateur : **Partager → Compagnon de
-voyage**. L'app demande pour quel voyage (une seule question s'il y en a
-plusieurs), puis ouvre l'import d'idées avec le lien ou le texte déjà en place :
-il ne reste qu'à appuyer sur **Analyser** et à cocher les lieux reconnus.
+Depuis une autre appli : **Partager → Compagnon de voyage**. L'app demande pour
+quel voyage (rien à choisir s'il n'y en a qu'un), puis :
 
-Cette fonction ajoute un module natif : elle demande **un nouvel APK** (la
-version de l'app est passée à `1.1.0` pour cette raison). Les mises à jour
-publiées avec cette version ne vont qu'aux APK `1.1.0` ; l'ancien APK continue de
-recevoir celles de la version `1.0.0`.
+- **Un lien ou un lieu** (TikTok, YouTube, Google Maps, navigateur) : ouvre
+  l'import d'idées avec le lien déjà en place, il ne reste qu'à appuyer sur
+  **Analyser** et à cocher les lieux reconnus.
+- **Une réservation** (le texte d'un mail de confirmation, une capture d'écran,
+  un PDF ou plusieurs captures) : ouvre « Réservation » qui la lit tout de
+  suite et propose les étapes (vol, train, bus, bateau, hôtel…) à cocher avant de
+  les ajouter au planning. Les captures et les PDF sont lus par l'IA avec votre
+  clé Anthropic (Réglages) ; le texte d'un mail se lit aussi sans clé, avec des
+  règles simples. Le fichier d'origine peut être gardé dans les Documents du voyage.
+
+Même fonction depuis l'app : dans un voyage, **Ajouter une réservation** (mail
+collé, captures ou PDF choisis dans le téléphone). Cette partie-là n'a pas besoin
+d'un nouveau build.
+
+Le bouton Partager ajoute un module natif et de nouveaux types de fichiers
+acceptés : il demande **un nouvel APK** (la version de l'app est passée à `1.1.0`
+pour cette raison). Les mises à jour publiées avec cette version ne vont qu'aux
+APK `1.1.0` ; l'ancien APK continue de recevoir celles de la version `1.0.0`.
+Android seulement pour l'instant.
 
 ## Vérification avant chaque build
 
