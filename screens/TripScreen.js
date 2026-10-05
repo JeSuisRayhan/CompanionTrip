@@ -543,6 +543,7 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
   const today = isoToday();
   const bookings = pendingBookings(trip, today);
   const country = detectCountry(trip);
+  const onAddBooking = () => navigation.navigate("ImportConfirmation", { tripId: trip.id });
   // The map has something to show once a step or an idea has a position.
   // The map opens as soon as there is something to put on it: a step or an idea, located or not (the map finds the positions).
   const hasMap = !isPark && (trip.days.some((d) => d.activities.length > 0) || (trip.ideas || []).length > 0);
@@ -605,7 +606,7 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
         actions={[
           { icon: "calendar-outline", title: "Décaler les dates", subtitle: "Tout le voyage, d'un nombre de jours", onPress: onShiftDates },
           { icon: "document-text-outline", title: "Importer un script", subtitle: "Prix, hôtels et étapes d'un programme collé", onPress: () => navigation.navigate("ImportScript", { tripId: trip.id }) },
-          { icon: "mail-outline", title: "Coller une confirmation", subtitle: "Vol, train, hôtel, restaurant ou billet", onPress: () => navigation.navigate("ImportConfirmation", { tripId: trip.id }) },
+          { icon: "mail-outline", title: "Ajouter une réservation", subtitle: "Mail, capture ou PDF : vol, train, bus, hôtel…", onPress: onAddBooking },
           { icon: "globe-outline", title: "Fiche pays", subtitle: country ? `${country.name} : monnaie, prises, urgences…` : "Monnaie, prises, urgences, décalage horaire", onPress: () => setCountryOpen(true) },
           { icon: "images-outline", title: "Bilan et souvenirs", subtitle: "Ce qui a été fait, le budget, les photos", onPress: () => navigation.navigate("TripRecap", { tripId: trip.id }) },
           { icon: "share-outline", title: "Partager", subtitle: "En texte, ou en fichier à importer", onPress: shareTrip },
@@ -714,6 +715,7 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
               {!q && (
                 <View style={styles.gridAdd}>
                   <Button title="Ajouter un jour" icon="add" variant="secondary" full onPress={onAddDay} />
+                  {!isPark && <Button title="Ajouter une réservation" icon="mail-outline" variant="secondary" full onPress={onAddBooking} style={styles.bookAdd} />}
                 </View>
               )}
             </View>
@@ -756,6 +758,7 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
                 </Pressable>
               </View>
             )}
+            {!q && !isPark && <Button title="Ajouter une réservation" icon="mail-outline" variant="secondary" full onPress={onAddBooking} style={styles.bookAdd} />}
           </View>
         );
       })()}
@@ -1742,6 +1745,7 @@ const styles = themedStyles(() => ({
 
   dayGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.md },
   gridAdd: { width: "100%" },
+  bookAdd: { marginTop: space.md },
   tile: { width: "48%", backgroundColor: THEME.bgCard, ...paperEdge(), padding: space.lg, borderWidth: 1.5, borderColor: THEME.light ? THEME.border : "transparent" },
   tileToday: { borderColor: THEME.gold },
   tileTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
