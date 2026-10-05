@@ -15,6 +15,7 @@ import { THEME, type, subscribeTheme, getThemeVersion } from "./lib/theme";
 import { loadPalette } from "./lib/appearance";
 import { installErrorHandlers } from "./lib/errorLog";
 import ErrorBoundary from "./components/ErrorBoundary";
+import PaperGrain from "./components/PaperGrain";
 import { hasPin } from "./lib/pin";
 import { onTripsSaved } from "./lib/storage";
 import { scheduleStepReminderSync } from "./lib/notifications";
@@ -230,6 +231,7 @@ function AppContent({ onReady }) {
           </Stack.Navigator>
         </NavigationContainer>
       </ErrorBoundary>
+      <PaperGrain />
     </GestureHandlerRootView>
   );
 }

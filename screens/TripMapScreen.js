@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { View, Text, ScrollView, ActivityIndicator, Linking, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
@@ -227,7 +227,7 @@ export default function TripMapScreen({ route, navigation }) {
       {showBanner ? (
         <Surface tone="raised" r="lg" pad="md" style={styles.banner}>
           <View style={styles.bannerRow}>
-            <Ionicons name={result && !unlocatedCount ? "checkmark-circle" : "location-outline"} size={20} color={result && !unlocatedCount ? THEME.teal : THEME.gold} />
+            <Icon name={result && !unlocatedCount ? "checkmark-circle" : "location-outline"} size={20} color={result && !unlocatedCount ? THEME.teal : THEME.gold} />
             <View style={styles.bannerText}>
               <Txt variant="label" numberOfLines={2}>
                 {locating ? (locating.done === 0 && isPark ? "Recherche des positions dans le parc…" : `Recherche des positions, ${locating.done}/${locating.total}`) : result || unlocatedLabel}

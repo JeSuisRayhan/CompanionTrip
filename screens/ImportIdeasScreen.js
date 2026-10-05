@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import * as Clipboard from "expo-clipboard";
 
 import { THEME, TONES, space, layout, type, themedStyles } from "../lib/theme";
@@ -188,7 +188,7 @@ export default function ImportIdeasScreen({ route, navigation }) {
                   return (
                     <Row
                       key={p.key}
-                      lead={<Ionicons name={p.checked ? "checkbox" : "square-outline"} size={26} color={p.checked ? THEME.gold : THEME.inkFaint} />}
+                      lead={<Icon name={p.checked ? "checkbox" : "square-outline"} size={26} color={p.checked ? THEME.mark : THEME.inkFaint} />}
                       title={p.name}
                       subtitle={subtitle || undefined}
                       selected={p.checked}
@@ -197,7 +197,7 @@ export default function ImportIdeasScreen({ route, navigation }) {
                       right={p.duplicate ? <Badge label="Déjà noté" tone="neutral" /> : null}
                     >
                       <View style={styles.metaItem}>
-                        <Ionicons name={cat.icon} size={12} color={TONES[toneOfCategory(cat)].fg} />
+                        <Icon name={cat.icon} size={12} color={TONES[toneOfCategory(cat)].fg} />
                         <Text style={type.caption}>{cat.label}</Text>
                       </View>
                     </Row>

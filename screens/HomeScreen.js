@@ -1,7 +1,7 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl, ImageBackground, Animated, Alert } from "react-native";
+import React, { useState, useCallback, useEffect } from "react";
+import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl, Animated, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -17,6 +17,9 @@ import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import UndoToast from "../components/UndoToast";
 import HomeNotices from "../components/HomeNotices";
 import { Txt, Stamp, Group, Row, Thumb, SectionTitle, EmptyState, IconButton, Fab, round } from "../components/ui";
+import TripCover from "../components/TripCover";
+import Appear from "../components/Appear";
+import { usePressScale } from "../lib/motion";
 
 function todayISO() {
   return isoDate(new Date());
@@ -72,14 +75,6 @@ export default function HomeScreen({ navigation }) {
   const [backupBusy, setBackupBusy] = useState(false);
   const updatePending = useUpdatePending();
   const [updateLater, setUpdateLater] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (!loading) {
-      fadeAnim.setValue(0);
-      Animated.timing(fadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start();
-    }
-  }, [loading]);
 
   const refresh = useCallback(async () => {
     const t = await loadTrips();
@@ -173,7 +168,7 @@ export default function HomeScreen({ navigation }) {
         {loading ? (
           <View style={[styles.skeleton, round("xl")]} />
         ) : (
-          <Animated.View style={{ opacity: fadeAnim }}>
+          <View>
             <HomeNotices
               storage={storage}
               backup={backup}
@@ -199,10 +194,11 @@ export default function HomeScreen({ navigation }) {
               />
             )}
 
-            {current.map((trip) => (
+            {current.map((trip, i) => (
               <SwipeToDelete key={trip.id} trip={trip} onDeleteWithUndo={handleDeleteWithUndo} style={styles.ticketGap} room>
                 <TripTicket
                   mode="current"
+                  index={i}
                   trip={trip}
                   today={today}
                   onPress={() => openTrip(trip)}
@@ -220,7 +216,7 @@ export default function HomeScreen({ navigation }) {
 
             {featuredNext && (
               <SwipeToDelete trip={featuredNext} onDeleteWithUndo={handleDeleteWithUndo} style={styles.ticketGap} room>
-                <TripTicket mode="next" trip={featuredNext} today={today} onPress={() => openTrip(featuredNext)} />
+                <TripTicket mode="next" index={current.length} trip={featuredNext} today={today} onPress={() => openTrip(featuredNext)} />
               </SwipeToDelete>
             )}
 
@@ -247,7 +243,7 @@ export default function HomeScreen({ navigation }) {
                 ))}
               </View>
             )}
-          </Animated.View>
+          </View>
         )}
       </ScrollView>
       {!loading && trips.length > 0 && !toast.visible && <Fab label="Nouveau voyage" onPress={() => navigation.navigate("Onboarding")} />}
@@ -272,7 +268,7 @@ function SwipeToDelete({ trip, onDeleteWithUndo, children, style, bg = THEME.bg,
             accessibilityRole="button"
             accessibilityLabel={`Supprimer ${trip.name}`}
           >
-            <Ionicons name="trash-outline" size={22} color={THEME.bg} />
+            <Icon name="trash-outline" size={22} color={THEME.bg} />
           </Pressable>
         )}
         overshootRight={false}
@@ -311,45 +307,34 @@ function HomeWeatherPreview({ day, dateISO, fallbackLocation }) {
 
 // The trip's boarding pass: photo + name on top, perforation, then a stub with
 // the one thing that matters now (current: today's next step, next: countdown).
-function TripTicket({ mode, trip, today, onPress, onPressToday }) {
+function TripTicket({ mode, index = 0, trip, today, onPress, onPressToday }) {
+  const press = usePressScale(0.985);
   const { start, end } = tripRange(trip);
   const cover = trip.coverImage;
-  const tone = tripTone(trip);
-  const meta = tripTypeMeta(trip);
   const isCurrent = mode === "current";
   const todayIndex = trip.days.findIndex((d, i) => resolveDayDate(trip, d, i) === today);
   const weatherDay = isCurrent ? (todayIndex >= 0 ? trip.days[todayIndex] : trip.days[0]) : trip.days[0];
   const weatherDate = isCurrent ? today : start;
   const diff = start ? dayDiff(start, today) : null;
 
-  // The photo is a band on top of the ticket and the name sits on the ticket stock below it: ink on paper,
-  // whatever the photo is, and in full sun.
-  const band = (
-    <>
-      {!cover?.url && <Ionicons name={meta.icon} size={110} color={THEME[tone]} style={styles.ticketWatermark} />}
-      <View style={styles.ticketBadgeRow}>
-        {isCurrent ? <Stamp label="En cours" tone="teal" icon="radio-button-on" /> : <Stamp label="Prochain départ" tone="gold" />}
-      </View>
-      {cover?.photographerName ? (
-        <Text style={styles.credit} numberOfLines={1}>
-          Photo : {cover.photographerName} / Unsplash
-        </Text>
-      ) : null}
-    </>
-  );
-
+  // The cover (a drawing, with the photo over it when there is one) is a band on top of the ticket and the
+  // name sits on the ticket stock below it: ink on paper, whatever the photo is, and in full sun.
   const step = isCurrent ? nextStepFor(trip, today) : null;
 
   return (
-    <View style={[styles.ticket, round("xl")]}>
-      <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`Ouvrir ${trip.name}`}>
-        {cover?.url ? (
-          <ImageBackground source={{ uri: cover.url }} style={styles.ticketTop} imageStyle={{ resizeMode: "cover" }}>
-            {band}
-          </ImageBackground>
-        ) : (
-          <View style={[styles.ticketTop, { backgroundColor: tone === "teal" ? THEME.tealDim : tone === "pink" ? THEME.pinkDim : THEME.goldDim }]}>{band}</View>
-        )}
+    <Appear index={index}>
+    <Animated.View style={[styles.ticket, round("xl"), { transform: [{ scale: press.scale }] }]}>
+      <Pressable onPress={onPress} onPressIn={press.onPressIn} onPressOut={press.onPressOut} accessibilityRole="button" accessibilityLabel={`Ouvrir ${trip.name}`}>
+        <TripCover trip={trip} height={148} photoUri={cover?.url} style={styles.ticketTop}>
+          <View style={styles.ticketBadgeRow}>
+            {isCurrent ? <Stamp label="En cours" tone="teal" icon="radio-button-on" thump delay={280 + Math.min(index, 5) * 70} /> : <Stamp label="Prochain départ" tone="gold" thump delay={280 + Math.min(index, 5) * 70} />}
+          </View>
+          {cover?.url && cover?.photographerName ? (
+            <Text style={styles.credit} numberOfLines={1}>
+              Photo : {cover.photographerName} / Unsplash
+            </Text>
+          ) : null}
+        </TripCover>
         <View style={styles.ticketTitleBlock}>
           <Text style={[type.title, styles.ticketTitle]} numberOfLines={2}>
             {trip.name}
@@ -366,6 +351,8 @@ function TripTicket({ mode, trip, today, onPress, onPressToday }) {
       {isCurrent ? (
         <Pressable
           onPress={onPressToday || onPress}
+          onPressIn={press.onPressIn}
+          onPressOut={press.onPressOut}
           accessibilityRole="button"
           accessibilityLabel={onPressToday ? "Ouvrir le programme d'aujourd'hui" : `Ouvrir ${trip.name}`}
           style={({ pressed }) => [styles.stub, pressed && { backgroundColor: THEME.pressed }]}
@@ -390,7 +377,7 @@ function TripTicket({ mode, trip, today, onPress, onPressToday }) {
               </>
             ) : step && step.kind === "done" ? (
               <View style={styles.stubNextRow}>
-                <Ionicons name="checkmark-circle" size={20} color={THEME.teal} />
+                <Icon name="checkmark-circle" size={20} color={THEME.teal} />
                 <Text style={type.label}>Journée terminée</Text>
               </View>
             ) : step && step.kind === "empty" ? (
@@ -402,10 +389,10 @@ function TripTicket({ mode, trip, today, onPress, onPressToday }) {
               <Text style={type.label}>Voir le programme</Text>
             )}
           </View>
-          <Ionicons name="chevron-forward" size={18} color={THEME.inkFaint} />
+          <Icon name="chevron-forward" size={18} color={THEME.inkFaint} />
         </Pressable>
       ) : (
-        <Pressable onPress={onPress} style={({ pressed }) => [styles.stub, pressed && { backgroundColor: THEME.pressed }]} accessibilityRole="button" accessibilityLabel={`Ouvrir ${trip.name}`}>
+        <Pressable onPress={onPress} onPressIn={press.onPressIn} onPressOut={press.onPressOut} style={({ pressed }) => [styles.stub, pressed && { backgroundColor: THEME.pressed }]} accessibilityRole="button" accessibilityLabel={`Ouvrir ${trip.name}`}>
           <View style={styles.stubCounter}>
             <Text style={[type.caption, { color: THEME.inkMuted }]}>Départ dans</Text>
             <View style={styles.stubCounterRow}>
@@ -425,10 +412,11 @@ function TripTicket({ mode, trip, today, onPress, onPressToday }) {
               {trip.days[0] ? trip.days[0].title : "À planifier"}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={THEME.inkFaint} />
+          <Icon name="chevron-forward" size={18} color={THEME.inkFaint} />
         </Pressable>
       )}
-    </View>
+    </Animated.View>
+    </Appear>
   );
 }
 
@@ -493,8 +481,7 @@ const styles = themedStyles(() => ({
   ticketGap: { marginBottom: space.md },
 
   ticket: { backgroundColor: THEME.bgCard, overflow: "hidden", ...paperEdge() },
-  ticketTop: { height: 148, justifyContent: "space-between", padding: space.lg },
-  ticketWatermark: { position: "absolute", right: space.lg, top: space.lg, opacity: 0.22 },
+  ticketTop: { padding: space.lg },
   ticketBadgeRow: { flexDirection: "row" },
   ticketTitleBlock: { gap: space.xs, paddingHorizontal: space.lg + 4, paddingTop: space.lg, paddingBottom: space.xs },
   ticketTitle: { color: THEME.ink },

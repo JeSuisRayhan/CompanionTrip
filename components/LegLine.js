@@ -1,6 +1,6 @@
 import React from "react";
 import { View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "./Icon";
 
 import { THEME, space, themedStyles } from "../lib/theme";
 import { legAdvice } from "../lib/travelTime";
@@ -17,7 +17,7 @@ export default function LegLine({ leg, arriveAt, now = null, compact = false, fr
   const label = [head, advice ? advice.text : null].filter(Boolean).join(". ");
   return (
     <View accessible accessibilityLabel={label} style={compact ? styles.compact : [styles.box, round("md")]}>
-      <Ionicons name={ICONS[leg.mode] || "walk-outline"} size={compact ? 14 : 18} color={THEME.inkFaint} style={styles.icon} />
+      <Icon name={ICONS[leg.mode] || "walk-outline"} size={compact ? 14 : 18} color={THEME.inkFaint} style={styles.icon} />
       <View style={styles.texts}>
         <Txt variant="caption">{head}</Txt>
         {advice ? (

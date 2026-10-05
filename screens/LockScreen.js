@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { THEME, space, radius, type, themedStyles, paperEdge } from "../lib/theme";
 import { checkPin } from "../lib/pin";
 import { Txt } from "../components/ui";
@@ -36,7 +36,7 @@ export default function LockScreen({ onUnlock }) {
     <SafeAreaView style={styles.safe}>
       <View style={styles.center}>
         <View style={styles.head}>
-          <Ionicons name="lock-closed" size={28} color={THEME.inkMuted} />
+          <Icon name="lock-closed" size={28} color={THEME.inkMuted} />
           <Txt variant="title" style={styles.title} accessibilityRole="header">
             Code de verrouillage
           </Txt>
@@ -73,7 +73,7 @@ function Key({ label, icon, bare, onPress }) {
       accessibilityLabel={label}
       style={({ pressed }) => [styles.key, !bare && styles.keyFilled, pressed && { backgroundColor: THEME.bgRaised }]}
     >
-      {icon ? <Ionicons name={icon} size={24} color={THEME.inkMuted} /> : <Text style={type.title}>{label}</Text>}
+      {icon ? <Icon name={icon} size={24} color={THEME.inkMuted} /> : <Text style={type.title}>{label}</Text>}
     </Pressable>
   );
 }
@@ -88,7 +88,7 @@ const styles = themedStyles(() => ({
   title: { textAlign: "center" },
   dots: { flexDirection: "row", gap: space.lg, marginBottom: space.xxl },
   dot: { width: space.lg, height: space.lg, borderRadius: radius.full, backgroundColor: THEME.light ? THEME.border : THEME.bgRaised },
-  dotFilled: { backgroundColor: THEME.gold },
+  dotFilled: { backgroundColor: THEME.mark },
   dotError: { backgroundColor: THEME.stamp },
   keypad: { flexDirection: "row", flexWrap: "wrap", gap: space.lg, width: KEY * 3 + space.lg * 2 },
   key: { width: KEY, height: KEY, borderRadius: radius.full, alignItems: "center", justifyContent: "center" },

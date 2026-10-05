@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
@@ -284,7 +284,7 @@ function StepRow({ item, trip, onPress }) {
     >
       <View style={styles.metaRow}>
         <View style={styles.metaItem}>
-          <Ionicons name={cat.icon} size={12} color={TONES[tone].fg} />
+          <Icon name={cat.icon} size={12} color={TONES[tone].fg} />
           <Text style={type.caption}>{cat.label}</Text>
         </View>
         {!!duration && <Text style={type.numeralSmall}>{duration}</Text>}

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { View, Text, ScrollView, Alert } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 
 import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { formatMoney } from "../lib/budget";
@@ -100,8 +100,8 @@ export default function IdeasTab({ trip, navigation, onChange }) {
   // With ideas, Importer and Hôtels sit in the "…" menu; the empty state shows them as buttons.
   const openHotels = () => navigation.navigate("Hotels", { tripId: trip.id });
   const openImport = () => navigation.navigate("ImportIdeas", { tripId: trip.id });
-  const hotelsButton = <Button title={`Hôtels${staysCount ? ` (${staysCount})` : ""}`} icon="bed-outline" variant="secondary" size="sm" style={styles.selfCenter} onPress={openHotels} />;
-  const importButton = <Button title="Importer" icon="download-outline" variant="secondary" accessibilityLabel="Importer des idées depuis un lien ou un texte" style={styles.selfCenter} onPress={openImport} />;
+  const hotelsButton = <Button title={`Hôtels${staysCount ? ` (${staysCount})` : ""}`} icon="bed-outline" variant="ghost" size="sm" style={styles.selfCenter} onPress={openHotels} />;
+  const importButton = <Button title="Importer" icon="download-outline" variant="ghost" size="sm" accessibilityLabel="Importer des idées depuis un lien ou un texte" style={styles.selfCenter} onPress={openImport} />;
   const canGenerate = plannable > 0 && trip.days.length > 0;
 
   return (
@@ -179,7 +179,7 @@ export default function IdeasTab({ trip, navigation, onChange }) {
           return (
             <View key={cat.id} style={styles.section}>
               <View style={styles.sectionTitle}>
-                <Ionicons name={cat.icon} size={18} color={TONES[tone].fg} />
+                <Icon name={cat.icon} size={18} color={TONES[tone].fg} />
                 <View style={styles.sectionTitleText}>
                   <Text style={type.heading} accessibilityRole="header">
                     {cat.label}
@@ -300,7 +300,7 @@ function IdeaRow({ idea, cat, tone, trip, placement, onOpen, onPlace, onBook }) 
         {idea.price != null && <Text style={type.numeralSmall}>{formatMoney(idea.price, trip.currency)}</Text>}
         {!hasPosition(idea) && (
           <View style={styles.metaItem}>
-            <Ionicons name="location-outline" size={12} color={THEME.inkFaint} />
+            <Icon name="location-outline" size={12} color={THEME.inkFaint} />
             <Text style={[type.caption, { color: THEME.inkFaint }]}>Sans position</Text>
           </View>
         )}
@@ -355,7 +355,7 @@ const styles = themedStyles(() => ({
   scrollContent: { padding: layout.gutter, paddingBottom: space.xxxl },
   actionRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
   selfCenter: { alignSelf: "center" },
-  emptyActions: { alignItems: "center", gap: space.md },
+  emptyActions: { flexDirection: "row", justifyContent: "center", gap: space.lg },
   generate: { marginTop: space.sm },
   statsText: { gap: 2, marginTop: space.lg },
   chipScroll: { flexGrow: 0, marginHorizontal: -layout.gutter },

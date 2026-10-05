@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "./Icon";
 
 import { THEME, space, type, themedStyles } from "../lib/theme";
 import { resolveDayDate, formatDayLabel } from "../lib/dates";
@@ -31,7 +31,7 @@ export default function DayPickerModal({ visible, trip, title, currentDayId, rem
                 }
                 title={day.title}
                 subtitle={`${date ? formatDayLabel(date) + " · " : ""}${count} étape${count !== 1 ? "s" : ""}`}
-                right={current ? <Ionicons name="checkmark-circle" size={22} color={THEME.teal} /> : null}
+                right={current ? <Icon name="checkmark-circle" size={22} color={THEME.teal} /> : null}
                 selected={current}
                 accessibilityLabel={`${day.title}, jour ${index + 1}${current ? ", jour actuel" : ""}`}
                 onPress={() => onPick(day.id)}

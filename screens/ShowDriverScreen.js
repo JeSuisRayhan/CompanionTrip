@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 
 import { bigTextSize } from "../lib/driverCard";
 
@@ -20,7 +20,7 @@ export default function ShowDriverScreen({ route, navigation }) {
       <View style={styles.top}>
         <Text style={styles.caption}>Adresse à montrer</Text>
         <Pressable onPress={close} hitSlop={12} accessibilityRole="button" accessibilityLabel="Fermer" style={styles.close}>
-          <Ionicons name="close" size={26} color={INK} />
+          <Icon name="close" size={26} color={INK} />
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>

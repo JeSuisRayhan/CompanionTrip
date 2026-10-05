@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { View, Text, ScrollView, Pressable, ActivityIndicator, Switch, Alert } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 
 import { THEME, TONES, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { PARK_PRIORITIES, getIdeaCategory, placementIndex, priorityMeta } from "../lib/ideas";
@@ -179,7 +179,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
           {loading ? (
             <ActivityIndicator size="small" color={THEME.teal} />
           ) : (
-            <Ionicons name={liveError ? "cloud-offline-outline" : "pulse"} size={18} color={liveError ? THEME.stamp : THEME.teal} />
+            <Icon name={liveError ? "cloud-offline-outline" : "pulse"} size={18} color={liveError ? THEME.stamp : THEME.teal} />
           )}
           <View style={styles.liveText}>
             {liveError ? (
@@ -259,7 +259,7 @@ export default function AttractionsTab({ trip, navigation, onChange }) {
 
       {ideas.length > 0 && newRides > 0 ? (
         <Pressable onPress={addFromPark} accessibilityRole="button" style={({ pressed }) => [styles.newRides, pressed && { opacity: 0.7 }]}>
-          <Ionicons name="download-outline" size={18} color={THEME.teal} />
+          <Icon name="download-outline" size={18} color={THEME.teal} />
           <Text style={[type.label, { color: THEME.teal, flex: 1 }]}>{newRides === 1 ? "Ajouter 1 nouvelle attraction du parc" : `Ajouter les ${newRides} nouvelles attractions du parc`}</Text>
         </Pressable>
       ) : null}

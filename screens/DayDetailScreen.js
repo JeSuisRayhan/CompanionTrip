@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useContext } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking, Alert, Platform } from "react-native";
 import { SafeAreaView, SafeAreaInsetsContext } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -20,6 +20,7 @@ import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import { fetchQueueTimes, liveByRideId } from "../lib/queueTimes";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
 import UndoToast from "../components/UndoToast";
+import DayDoneStamp from "../components/DayDoneStamp";
 import WaitBadge from "../components/WaitBadge";
 import QueueTimesCredit from "../components/QueueTimesCredit";
 import LegLine from "../components/LegLine";
@@ -76,6 +77,7 @@ export default function DayDetailScreen({ route, navigation }) {
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [flightOpen, setFlightOpen] = useState(false);
   const [toast, setToast] = useState({ visible: false, message: "", undoActivity: null });
+  const [dayDone, setDayDone] = useState(false); // "Journée faite" is showing
   const insets = useContext(SafeAreaInsetsContext);
 
   const refresh = useCallback(async () => {
@@ -154,9 +156,13 @@ export default function DayDetailScreen({ route, navigation }) {
   const parkIdeas = day.dayType === "park" ? (isParkTrip ? trip.ideas : (day.park && trip.parkLists && trip.parkLists[day.park.qtId]) || []) : [];
   const parkIdeaOf = (a) => (a.ideaId ? parkIdeas.find((i) => i.id === a.ideaId) || null : null);
 
+  // Ticking the last open step of a day inks "Journée faite" on the screen (dayDone, above).
   async function onToggleDone(activityId) {
+    const target = day.activities.find((a) => a.id === activityId);
+    const finishes = !!target && !target.done && day.activities.every((a) => a.id === activityId || a.done);
     await toggleActivityDone(tripId, dayId, activityId);
     refresh();
+    if (finishes) setDayDone(true);
   }
 
   async function onDeleteWithUndo(activity) {
@@ -319,13 +325,14 @@ export default function DayDetailScreen({ route, navigation }) {
           Donne un habillage et des rappels adaptés à ce jour.
         </Txt>
         <Group style={styles.typeGroup}>
-          <Row icon="today-outline" title="Jour normal" selected={!day.dayType} right={!day.dayType ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType(null)} />
-          <Row icon="airplane-outline" title="Jour de vol ou de train" selected={day.dayType === "flight"} right={day.dayType === "flight" ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("flight")} />
-          <Row icon="happy-outline" title="Jour parc d'attractions" selected={day.dayType === "park"} right={day.dayType === "park" ? <Ionicons name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("park")} />
+          <Row icon="today-outline" title="Jour normal" selected={!day.dayType} right={!day.dayType ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType(null)} />
+          <Row icon="airplane-outline" title="Jour de vol ou de train" selected={day.dayType === "flight"} right={day.dayType === "flight" ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("flight")} />
+          <Row icon="happy-outline" title="Jour parc d'attractions" selected={day.dayType === "park"} right={day.dayType === "park" ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("park")} />
         </Group>
       </Sheet>
 
       <UndoToast visible={toast.visible} message={toast.message} onUndo={onUndoDelete} onDismiss={onToastDismiss} />
+      {dayDone ? <DayDoneStamp onHide={() => setDayDone(false)} /> : null}
     </SafeAreaView>
   );
 }
@@ -368,7 +375,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
         containerStyle={styles.swipeContainer}
         renderRightActions={() => (
           <Pressable style={styles.deleteAction} onPress={onDeleteWithUndo} accessibilityRole="button" accessibilityLabel={`Supprimer ${activity.title}`}>
-            <Ionicons name="trash-outline" size={20} color={THEME.bg} />
+            <Icon name="trash-outline" size={20} color={THEME.bg} />
           </Pressable>
         )}
         overshootRight={false}
@@ -382,7 +389,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
           >
             <View style={[styles.stub, { backgroundColor: stubBg }]}>
               {activity.time ? <Text style={[styles.stubTime, { color: stubInk }]}>{activity.time}</Text> : null}
-              {showIcon ? <Ionicons name={t.icon} size={activity.time ? 14 : 18} color={stubInk} /> : null}
+              {showIcon ? <Icon name={t.icon} size={activity.time ? 14 : 18} color={stubInk} /> : null}
             </View>
             <View style={styles.body}>
               <View style={styles.stepTitleRow}>
@@ -392,7 +399,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
                 <View style={styles.detailLine}>
                   {place ? (
                     <View style={styles.metaLine}>
-                      <Ionicons name="location-outline" size={14} color={THEME.inkFaint} />
+                      <Icon name="location-outline" size={14} color={THEME.inkFaint} />
                       <Text style={[type.caption, styles.metaText]} numberOfLines={2}>{place}</Text>
                     </View>
                   ) : null}
@@ -402,13 +409,13 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
                   {hasPrice ? <Text style={styles.stepPrice}>{formatMoney(activity.price, trip.currency)}</Text> : null}
                   {goUrl ? (
                     <Pressable onPress={goThere} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Y aller : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
-                      <Ionicons name="navigate" size={13} color={THEME.blue} />
+                      <Icon name="navigate" size={13} color={THEME.blue} />
                       <Text style={[type.caption, { color: THEME.blue }]}>Y aller</Text>
                     </Pressable>
                   ) : null}
                   {card ? (
                     <Pressable onPress={() => onShowDriver(card)} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Montrer l'adresse au chauffeur : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
-                      <Ionicons name="car-outline" size={14} color={THEME.blue} />
+                      <Icon name="car-outline" size={14} color={THEME.blue} />
                       <Text style={[type.caption, { color: THEME.blue }]}>Montrer</Text>
                     </Pressable>
                   ) : null}
@@ -425,7 +432,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
             accessibilityLabel={`Fait : ${activity.title}`}
             style={({ pressed }) => [styles.checkHit, pressed && { opacity: 0.7 }]}
           >
-            <View style={[styles.check, done && styles.checkDone]}>{done ? <Ionicons name="checkmark" size={16} color={THEME.onAccent} /> : null}</View>
+            <View style={[styles.check, done && styles.checkDone]}>{done ? <Icon name="checkmark" size={16} color={THEME.onAccent} /> : null}</View>
           </Pressable>
         </View>
       </Swipeable>
@@ -484,7 +491,7 @@ function FlightDayBanner({ day, dateISO }) {
               </View>
               <View style={styles.flightPath}>
                 <Dashes />
-                <Ionicons name="airplane" size={18} color={THEME.blue} />
+                <Icon name="airplane" size={18} color={THEME.blue} />
                 <Dashes />
               </View>
               <View style={[styles.flightAirport, { alignItems: "flex-end" }]}>
@@ -526,7 +533,7 @@ function FlightDayBanner({ day, dateISO }) {
         </>
       ) : (
         <View style={styles.panelRow}>
-          <Ionicons name="airplane" size={22} color={THEME.blue} />
+          <Icon name="airplane" size={22} color={THEME.blue} />
           <Txt variant="subhead" style={styles.panelText}>
             Jour de vol ou de train — scannez votre billet ou saisissez le trajet ci-dessous.
           </Txt>
@@ -625,7 +632,7 @@ function ParkDayBanner({ day, park, attractionCount, ownPark, onAttractions, onP
   return (
     <Surface pad="lg" style={styles.panel}>
       <View style={styles.panelRow}>
-        <Ionicons name="sparkles" size={22} color={THEME.pink} />
+        <Icon name="sparkles" size={22} color={THEME.pink} />
         <View style={styles.panelText}>
           {ownPark && park ? (
             <Txt variant="heading" numberOfLines={2}>
