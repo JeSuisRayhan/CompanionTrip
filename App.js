@@ -20,6 +20,8 @@ import { hasPin } from "./lib/pin";
 import { onTripsSaved } from "./lib/storage";
 import { scheduleStepReminderSync } from "./lib/notifications";
 import { targetFromResponse } from "./lib/stepReminders";
+import { useSharedContent } from "./lib/useSharedContent";
+import { sharedTextOf } from "./lib/shareIntake";
 import SplashOverlay, { SPLASH_BACKGROUND } from "./components/SplashOverlay";
 // imported here so the park alert task is defined whenever the app starts, even in the background
 import { syncParkAlertTask } from "./lib/parkAlertsTask";
@@ -45,6 +47,7 @@ import PlanGeneratorScreen from "./screens/PlanGeneratorScreen";
 import ImportIdeasScreen from "./screens/ImportIdeasScreen";
 import ImportScriptScreen from "./screens/ImportScriptScreen";
 import ImportConfirmationScreen from "./screens/ImportConfirmationScreen";
+import ShareTargetScreen from "./screens/ShareTargetScreen";
 import RecapScreen from "./screens/RecapScreen";
 import LockScreen from "./screens/LockScreen";
 import ErrorLogScreen from "./screens/ErrorLogScreen";
@@ -153,6 +156,19 @@ function AppContent({ onReady }) {
     };
   }, []);
 
+  // A link or a place shared from another app ("Partager") opens the choice of the trip it is for, once the app is
+  // unlocked and its screens are up.
+  const { hasShareIntent, shareIntent, resetShareIntent } = useSharedContent();
+  const pendingShare = useRef(null);
+  useEffect(() => {
+    if (!hasShareIntent) return;
+    const text = sharedTextOf(shareIntent);
+    resetShareIntent();
+    if (!text) return;
+    if (navigationRef.isReady()) navigationRef.navigate("ShareTarget", { text });
+    else pendingShare.current = text;
+  }, [hasShareIntent, shareIntent]);
+
   const ready = !checking && fontsLoaded;
   useEffect(() => {
     if (ready) onReady();
@@ -175,6 +191,11 @@ function AppContent({ onReady }) {
             if (target) {
               pendingTarget.current = null;
               navigationRef.navigate(target.screen, target.params);
+            }
+            const shared = pendingShare.current;
+            if (shared) {
+              pendingShare.current = null;
+              navigationRef.navigate("ShareTarget", { text: shared });
             }
           }}
           theme={buildNavTheme()}
@@ -227,6 +248,7 @@ function AppContent({ onReady }) {
             <Stack.Screen name="ParkLive" component={ParkLiveScreen} options={{ headerShown: false }} />
             <Stack.Screen name="PlanGenerator" component={PlanGeneratorScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ImportIdeas" component={ImportIdeasScreen} options={{ headerShown: false, presentation: "modal" }} />
+            <Stack.Screen name="ShareTarget" component={ShareTargetScreen} options={{ headerShown: false, presentation: "modal" }} />
             <Stack.Screen name="ImportScript" component={ImportScriptScreen} options={{ headerShown: false, presentation: "modal" }} />
             <Stack.Screen name="ImportConfirmation" component={ImportConfirmationScreen} options={{ headerShown: false, presentation: "modal" }} />
             <Stack.Screen name="TripRecap" component={RecapScreen} options={{ headerShown: false }} />

@@ -121,6 +121,18 @@ du code qu'il ne sait pas exécuter.
 `preview` (celles de l'étape précédente : `EXPO_PUBLIC_AVIATIONSTACK_API_KEY`,
 `EXPO_PUBLIC_UNSPLASH_ACCESS_KEY`), comme le fait le build : rien de plus à faire.
 
+## Envoyer un lien ou un lieu vers l'app (Partager)
+
+Depuis TikTok, YouTube, Google Maps ou le navigateur : **Partager → Compagnon de
+voyage**. L'app demande pour quel voyage (une seule question s'il y en a
+plusieurs), puis ouvre l'import d'idées avec le lien ou le texte déjà en place :
+il ne reste qu'à appuyer sur **Analyser** et à cocher les lieux reconnus.
+
+Cette fonction ajoute un module natif : elle demande **un nouvel APK** (la
+version de l'app est passée à `1.1.0` pour cette raison). Les mises à jour
+publiées avec cette version ne vont qu'aux APK `1.1.0` ; l'ancien APK continue de
+recevoir celles de la version `1.0.0`.
+
 ## Vérification avant chaque build
 
 Le workflow de build commence par vérifier que le code compile

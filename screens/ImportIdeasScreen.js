@@ -18,11 +18,11 @@ const toneOfCategory = (cat) => Object.keys(TONES).find((k) => TONES[k].fg === c
 // "Construire mon voyage", phase 3: fill the notebook from a link or a text.
 // Steps: paste -> tick what is right -> added with positions.
 export default function ImportIdeasScreen({ route, navigation }) {
-  const { tripId } = route.params;
+  const { tripId, initialText } = route.params; // initialText: what another app shared
   const [trip, setTrip] = useState(null);
   const [hasKey, setHasKey] = useState(false);
   const [stage, setStage] = useState("input"); // input | review | saving | done
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText || "");
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null); // { places, links, usedAI, aiError }
