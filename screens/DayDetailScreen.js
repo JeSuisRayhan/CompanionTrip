@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useContext } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking, Alert, Platform } from "react-native";
 import { SafeAreaView, SafeAreaInsetsContext } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
@@ -9,6 +9,7 @@ import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { scopedId } from "../lib/parkDay";
 import { splitTitlePlace } from "../lib/script";
+import { directionsUrl } from "../lib/map";
 import { getTrip, toggleActivityDone, setDayLocation, addActivity, deleteActivity, setDayType } from "../lib/trips";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
@@ -346,6 +347,9 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
   // the usual "activité" pin says nothing: an icon only for the other kinds, or when there is no time to show
   const showIcon = !activity.time || activity.type !== "activite";
   const label = `${activity.title}${activity.time ? ", " + activity.time : ""}${done ? ", fait" : isCurrent ? ", à suivre" : ""}`;
+  // a step that is not done yet and has an address or a position can be gone to
+  const goUrl = done ? null : directionsUrl(activity, Platform.OS);
+  const goThere = () => Linking.openURL(goUrl).catch(() => Alert.alert("Impossible d'ouvrir l'application de cartes"));
 
   return (
     <View style={styles.stepWrap}>
@@ -373,7 +377,7 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
               <View style={styles.stepTitleRow}>
                 <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{name}</Text>
               </View>
-              {place || liveWait || estimate || activity.confirmationCode || hasPrice ? (
+              {place || liveWait || estimate || activity.confirmationCode || hasPrice || goUrl ? (
                 <View style={styles.detailLine}>
                   {place ? (
                     <View style={styles.metaLine}>
@@ -385,6 +389,12 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onPr
                   {estimate ? <Badge label={`~${estimate} min`} icon="hourglass-outline" tone="neutral" /> : null}
                   {activity.confirmationCode ? <Badge label={activity.confirmationCode} icon="key-outline" tone="neutral" /> : null}
                   {hasPrice ? <Text style={styles.stepPrice}>{formatMoney(activity.price, trip.currency)}</Text> : null}
+                  {goUrl ? (
+                    <Pressable onPress={goThere} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Y aller : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
+                      <Ionicons name="navigate" size={13} color={THEME.blue} />
+                      <Text style={[type.caption, { color: THEME.blue }]}>Y aller</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
               {note ? <Text style={[type.subhead, done && { color: THEME.inkFaint }]}>{note}</Text> : null}
@@ -708,6 +718,7 @@ const styles = themedStyles(() => ({
   detailLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.md, rowGap: space.xs + 2 },
   metaLine: { flexShrink: 1, flexDirection: "row", alignItems: "flex-start", gap: space.xs + 2 },
   metaText: { flexShrink: 1 },
+  goPill: { flexDirection: "row", alignItems: "center", gap: space.xs, paddingHorizontal: space.md, minHeight: 28, borderRadius: radius.full, backgroundColor: THEME.blueDim },
   checkHit: { width: 52, alignItems: "center", paddingTop: space.md - 2 },
   check: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: THEME.hairStrong, alignItems: "center", justifyContent: "center" },
   checkDone: { backgroundColor: THEME.teal, borderColor: THEME.teal },
