@@ -149,7 +149,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
               <View key={index} style={styles.item}>
                 <Group>
                   <Row
-                    icon={t.icon}
+                    icon={it.transportMode === "train" ? "train" : t.icon}
                     tone={it.type === "hotel" ? "stamp" : it.type === "repas" ? "gold" : it.type === "transport" ? "blue" : "teal"}
                     title={it.title}
                     subtitle={bits.join(" · ")}

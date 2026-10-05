@@ -92,6 +92,10 @@ export default function RecapScreen({ route, navigation }) {
     recap.photos > 0 ? { key: "photos", value: recap.photos, label: recap.photos > 1 ? "photos souvenirs" : "photo souvenir", icon: "images-outline" } : null,
   ].filter(Boolean);
 
+  // "Jour 3 · Shibuya · 4 étapes faites": the day's own name only when it has one ("Jour 3" says nothing more)
+  const busiestText = recap.busiest
+    ? [`Jour ${recap.busiest.dayNumber}`, /^jour\s*\d+$/i.test(recap.busiest.title.trim()) ? null : recap.busiest.title, `${recap.busiest.count} étapes faites`].filter(Boolean).join(" · ")
+    : "";
   const spentRows = recap.money ? EXPENSE_CATEGORIES.filter((c) => recap.money.byCategory[c.key] > 0) : [];
 
   return (
@@ -122,8 +126,8 @@ export default function RecapScreen({ route, navigation }) {
               icon="trophy-outline"
               tone="gold"
               title="Journée la plus remplie"
-              subtitle={`Jour ${recap.busiest.dayNumber} · ${recap.busiest.title} · ${recap.busiest.count} étapes faites`}
-              accessibilityLabel={`Journée la plus remplie : jour ${recap.busiest.dayNumber}, ${recap.busiest.title}, ${recap.busiest.count} étapes faites`}
+              subtitle={busiestText}
+              accessibilityLabel={`Journée la plus remplie : ${busiestText}`}
             />
           </Group>
         ) : null}
