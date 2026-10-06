@@ -322,7 +322,7 @@ function NextCard({ step, trip, countdown, leg, now, busy, onGo, onDone, onEdit,
             {hasPrice ? <Badge label={formatMoney(step.price, trip.currency)} icon="pricetag-outline" tone="neutral" /> : null}
           </View>
           {step.note ? <Text style={type.subhead} numberOfLines={4}>{step.note}</Text> : null}
-          {leg ? <LegLine leg={leg} arriveAt={step.time} now={now} fromName={stepText({ title: leg.fromTitle }).name} /> : null}
+          {leg ? <LegLine leg={leg} arriveAt={step.time} now={now} fromName={stepText({ title: leg.fromTitle }).name} currency={trip.currency} /> : null}
         </View>
       </Pressable>
       <View style={styles.actions}>

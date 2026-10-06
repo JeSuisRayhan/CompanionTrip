@@ -143,8 +143,13 @@ en haut de la liste des jours (mail collé, captures ou PDF choisis dans le tél
 
 Ce que fait l'ajout d'une réservation, en plus des étapes :
 
-- **Transport** (vol, train, bus, bateau) : le jour de l'aller et celui du retour
-  deviennent des jours de voyage, avec le trajet déjà rempli quand il est lu.
+- **Transport** (vol, train, bus, bateau) : deux étapes par trajet, le **départ**
+  (avec le prix et le code) et l'**arrivée** (avec son heure, au jour suivant quand
+  l'arrivée est plus tôt que le départ ou marquée « +1 »). Pour un vol, les deux
+  étapes portent l'**adresse de l'aéroport** et sa position, ce qui permet à l'app
+  d'estimer le trajet de l'aéroport à l'étape suivante. Les jours concernés
+  deviennent des jours de voyage, avec le trajet déjà rempli quand il est lu. Sans
+  heure d'arrivée sur la confirmation, il n'y a que le départ.
 - **Billet de parc d'attractions** : le jour devient un jour parc d'attractions,
   avec le parc déjà choisi quand le billet le nomme (liste Queue-Times, réseau
   nécessaire ; sans réseau ou si le nom est ambigu, le parc se choisit sur le jour).
@@ -152,6 +157,16 @@ Ce que fait l'ajout d'une réservation, en plus des étapes :
   monnaie (dinar tunisien, yen…), ils sont convertis avec le taux du voyage, ou
   le taux du jour s'il n'en a pas. Sans taux disponible, le prix n'est pas ajouté
   plutôt que d'être mis dans la mauvaise monnaie.
+
+**Trajets entre deux étapes.** Entre deux étapes qui ont une adresse, le jour affiche
+une ligne de trajet (« environ 50 min en voiture ou transports · 28 km », « Partir
+à 17:45 pour arriver à 18:40 »). Un appui sur cette ligne permet d'écrire **le prix
+du trajet** et le moyen (taxi, bus…) : il est compté dans le budget, en transport.
+Dans un script, un trajet écrit entre deux étapes (« 10:30 Taxi vers le souk
+25 € ») devient cette ligne, avec son prix, au lieu d'une étape. Restent des
+étapes : les vols et les trains, un trajet au début ou à la fin de la journée,
+et un trajet qui a déjà un code de réservation ou une adresse. Les bus et les
+bateaux écrits dans un script sont des trajets comme les autres.
 
 Un jour se supprime depuis ses options (les trois points sur sa ligne, ou appui long
 sur sa tuile en grille, ou le menu du jour) ; l'app demande confirmation et dit

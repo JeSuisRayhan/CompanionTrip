@@ -355,7 +355,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
             </Txt>
           ) : null}
           <Group style={styles.help}>
-            <Row icon="airplane-outline" tone="blue" title="Vol, train, bus et bateau" subtitle="Un trajet par étape, avec l'heure de départ." accessibilityLabel="Vol, train, bus et bateau : un trajet par étape avec l'heure de départ" />
+            <Row icon="airplane-outline" tone="blue" title="Vol, train, bus et bateau" subtitle="Deux étapes par trajet : le départ et l'arrivée, avec leurs heures." accessibilityLabel="Vol, train, bus et bateau : deux étapes par trajet, le départ et l'arrivée avec leurs heures" />
             <Row icon="bed-outline" tone="stamp" title="Hôtel" subtitle="Devient un séjour : dates, nuits, adresse, prix total et code." accessibilityLabel="Hôtel : devient un séjour avec dates, nuits, adresse, prix total et code" />
             <Row icon="restaurant-outline" tone="gold" title="Restaurant ou billet" subtitle="Le jour, l'heure, l'adresse et le code." accessibilityLabel="Restaurant ou billet : le jour, l'heure, l'adresse et le code" />
           </Group>

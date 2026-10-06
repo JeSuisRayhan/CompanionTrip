@@ -10,12 +10,13 @@ import { Txt, Button, Group, Row, Field, EmptyState, ModalHeader } from "../comp
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + "s"}`;
 
-// What the import did, in words: "2 prix ajoutés · 1 séjour d'hôtel · 3 étapes ajoutées".
+// What the import did, in words: "2 prix ajoutés · 1 séjour d'hôtel · 3 étapes ajoutées · 2 trajets ajoutés".
 function summarize(stats) {
   const parts = [];
   if (stats.priced) parts.push(plural(stats.priced, "prix ajouté", "prix ajoutés"));
   if (stats.stays) parts.push(plural(stats.stays, "séjour d'hôtel", "séjours d'hôtel"));
   if (stats.addedSteps) parts.push(plural(stats.addedSteps, "étape ajoutée", "étapes ajoutées"));
+  if (stats.legs) parts.push(plural(stats.legs, "trajet ajouté", "trajets ajoutés"));
   if (stats.addedDays) parts.push(plural(stats.addedDays, "jour ajouté", "jours ajoutés"));
   return parts;
 }

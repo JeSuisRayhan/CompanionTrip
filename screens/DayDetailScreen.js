@@ -17,6 +17,7 @@ import { bookingOf, deadlineInfo } from "../lib/booking";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { dayLegs, formatDistance } from "../lib/travelTime";
+import { withLegEdit } from "../lib/leg";
 import { proximityOrder } from "../lib/dayOrder";
 import { journalOf, canWriteJournal, MAX_JOURNAL } from "../lib/journal";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
@@ -27,6 +28,7 @@ import DayDoneStamp from "../components/DayDoneStamp";
 import WaitBadge from "../components/WaitBadge";
 import QueueTimesCredit from "../components/QueueTimesCredit";
 import LegLine from "../components/LegLine";
+import LegSheet from "../components/LegSheet";
 import { Txt, Button, IconButton, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
@@ -83,6 +85,7 @@ export default function DayDetailScreen({ route, navigation }) {
   const [orderOpen, setOrderOpen] = useState(false); // the preview of "réordonner par proximité"
   const [journalOpen, setJournalOpen] = useState(false); // the note du soir
   const [dayDone, setDayDone] = useState(false); // "Journée faite" is showing
+  const [legFor, setLegFor] = useState(null); // id of the step whose way (price of the trip to it) is being edited
   const insets = useContext(SafeAreaInsetsContext);
 
   const refresh = useCallback(async () => {
@@ -174,6 +177,15 @@ export default function DayDetailScreen({ route, navigation }) {
     await toggleActivityDone(tripId, dayId, activityId);
     refresh();
     if (finishes) setDayDone(true);
+  }
+
+  // The price of the way to a step (and what it was done by), typed from the line between two steps; nothing left removes it.
+  async function onSaveLeg({ price, label }) {
+    const target = day.activities.find((a) => a.id === legFor);
+    setLegFor(null);
+    if (!target) return;
+    await editActivity(tripId, dayId, target.id, { leg: withLegEdit(target.leg, { price, label }) });
+    refresh();
   }
 
   // One tap on "À réserver" says it is booked.
@@ -328,7 +340,7 @@ export default function DayDetailScreen({ route, navigation }) {
           <View>
             {sorted.map((a, i) => (
               <React.Fragment key={a.id}>
-                {legs && legs.get(a.id) ? <LegLine compact leg={legs.get(a.id)} arriveAt={a.time} /> : null}
+                {legs && legs.get(a.id) ? <LegLine compact leg={legs.get(a.id)} arriveAt={a.time} currency={trip.currency} onPress={() => setLegFor(a.id)} /> : null}
                 <ActivityRow
                   activity={a}
                   trip={trip}
@@ -392,6 +404,15 @@ export default function DayDetailScreen({ route, navigation }) {
           setLocationModalOpen(false);
           refresh();
         }}
+      />
+
+      <LegSheet
+        visible={!!legFor && !!legs && legs.has(legFor)}
+        leg={legFor && legs ? legs.get(legFor) || null : null}
+        toTitle={legFor && day.activities.some((a) => a.id === legFor) ? splitTitlePlace(day.activities.find((a) => a.id === legFor).title).title : ""}
+        currency={trip.currency}
+        onClose={() => setLegFor(null)}
+        onSave={onSaveLeg}
       />
 
       <FlightSheet
