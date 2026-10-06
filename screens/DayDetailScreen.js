@@ -12,7 +12,7 @@ import { splitTitlePlace } from "../lib/script";
 import { directionsUrl } from "../lib/map";
 import { driverCard } from "../lib/driverCard";
 import { isPdfDoc } from "../lib/documents";
-import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal } from "../lib/trips";
+import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal, deleteDay, deleteDayMessage } from "../lib/trips";
 import { bookingOf, deadlineInfo } from "../lib/booking";
 import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
@@ -227,6 +227,25 @@ export default function DayDetailScreen({ route, navigation }) {
     setDayType(tripId, dayId, next).then(refresh);
   }
 
+  // Deleting the day takes its steps with it: ask first, and say how many.
+  function askDeleteDay() {
+    setTypeMenuOpen(false);
+    // let the sheet finish closing (iOS)
+    setTimeout(() => {
+      Alert.alert(`Supprimer « ${day.title} » ?`, deleteDayMessage(day), [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            await deleteDay(tripId, dayId);
+            navigation.goBack();
+          },
+        },
+      ]);
+    }, 350);
+  }
+
   function addStep() {
     navigation.navigate("ActivityEditor", { tripId, dayId, activity: null });
   }
@@ -394,6 +413,9 @@ export default function DayDetailScreen({ route, navigation }) {
           <Row icon="today-outline" title="Jour normal" selected={!day.dayType} right={!day.dayType ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType(null)} />
           <Row icon="airplane-outline" title="Jour de vol ou de train" selected={day.dayType === "flight"} right={day.dayType === "flight" ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("flight")} />
           <Row icon="happy-outline" title="Jour parc d'attractions" selected={day.dayType === "park"} right={day.dayType === "park" ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("park")} />
+        </Group>
+        <Group style={styles.typeGroup}>
+          <Row icon="trash-outline" tone="stamp" title="Supprimer ce jour" onPress={askDeleteDay} />
         </Group>
       </Sheet>
 

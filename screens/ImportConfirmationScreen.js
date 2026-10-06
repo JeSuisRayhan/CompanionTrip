@@ -7,9 +7,11 @@ import * as Clipboard from "expo-clipboard";
 import { THEME, space, layout, themedStyles } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { getTrip, addConfirmationSteps } from "../lib/trips";
-import { readConfirmations } from "../lib/confirmation";
+import { readConfirmations, inTripCurrency } from "../lib/confirmation";
 import { MAX_FILES, pickScreenshots, pickPdf, readFiles } from "../lib/confirmationFiles";
 import { addDocument } from "../lib/documents";
+import { euroRateFor } from "../lib/rates";
+import { fetchParks } from "../lib/queueTimes";
 import { resolveDayDate, formatDayLabel, formatShortDate, formatDateRange, addDaysISO } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
 import { Txt, Button, IconButton, Chip, Group, Row, Field, EmptyState, ModalHeader } from "../components/ui";
@@ -22,6 +24,8 @@ function summarize(stats) {
   if (stats.stays) parts.push(plural(stats.stays, "séjour d'hôtel", "séjours d'hôtel"));
   if (stats.updated) parts.push(plural(stats.updated, "étape complétée", "étapes complétées"));
   if (stats.addedDays) parts.push(plural(stats.addedDays, "jour ajouté", "jours ajoutés"));
+  if (stats.travelDays) parts.push(plural(stats.travelDays, "jour de voyage", "jours de voyage"));
+  if (stats.parkDays) parts.push(plural(stats.parkDays, "jour parc d'attractions", "jours parc d'attractions"));
   if (stats.docs) parts.push(plural(stats.docs, "document gardé", "documents gardés"));
   return parts;
 }
@@ -63,6 +67,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [items, setItems] = useState(null); // the steps read: { ...step, include, dayId }
+  const [rate, setRate] = useState(null); // what 1 euro is worth in the trip's currency, for the prices read (null: unknown)
   const [done, setDone] = useState(null);
   const autoStarted = useRef(false);
 
@@ -121,6 +126,8 @@ export default function ImportConfirmationScreen({ route, navigation }) {
       const fromFiles = files.length ? await readFiles(files) : [];
       const steps = readConfirmations([text, ...fromFiles.map((f) => f.text)].filter((t) => t.trim()), { trip });
       if (steps.length) {
+        // the prices read are in euros: a trip in another currency needs the rate to count them
+        setRate(trip.currency && trip.currency !== "EUR" && steps.some((x) => x.price != null) ? await euroRateFor(trip) : null);
         show(steps);
       } else {
         // what was read in the files goes into the field: the person can correct it (a misread letter) and read again
@@ -137,21 +144,31 @@ export default function ImportConfirmationScreen({ route, navigation }) {
     }
   }
 
+  const needsRate = !!trip && !!trip.currency && trip.currency !== "EUR";
   const patch = (index, change) => setItems((list) => list.map((it, i) => (i === index ? { ...it, ...change } : it)));
 
   async function add() {
     const chosen = items.filter((it) => it.include && (it.date || it.dayId));
     setBusy(true);
     try {
-      const stats = await addConfirmationSteps(
-        tripId,
-        chosen.map(({ include, ...step }) => {
-          // a step placed by hand on a day with a date is a step with that date (a hotel then becomes a stay)
-          const day = step.dayId ? trip.days.findIndex((d) => d.id === step.dayId) : -1;
-          const dated = day >= 0 ? resolveDayDate(trip, trip.days[day], day) : null;
-          return dated ? { ...step, date: dated, dayId: null } : step;
-        })
-      );
+      const placed = chosen.map(({ include, ...step }) => {
+        // a step placed by hand on a day with a date is a step with that date (a hotel then becomes a stay)
+        const day = step.dayId ? trip.days.findIndex((d) => d.id === step.dayId) : -1;
+        const dated = day >= 0 ? resolveDayDate(trip, trip.days[day], day) : null;
+        return dated ? { ...step, date: dated, dayId: null } : step;
+      });
+      // the prices read are in euros; the trip counts in its own currency
+      const steps = needsRate ? inTripCurrency(placed, rate ? rate.rate : 0) : placed;
+      // a ticket may be for a theme park: the list of parks tells which one, so the day gets it straight away
+      let parks = null;
+      if (steps.some((x) => x.type === "activite")) {
+        try {
+          parks = await fetchParks({ timeoutMs: 4000 });
+        } catch (e) {
+          // no list: the day is still a park day, the park is chosen on it
+        }
+      }
+      const stats = await addConfirmationSteps(tripId, steps, { parks });
       // the file the booking was read from goes to the Documents tab, where it is at hand at the desk or the gate
       stats.docs = 0;
       if (keepOriginal && files.length && stats.added + stats.stays + stats.updated > 0) {
@@ -217,7 +234,7 @@ export default function ImportConfirmationScreen({ route, navigation }) {
               stayRange || (it.date ? formatDayLabel(it.date) : "Jour à choisir"),
               it.time,
               it.type === "hotel" && it.nights ? plural(it.nights, "nuit") : null,
-              it.price != null ? formatMoney(it.price, "EUR") : null,
+              it.price != null ? formatMoney(it.price, "EUR") + (needsRate && rate ? ` (≈ ${formatMoney(it.price * rate.rate, trip.currency)})` : "") : null,
               it.confirmationCode ? `code ${it.confirmationCode}` : null,
             ].filter(Boolean);
             const placeable = !!(it.date || it.dayId);
@@ -262,6 +279,13 @@ export default function ImportConfirmationScreen({ route, navigation }) {
               </View>
             );
           })}
+          {needsRate && items.some((it) => it.price != null) ? (
+            <Txt variant="caption" color={rate ? "inkFaint" : "stamp"} style={styles.note}>
+              {rate
+                ? `Prix lus en euros, comptés en ${trip.currency} dans le voyage (1 € = ${Math.round(rate.rate * 1000) / 1000} ${trip.currency}).`
+                : `Taux de change indisponible : les prix en euros ne seront pas ajoutés, à saisir sur l'étape en ${trip.currency}.`}
+            </Txt>
+          ) : null}
           {items.length > 1 && items[0].price != null ? (
             <Txt variant="caption" color="inkFaint" style={styles.note}>
               Le prix total de la réservation est mis sur la première étape.

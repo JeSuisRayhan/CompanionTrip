@@ -138,8 +138,24 @@ quel voyage (rien à choisir s'il n'y en a qu'un), puis :
   numéro de réservation. Le fichier d'origine peut être gardé dans les Documents
   du voyage.
 
-Même fonction depuis l'app : dans un voyage, **Ajouter une réservation** (mail
-collé, captures ou PDF choisis dans le téléphone).
+Même fonction depuis l'app : dans un voyage, le bouton **Ajouter une réservation**
+en haut de la liste des jours (mail collé, captures ou PDF choisis dans le téléphone).
+
+Ce que fait l'ajout d'une réservation, en plus des étapes :
+
+- **Transport** (vol, train, bus, bateau) : le jour de l'aller et celui du retour
+  deviennent des jours de voyage, avec le trajet déjà rempli quand il est lu.
+- **Billet de parc d'attractions** : le jour devient un jour parc d'attractions,
+  avec le parc déjà choisi quand le billet le nomme (liste Queue-Times, réseau
+  nécessaire ; sans réseau ou si le nom est ambigu, le parc se choisit sur le jour).
+- **Prix** : les prix sont lus en euros. Dans un voyage compté dans une autre
+  monnaie (dinar tunisien, yen…), ils sont convertis avec le taux du voyage, ou
+  le taux du jour s'il n'en a pas. Sans taux disponible, le prix n'est pas ajouté
+  plutôt que d'être mis dans la mauvaise monnaie.
+
+Un jour se supprime depuis ses options (les trois points sur sa ligne, ou appui long
+sur sa tuile en grille, ou le menu du jour) ; l'app demande confirmation et dit
+combien d'étapes partent avec.
 
 À savoir sur la lecture des captures et des PDF :
 

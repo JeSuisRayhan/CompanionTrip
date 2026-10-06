@@ -9,7 +9,7 @@ if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 import { THEME, TONES, space, layout, radius, type, themedStyles, withAlpha, paperEdge, shadow } from "../lib/theme";
-import { getTrip, editActivity, updateTripSettings, addExpense, addPhrases, updateExpense, removeExpense, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay } from "../lib/trips";
+import { getTrip, editActivity, updateTripSettings, addExpense, addPhrases, updateExpense, removeExpense, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem, addPhrase, removePhrase, shiftTripDatesBy, duplicateDay, moveDay, setDayType, addDay, deleteDay, deleteDayMessage } from "../lib/trips";
 import { resolveDayDate, formatDateLabel, formatDayLabel, formatShortDate, formatDateRange, tripRange, tripStatus, addDaysISO } from "../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../lib/boardingPass";
 import { tripActivityTotal, transportTotal, accommodationTotal, repasTotal, otherExpensesTotal, expensesTotal, expensesByCategory, expenseCategory, EXPENSE_CATEGORIES, formatMoney, convertAmount, budgetOverview, budgetSummary, parseBudgetInput } from "../lib/budget";
@@ -181,6 +181,10 @@ export default function TripScreen({ route, navigation }) {
           }}
           onMoveDay={async (dayId, direction) => {
             await moveDay(trip.id, dayId, direction);
+            refresh();
+          }}
+          onDeleteDay={async (dayId) => {
+            await deleteDay(trip.id, dayId);
             refresh();
           }}
           onAddDay={async () => {
@@ -504,7 +508,7 @@ function DayTicket({ day, index, date, state, isPark, trip, first, last, ending,
   );
 }
 
-function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplicateDay, onMoveDay, onAddDay, searchQuery, gridView, onSearchChange, onToggleGrid }) {
+function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplicateDay, onMoveDay, onDeleteDay, onAddDay, searchQuery, gridView, onSearchChange, onToggleGrid }) {
   const isPark = trip.tripType === "park";
   const [menuDay, setMenuDay] = useState(null); // { day, index } while the day menu sheet is open
   const [menuOpen, setMenuOpen] = useState(false); // the "Ce voyage" actions
@@ -544,6 +548,13 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
   const bookings = pendingBookings(trip, today);
   const country = detectCountry(trip);
   const onAddBooking = () => navigation.navigate("ImportConfirmation", { tripId: trip.id });
+  // Deleting a day takes its steps with it: ask first, and say how many.
+  function confirmDeleteDay(day) {
+    Alert.alert(`Supprimer « ${day.title} » ?`, deleteDayMessage(day), [
+      { text: "Annuler", style: "cancel" },
+      { text: "Supprimer", style: "destructive", onPress: () => onDeleteDay(day.id) },
+    ]);
+  }
   // The map has something to show once a step or an idea has a position.
   // The map opens as soon as there is something to put on it: a step or an idea, located or not (the map finds the positions).
   const hasMap = !isPark && (trip.days.some((d) => d.activities.length > 0) || (trip.ideas || []).length > 0);
@@ -556,6 +567,9 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
         <Txt variant="subhead" style={styles.toolbarCount}>
           {trip.days.length ? `${trip.days.length} jour${trip.days.length !== 1 ? "s" : ""}` : ""}
         </Txt>
+        {!isPark && trip.days.length > 0 && (
+          <IconButton icon="sunny" label="Météo du voyage" filled size={20} onPress={() => navigation.navigate("WeatherReorg", { tripId: trip.id })} />
+        )}
         {canSearch && (
           <IconButton
             icon={showSearch ? "close" : "search"}
@@ -606,12 +620,10 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
         actions={[
           { icon: "calendar-outline", title: "Décaler les dates", subtitle: "Tout le voyage, d'un nombre de jours", onPress: onShiftDates },
           { icon: "document-text-outline", title: "Importer un script", subtitle: "Prix, hôtels et étapes d'un programme collé", onPress: () => navigation.navigate("ImportScript", { tripId: trip.id }) },
-          { icon: "mail-outline", title: "Ajouter une réservation", subtitle: "Mail, capture ou PDF : vol, train, bus, hôtel…", onPress: onAddBooking },
           { icon: "globe-outline", title: "Fiche pays", subtitle: country ? `${country.name} : monnaie, prises, urgences…` : "Monnaie, prises, urgences, décalage horaire", onPress: () => setCountryOpen(true) },
           { icon: "images-outline", title: "Bilan et souvenirs", subtitle: "Ce qui a été fait, le budget, les photos", onPress: () => navigation.navigate("TripRecap", { tripId: trip.id }) },
           { icon: "share-outline", title: "Partager", subtitle: "En texte, ou en fichier à importer", onPress: shareTrip },
           { icon: "download-outline", title: "Exporter vers un calendrier", subtitle: "Fichier .ics", onPress: () => shareTripAsICS(trip) },
-          !isPark && { icon: "partly-sunny-outline", title: "Réorganiser selon la météo", subtitle: "Déplacer les sorties en extérieur", onPress: () => navigation.navigate("WeatherReorg", { tripId: trip.id }) },
           hasMap && { icon: "map-outline", title: "Voir sur la carte", onPress: () => navigation.navigate("TripMap", { tripId: trip.id }) },
         ]}
       />
@@ -654,6 +666,8 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
 
       {!isPark && !q && tripStatus(trip, today) === "past" ? <RecapCard trip={trip} onPress={() => navigation.navigate("TripRecap", { tripId: trip.id })} /> : null}
 
+      {!q ? <Button title="Ajouter une réservation" icon="mail-outline" variant="secondary" full onPress={onAddBooking} style={styles.bookAdd} /> : null}
+
       {(() => {
         const filtered = trip.days
           .map((day, index) => ({ day, index }))
@@ -693,6 +707,7 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
                   <Pressable
                     key={day.id}
                     onPress={() => navigation.navigate("DayDetail", { tripId: trip.id, dayId: day.id })}
+                    onLongPress={!q ? () => openDayMenu(day, index) : undefined}
                     accessibilityRole="button"
                     accessibilityLabel={`${day.title}, ${day.activities.length} étapes`}
                     style={({ pressed }) => [styles.tile, round("lg"), state === "today" && styles.tileToday, pressed && { opacity: 0.8 }]}
@@ -715,7 +730,6 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
               {!q && (
                 <View style={styles.gridAdd}>
                   <Button title="Ajouter un jour" icon="add" variant="secondary" full onPress={onAddDay} />
-                  {!isPark && <Button title="Ajouter une réservation" icon="mail-outline" variant="secondary" full onPress={onAddBooking} style={styles.bookAdd} />}
                 </View>
               )}
             </View>
@@ -758,7 +772,6 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
                 </Pressable>
               </View>
             )}
-            {!q && !isPark && <Button title="Ajouter une réservation" icon="mail-outline" variant="secondary" full onPress={onAddBooking} style={styles.bookAdd} />}
           </View>
         );
       })()}
@@ -817,6 +830,16 @@ function DaysTab({ trip, navigation, onChange, onOpenTab, onShiftDates, onDuplic
                 const d = menuDay.day;
                 setMenuDay(null);
                 onDuplicateDay(d.id);
+              }}
+            />
+            <Row
+              icon="trash-outline"
+              tone="stamp"
+              title="Supprimer ce jour"
+              onPress={() => {
+                const d = menuDay.day;
+                setMenuDay(null);
+                setTimeout(() => confirmDeleteDay(d), 350); // let the sheet finish closing (iOS)
               }}
             />
           </Group>
@@ -1745,7 +1768,7 @@ const styles = themedStyles(() => ({
 
   dayGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: space.md },
   gridAdd: { width: "100%" },
-  bookAdd: { marginTop: space.md },
+  bookAdd: { marginBottom: space.md },
   tile: { width: "48%", backgroundColor: THEME.bgCard, ...paperEdge(), padding: space.lg, borderWidth: 1.5, borderColor: THEME.light ? THEME.border : "transparent" },
   tileToday: { borderColor: THEME.gold },
   tileTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
