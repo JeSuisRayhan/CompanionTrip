@@ -1,18 +1,17 @@
 import React, { useState, useCallback } from "react";
-import { View, Text, Switch, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Switch, ScrollView, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Icon from "../components/Icon";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, space, layout, type, themedStyles } from "../lib/theme";
-import { CURRENCY_PRESETS, suggestRate, BUDGET_TYPES } from "../lib/constants";
+import { BUDGET_TYPES } from "../lib/constants";
 import { getTrip, updateTripSettings } from "../lib/trips";
 import { reminderSettings, REMINDER_MINUTES } from "../lib/stepReminders";
-import { fetchRate } from "../lib/rates";
-import { formatShortDate } from "../lib/dates";
+import { rateOfTheDay } from "../lib/rates";
 import { scheduleDailySummaries, scheduleDepartureReminder, requestNotificationPermission } from "../lib/notifications";
 import { requestGeofencingPermissions, scheduleHotelProximityAlerts, stopHotelProximityAlerts, isHotelProximityActiveForTrip, hotelStops } from "../lib/geofencing";
-import { Txt, Button, Chip, Group, Row, SectionTitle, Field, ModalHeader, Sheet } from "../components/ui";
+import { Txt, Button, Chip, Group, Row, SectionTitle, Field, ModalHeader } from "../components/ui";
+import { PickerField, CurrencyPickerModal, currencyLabel } from "../components/CurrencyPicker";
 
 const CATEGORY_LABELS = { transport: "Transport", hotel: "Hébergement", repas: "Repas" };
 
@@ -77,17 +76,9 @@ export default function TripSettingsScreen({ route, navigation }) {
     setRateBusy(true);
     setRateNote("");
     try {
-      const { rate: live, date } = await fetchRate(currency, homeCurrency);
-      setRate(String(live));
-      setRateNote(date ? `Taux du ${formatShortDate(date)}.` : "Taux du jour.");
-    } catch (e) {
-      const approx = suggestRate(currency, homeCurrency);
-      if (approx) {
-        setRate(String(Math.round(approx * 10000) / 10000));
-        setRateNote("Pas de connexion : taux approximatif, à ajuster.");
-      } else {
-        setRateNote(e.message || "Impossible de récupérer le taux.");
-      }
+      const result = await rateOfTheDay(currency, homeCurrency);
+      if (result.rate) setRate(String(result.rate));
+      setRateNote(result.note);
     } finally {
       setRateBusy(false);
     }
@@ -184,8 +175,7 @@ export default function TripSettingsScreen({ route, navigation }) {
     }
   }
 
-  const currencyLabel = (code) => CURRENCY_PRESETS.find((c) => c.code === code)?.label || code;
-  const cancel = { label: "Annuler", onPress: () => navigation.goBack() };
+  const cancel ={ label: "Annuler", onPress: () => navigation.goBack() };
 
   if (loading || !trip) {
     return (
@@ -403,40 +393,6 @@ function Section({ title, children }) {
   );
 }
 
-// A read-only Field that opens a picker: same look as its sibling inputs.
-function PickerField({ label, value, onPress }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${label} : ${value}`}
-      style={({ pressed }) => (pressed ? styles.pressed : null)}
-    >
-      <View pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <Field label={label} value={value} editable={false} right={<Icon name="chevron-down" size={18} color={THEME.inkMuted} />} />
-      </View>
-    </Pressable>
-  );
-}
-
-function CurrencyPickerModal({ visible, selected, onClose, onSelect }) {
-  return (
-    <Sheet visible={visible} onClose={onClose} title="Choisir une devise">
-      <Group style={styles.currencyList}>
-        {CURRENCY_PRESETS.map((item) => (
-          <Row
-            key={item.code}
-            title={item.label}
-            selected={item.code === selected}
-            right={item.code === selected ? <Icon name="checkmark" size={20} color={THEME.mark} /> : null}
-            onPress={() => onSelect(item.code)}
-          />
-        ))}
-      </Group>
-    </Sheet>
-  );
-}
-
 const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
@@ -449,6 +405,4 @@ const styles = themedStyles(() => ({
   numericInput: { ...type.numeral },
   rateRow: { flexDirection: "row", alignItems: "flex-end", gap: space.md },
   rateField: { flex: 1, marginBottom: 0 },
-  pressed: { opacity: 0.8 },
-  currencyList: { marginBottom: space.md },
 }));
