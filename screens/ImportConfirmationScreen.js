@@ -1,20 +1,24 @@
+// "Réservation": a booking confirmation (pasted text, screenshots, a PDF) read into steps. What was read is shown first,
+// as it will be put in the trip (the day, the hour, the price, the code), and only what the person keeps is added.
 import React, { useState, useEffect, useRef } from "react";
-import { View, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "../components/Icon";
 import * as Clipboard from "expo-clipboard";
 
-import { THEME, space, layout, themedStyles } from "../lib/theme";
-import { TYPES } from "../lib/constants";
+import { THEME, TONES, FONTS, space, layout, type, themedStyles, paperEdge } from "../lib/theme";
 import { getTrip, addConfirmationSteps } from "../lib/trips";
 import { readConfirmations, inTripCurrency } from "../lib/confirmation";
 import { MAX_FILES, pickScreenshots, pickPdf, readFiles } from "../lib/confirmationFiles";
 import { addDocument } from "../lib/documents";
 import { euroRateFor } from "../lib/rates";
 import { fetchParks } from "../lib/queueTimes";
-import { resolveDayDate, formatDayLabel, formatShortDate, formatDateRange, addDaysISO } from "../lib/dates";
+import { resolveDayDate, formatDayLabel, formatShortDate, addDaysISO } from "../lib/dates";
 import { formatMoney } from "../lib/budget";
-import { Txt, Button, IconButton, Chip, Group, Row, Field, EmptyState, ModalHeader } from "../components/ui";
+import { stepTone, stepIcon } from "../lib/stepLook";
+import { tripInk, TripInkContext } from "../lib/tripInk";
+import { Button, Chip, Stamp, Field, Group, Row, round } from "../components/ui";
+import { TripTopBar, TopButton, Section, Perforation, CheckBox, MAIN } from "../components/mix";
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + "s"}`;
 
@@ -29,9 +33,6 @@ function summarize(stats) {
   if (stats.docs) parts.push(plural(stats.docs, "document gardé", "documents gardés"));
   return parts;
 }
-
-// The icon of a step read: its mode of transport when it has one.
-const MODE_ICON = { avion: "airplane", train: "train", bus: "bus", bateau: "boat" };
 
 // A file that could not be read says why (our own errors carry a message made for the person).
 function errorText(e) {
@@ -54,6 +55,108 @@ function nothingText(files) {
   if (files.length) return "Le texte est lu (ci-dessus) mais aucune réservation n'y est reconnue. Corrigez-le si besoin, il faut au moins le nom et la date, puis relancez la lecture.";
   return "Aucune réservation reconnue. Le texte doit contenir au moins le nom et la date.";
 }
+
+// What a booking is called on its stamp.
+const KIND = { hotel: "Hébergement", repas: "Restaurant", activite: "Billet", transport: "Transport" };
+const MODE_KIND = { avion: "Vol", train: "Train", bus: "Bus", bateau: "Bateau" };
+const kindOf = (item) => (item.type === "transport" && MODE_KIND[item.transportMode]) || KIND[item.type] || KIND.activite;
+
+// One line of what was read: its name small, its value like a figure, and a tick (or a stamp when it is to be checked).
+function Fact({ label, value, plain, check, stamp, tint, right, first }) {
+  return (
+    <View style={[styles.fact, !first && styles.factRule, tint && { backgroundColor: tint }]}>
+      <View style={styles.factText}>
+        <Text style={styles.factLabel}>{label}</Text>
+        <Text style={plain ? styles.factPlain : styles.factValue} numberOfLines={3}>{value}</Text>
+      </View>
+      {right || (stamp ? <Stamp label={stamp.label} tone={stamp.tone} small tilt={0} decorative /> : check ? <Icon name="checkmark" size={22} color={THEME.teal} /> : null)}
+    </View>
+  );
+}
+
+// A step read, as it will be put in the trip: its day, its hour, what it costs, its code. The box on its title keeps it
+// or leaves it out; a step with no date asks for its day.
+function ReadCard({ item, trip, withHead, priceText, converted, onToggle, onDay }) {
+  const tone = stepTone(item);
+  const dated = !!item.date;
+  const placeable = dated || !!item.dayId;
+  const kept = item.include && placeable;
+  const [copied, setCopied] = useState(false);
+  const stay = item.type === "hotel" && dated && item.nights >= 1;
+  const timeBit = item.time ? ` · ${item.time}` : "";
+  const copy = async () => {
+    try {
+      await Clipboard.setStringAsync(String(item.confirmationCode));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch (e) {
+      // no clipboard: the code is on screen
+    }
+  };
+  return (
+    <View style={[styles.card, round("lg"), !kept && withHead && { opacity: 0.6 }]}>
+      {withHead ? (
+        <Pressable
+          onPress={() => placeable && onToggle()}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: kept, disabled: !placeable }}
+          accessibilityLabel={`${item.title}, ${kept ? "sera ajoutée" : "ignorée"}`}
+          style={({ pressed }) => [styles.cardHead, pressed && { backgroundColor: THEME.pressed }]}
+        >
+          <View style={[styles.cardTile, { backgroundColor: TONES[tone].bg }]}>
+            <Icon name={stepIcon(item)} size={20} color={TONES[tone].fg} />
+          </View>
+          <Text style={[type.name, { flex: 1 }]} numberOfLines={2}>{item.title}</Text>
+          <CheckBox checked={kept} />
+        </Pressable>
+      ) : null}
+
+      {stay ? (
+        <>
+          <Fact first={!withHead} label="Arrivée" value={`${formatDayLabel(item.date)}${timeBit}`} check />
+          <Fact label="Départ" value={formatDayLabel(addDaysISO(item.date, item.nights))} check />
+        </>
+      ) : (
+        <Fact first={!withHead} label="Jour" value={dated ? `${formatDayLabel(item.date)}${timeBit}` : item.dayId ? dayChoiceLabel(trip, item.dayId) : "À choisir"} check={placeable} stamp={placeable ? null : { label: "À choisir", tone: "gold" }} />
+      )}
+      {!dated ? (
+        <View style={[styles.dayPick, styles.factRule]}>
+          <Text style={type.caption}>Quel jour ?</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+            {trip.days.map((d, i) => {
+              const date = resolveDayDate(trip, d, i);
+              return <Chip key={d.id} label={`J${i + 1}${date ? " · " + formatShortDate(date, false) : ""}`} selected={item.dayId === d.id} onPress={() => onDay(d.id)} accessibilityLabel={`${item.title} : jour ${i + 1}`} />;
+            })}
+          </ScrollView>
+        </View>
+      ) : null}
+      {item.address ? <Fact label="Adresse" value={item.address} plain check /> : null}
+      {priceText ? (
+        <Fact
+          label={converted ? "Prix total · au taux du voyage" : "Prix total"}
+          value={priceText}
+          tint={converted ? THEME.goldDim : undefined}
+          stamp={converted ? { label: "À vérifier", tone: "gold" } : null}
+          check={!converted}
+        />
+      ) : null}
+      {item.confirmationCode ? (
+        <Fact
+          label="Code de réservation"
+          value={String(item.confirmationCode)}
+          right={<Button title={copied ? "Copié" : "Copier"} icon={copied ? "checkmark" : undefined} variant="secondary" size="sm" onPress={copy} accessibilityLabel={`Copier le code ${item.confirmationCode}`} />}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+const dayChoiceLabel = (trip, dayId) => {
+  const i = trip.days.findIndex((d) => d.id === dayId);
+  if (i < 0) return "À choisir";
+  const date = resolveDayDate(trip, trip.days[i], i);
+  return date ? formatDayLabel(date) : `Jour ${i + 1}`;
+};
 
 // A booking confirmation pasted from an email: what is read from it is shown first, with the day each step goes
 // to, and only what the person keeps is added.
@@ -195,197 +298,222 @@ export default function ImportConfirmationScreen({ route, navigation }) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.center}>
-          <ActivityIndicator color={THEME.teal} />
+          <ActivityIndicator color={THEME.ink} />
         </View>
       </SafeAreaView>
     );
   }
 
+  const ink = tripInk(trip);
+  const top = (onBack, label, icon) => <TripTopBar name={`${trip.name} · réservation`} onBack={onBack} backLabel={label} backIcon={icon} />;
+
   if (done) {
     const parts = summarize(done);
     return (
-      <SafeAreaView style={styles.safe}>
-        <ModalHeader title="Réservation" />
-        <View style={styles.center}>
-          {parts.length ? (
-            <EmptyState icon="checkmark-circle-outline" tone="teal" title="Réservation ajoutée" text={parts.join(" · ")} action={{ label: "Voir le voyage", onPress: close }} />
-          ) : (
-            <EmptyState icon="information-circle-outline" tone="gold" title="Rien à ajouter" text="Cette réservation est déjà dans le voyage." action={{ label: "Fermer", onPress: close }} />
-          )}
-        </View>
-      </SafeAreaView>
+      <TripInkContext.Provider value={ink}>
+        <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
+          {top(close, "Fermer", "close")}
+          <View style={styles.center}>
+            <View style={[styles.ticket, round("xl")]}>
+              <View style={styles.tkTitle}>
+                {parts.length ? <Stamp label="Ajouté au voyage" tone="teal" icon="checkmark" large style={{ alignSelf: "flex-start" }} /> : <Stamp label="Déjà dans le voyage" tone="gold" large style={{ alignSelf: "flex-start" }} />}
+                <Text style={[type.body, { color: THEME.inkMuted, paddingTop: 8 }]}>{parts.length ? parts.join(" · ") : "Cette réservation est déjà dans le voyage : rien à ajouter."}</Text>
+              </View>
+              <Perforation />
+              <View style={styles.tkBtn}>
+                <Button title={parts.length ? "Voir le voyage" : "Fermer"} size="lg" full onPress={close} />
+              </View>
+            </View>
+          </View>
+        </SafeAreaView>
+      </TripInkContext.Provider>
     );
   }
 
   if (items) {
     const picked = items.filter((it) => it.include && (it.date || it.dayId)).length;
+    const first = items[0];
+    const kind = kindOf(first);
+    const converted = needsRate;
+    // what is to be looked at: a step with no day yet, the prices counted at a rate
+    const toCheck = items.filter((it) => !it.date && !it.dayId).length + (converted && items.some((it) => it.price != null) ? 1 : 0);
+    const sub = [first.address, first.type === "hotel" && first.nights ? plural(first.nights, "nuit") : null, items.length > 1 ? plural(items.length, "étape lue", "étapes lues") : null].filter(Boolean).join(" · ");
+    const priceTextOf = (it) =>
+      it.price == null ? null : formatMoney(it.price, "EUR") + (needsRate && rate ? ` · ≈ ${formatMoney(it.price * rate.rate, trip.currency)}` : "");
     return (
-      <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
-        <ModalHeader title="Ce qui a été lu" left={{ label: "Retour", onPress: () => setItems(null) }} />
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Txt variant="subhead" style={styles.intro}>
-            Vérifiez, décochez ce qui ne va pas : seul ce qui est coché est ajouté. Vous pourrez tout modifier ensuite.
-          </Txt>
-          {items.map((it, index) => {
-            const t = TYPES[it.type] || TYPES.activite;
-            // a stay says its two days ("17 – 29 oct."), the other steps their day
-            const stayRange = it.type === "hotel" && it.date && it.nights ? formatDateRange(it.date, addDaysISO(it.date, it.nights)) : null;
-            const bits = [
-              stayRange || (it.date ? formatDayLabel(it.date) : "Jour à choisir"),
-              it.time,
-              it.type === "hotel" && it.nights ? plural(it.nights, "nuit") : null,
-              it.price != null ? formatMoney(it.price, "EUR") + (needsRate && rate ? ` (≈ ${formatMoney(it.price * rate.rate, trip.currency)})` : "") : null,
-              it.confirmationCode ? `code ${it.confirmationCode}` : null,
-            ].filter(Boolean);
-            const placeable = !!(it.date || it.dayId);
-            return (
-              <View key={index} style={styles.item}>
-                <Group>
-                  <Row
-                    icon={MODE_ICON[it.transportMode] || t.icon}
-                    tone={it.type === "hotel" ? "stamp" : it.type === "repas" ? "gold" : it.type === "transport" ? "blue" : "teal"}
-                    title={it.title}
-                    subtitle={bits.join(" · ")}
-                    right={<Icon name={it.include && placeable ? "checkbox" : "square-outline"} size={24} color={it.include && placeable ? THEME.teal : THEME.inkFaint} />}
-                    onPress={() => placeable && patch(index, { include: !it.include })}
-                    accessibilityLabel={`${it.title}, ${it.include && placeable ? "sélectionnée" : "ignorée"}`}
-                  >
-                    {it.address ? (
-                      <Txt variant="caption" color="inkFaint" numberOfLines={2} style={styles.address}>
-                        {it.address}
-                      </Txt>
-                    ) : null}
-                  </Row>
-                </Group>
-                {!it.date ? (
-                  <View style={styles.dayPick}>
-                    <Txt variant="caption" color="inkMuted">Quel jour ?</Txt>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                      {trip.days.map((d, i) => {
-                        const date = resolveDayDate(trip, d, i);
-                        return (
-                          <Chip
-                            key={d.id}
-                            label={`J${i + 1}${date ? " · " + formatShortDate(date) : ""}`}
-                            selected={it.dayId === d.id}
-                            onPress={() => patch(index, { dayId: d.id, include: true })}
-                            accessibilityLabel={`${it.title} : jour ${i + 1}`}
-                          />
-                        );
-                      })}
-                    </ScrollView>
+      <TripInkContext.Provider value={ink}>
+        <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
+          {top(() => setItems(null), "Retour à la lecture")}
+          <ScrollView contentContainerStyle={MAIN} showsVerticalScrollIndicator={false}>
+            <View style={styles.head}>
+              <Stamp label={kind} tone={stepTone(first)} icon={stepIcon(first)} style={{ alignSelf: "flex-start" }} />
+              <Text style={[type.display, { paddingTop: 6 }]} numberOfLines={3} accessibilityRole="header">{first.title}</Text>
+              {sub ? <Text style={type.subhead}>{sub}</Text> : null}
+            </View>
+
+            {files.length ? (
+              <View style={styles.fileCards}>
+                {files.map((f) => (
+                  <View key={f.uri} style={[styles.fileCard, round("lg")]}>
+                    <View style={[styles.cardTile, { backgroundColor: TONES[f.kind === "pdf" ? "stamp" : "blue"].bg, width: 44, height: 44 }]}>
+                      <Icon name={f.kind === "pdf" ? "document-text-outline" : "image-outline"} size={22} color={TONES[f.kind === "pdf" ? "stamp" : "blue"].fg} />
+                    </View>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={type.name} numberOfLines={1}>{f.name}</Text>
+                      <Text style={type.subhead}>{`Lu à l'instant${toCheck ? ` · ${toCheck} point${toCheck > 1 ? "s" : ""} à vérifier` : ""}`}</Text>
+                    </View>
+                    <Stamp label="Lu" tone="teal" icon="checkmark" small tilt={0} decorative />
                   </View>
-                ) : null}
+                ))}
               </View>
-            );
-          })}
-          {needsRate && items.some((it) => it.price != null) ? (
-            <Txt variant="caption" color={rate ? "inkFaint" : "stamp"} style={styles.note}>
-              {rate
-                ? `Prix lus en euros, comptés en ${trip.currency} dans le voyage (1 € = ${Math.round(rate.rate * 1000) / 1000} ${trip.currency}).`
-                : `Taux de change indisponible : les prix en euros ne seront pas ajoutés, à saisir sur l'étape en ${trip.currency}.`}
-            </Txt>
-          ) : null}
-          {items.length > 1 && items[0].price != null ? (
-            <Txt variant="caption" color="inkFaint" style={styles.note}>
-              Le prix total de la réservation est mis sur la première étape.
-            </Txt>
-          ) : null}
-          {files.length ? (
-            <Group style={styles.keep}>
-              <Row
-                icon="attach-outline"
-                tone="teal"
-                title="Garder l'original dans Documents"
-                subtitle={files.length > 1 ? "Les fichiers rejoignent l'onglet Documents du voyage." : "Le fichier rejoint l'onglet Documents du voyage."}
-                right={<Icon name={keepOriginal ? "checkbox" : "square-outline"} size={24} color={keepOriginal ? THEME.teal : THEME.inkFaint} />}
-                onPress={() => setKeepOriginal((v) => !v)}
-                accessibilityLabel={`Garder l'original dans Documents : ${keepOriginal ? "oui" : "non"}`}
-              />
-            </Group>
-          ) : null}
-          {error ? <Txt variant="caption" color="stamp" style={styles.note}>{error}</Txt> : null}
-        </ScrollView>
-        <View style={styles.footer}>
-          <Button title={picked ? `Ajouter ${plural(picked, "étape")}` : "Rien de coché"} icon="add" full loading={busy} disabled={!picked} onPress={add} />
-        </View>
-      </SafeAreaView>
+            ) : null}
+
+            <Section title="Ce que j'ai lu" count={toCheck ? `${toCheck} à vérifier` : undefined}>
+              <Text style={type.subhead}>Décochez ce qui ne va pas : seul ce qui est coché est ajouté. Vous pourrez tout modifier ensuite.</Text>
+              {items.map((it, index) => (
+                <ReadCard
+                  key={index}
+                  item={it}
+                  trip={trip}
+                  withHead={items.length > 1}
+                  priceText={priceTextOf(it)}
+                  converted={converted && it.price != null}
+                  onToggle={() => patch(index, { include: !it.include })}
+                  onDay={(dayId) => patch(index, { dayId, include: true })}
+                />
+              ))}
+              {needsRate && items.some((it) => it.price != null) ? (
+                <Text style={[type.caption, !rate && { color: THEME.stamp }]}>
+                  {rate
+                    ? `Prix lus en euros, comptés en ${trip.currency} dans le voyage (1 € = ${String(Math.round(rate.rate * 1000) / 1000).replace(".", ",")} ${trip.currency}).`
+                    : `Taux de change indisponible : les prix en euros ne seront pas ajoutés, à saisir sur l'étape en ${trip.currency}.`}
+                </Text>
+              ) : null}
+              {items.length > 1 && items[0].price != null ? <Text style={type.caption}>Le prix total de la réservation est mis sur la première étape.</Text> : null}
+            </Section>
+
+            {files.length ? (
+              <Group>
+                <Row
+                  icon="attach-outline"
+                  tone="teal"
+                  title="Garder l'original dans Documents"
+                  subtitle={files.length > 1 ? "Les fichiers rejoignent les documents du voyage (onglet Pratique)." : "Le fichier rejoint les documents du voyage (onglet Pratique)."}
+                  right={<CheckBox checked={keepOriginal} />}
+                  onPress={() => setKeepOriginal((v) => !v)}
+                  accessibilityLabel={`Garder l'original dans Documents : ${keepOriginal ? "oui" : "non"}`}
+                />
+              </Group>
+            ) : null}
+            {error ? <Text style={[type.caption, { color: THEME.stamp }]}>{error}</Text> : null}
+          </ScrollView>
+          <View style={styles.dock}>
+            <Button title="Corriger" variant="secondary" size="lg" style={{ flex: 1 }} onPress={() => setItems(null)} accessibilityLabel="Corriger : revenir au texte lu" />
+            <Button
+              title={!picked ? "Rien de coché" : picked === items.length ? "Tout est bon" : `Ajouter ${plural(picked, "étape")}`}
+              size="lg"
+              style={{ flex: 1.2 }}
+              loading={busy}
+              disabled={!picked}
+              onPress={add}
+            />
+          </View>
+        </SafeAreaView>
+      </TripInkContext.Provider>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ModalHeader title="Réservation" left={{ label: "Annuler", onPress: close }} />
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <Txt variant="subhead" style={styles.intro}>
-            Collez le texte d'un mail ou d'un SMS, ou choisissez une capture d'écran ou un PDF : vol, train, bus, bateau, hôtel, restaurant ou billet. L'étape est créée sur le bon jour de « {trip.name} », avec l'heure, le prix et le code. Un hôtel devient un séjour.
-          </Txt>
-          <Field
-            label="Confirmation"
-            value={text}
-            onChangeText={setText}
-            placeholder={"Référence de réservation : K7QX2M\nAller - samedi 30 octobre 2027\nParis (CDG) 10:05 → Tokyo (HND) 06:30\nTotal payé : 1 284,50 €"}
-            multiline
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <View style={styles.actions}>
-            <Button title="Coller" icon="clipboard-outline" variant="secondary" size="sm" onPress={pasteFromClipboard} />
-            <Button title="Capture d'écran" icon="image-outline" variant="secondary" size="sm" disabled={files.length >= MAX_FILES} onPress={chooseScreenshots} />
-            <Button title="PDF" icon="document-outline" variant="secondary" size="sm" disabled={files.length >= MAX_FILES} onPress={choosePdf} />
+    <TripInkContext.Provider value={ink}>
+      <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
+        <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          {top(close, "Annuler", "close")}
+          <ScrollView contentContainerStyle={MAIN} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+            <View style={styles.head}>
+              <Text style={type.display} accessibilityRole="header">Nouvelle réservation</Text>
+              <Text style={type.subhead}>
+                Collez le texte d'un mail ou d'un SMS, ou choisissez une capture d'écran ou un PDF : vol, train, bus, bateau, hôtel, restaurant ou billet. L'étape est créée sur le bon jour de « {trip.name} », avec l'heure, le prix et le code. Un hôtel devient un séjour.
+              </Text>
+            </View>
+            <View style={styles.block}>
+              <Field
+                label="Confirmation"
+                value={text}
+                onChangeText={setText}
+                placeholder={"Référence de réservation : K7QX2M\nAller - samedi 30 octobre 2027\nParis (CDG) 10:05 → Tokyo (HND) 06:30\nTotal payé : 1 284,50 €"}
+                multiline
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={{ marginBottom: 0 }}
+                inputStyle={styles.textBox}
+              />
+              <View style={styles.actions}>
+                <Button title="Coller" icon="clipboard-outline" variant="secondary" size="sm" onPress={pasteFromClipboard} accessibilityLabel="Coller le texte copié" />
+                <Button title="Capture" icon="image-outline" variant="secondary" size="sm" disabled={files.length >= MAX_FILES} onPress={chooseScreenshots} accessibilityLabel="Choisir une capture d'écran" />
+                <Button title="PDF" icon="document-outline" variant="secondary" size="sm" disabled={files.length >= MAX_FILES} onPress={choosePdf} accessibilityLabel="Choisir un PDF" />
+              </View>
+              {files.length ? (
+                <Group>
+                  {files.map((f) => (
+                    <Row
+                      key={f.uri}
+                      icon={f.kind === "pdf" ? "document-text-outline" : "image-outline"}
+                      tone={f.kind === "pdf" ? "stamp" : "blue"}
+                      title={f.name}
+                      subtitle={f.kind === "pdf" ? "PDF" : "Capture d'écran"}
+                      right={<TopButton icon="close" plain size={18} label={`Retirer ${f.name}`} onPress={() => setFiles((list) => list.filter((x) => x.uri !== f.uri))} />}
+                    />
+                  ))}
+                </Group>
+              ) : null}
+              {error ? <Text style={[type.subhead, { color: THEME.stamp }]} accessibilityRole="alert">{error}</Text> : null}
+            </View>
+            <Section title="Ce que je sais lire">
+              <Group>
+                <Row icon="airplane-outline" tone="blue" title="Vol, train, bus et bateau" subtitle="Deux étapes par trajet : le départ et l'arrivée, avec leurs heures." accessibilityLabel="Vol, train, bus et bateau : deux étapes par trajet, le départ et l'arrivée avec leurs heures" />
+                <Row icon="bed-outline" tone="stamp" title="Hôtel" subtitle="Devient un séjour : dates, nuits, adresse, prix total et code." accessibilityLabel="Hôtel : devient un séjour avec dates, nuits, adresse, prix total et code" />
+                <Row icon="restaurant-outline" tone="gold" title="Restaurant ou billet" subtitle="Le jour, l'heure, l'adresse et le code." accessibilityLabel="Restaurant ou billet : le jour, l'heure, l'adresse et le code" />
+              </Group>
+              <Text style={type.caption}>
+                La lecture se fait sur le téléphone, rien n'est envoyé. Les captures sont lues par la reconnaissance de texte du téléphone : plus elles sont nettes, meilleur est le résultat. Seuls les prix en euros sont lus.
+              </Text>
+            </Section>
+          </ScrollView>
+          <View style={styles.dock}>
+            <Button title="Lire la réservation" icon="search-outline" size="lg" style={{ flex: 1 }} loading={busy} disabled={!text.trim() && !files.length} onPress={read} />
           </View>
-          {files.length ? (
-            <Group style={styles.files}>
-              {files.map((f) => (
-                <Row
-                  key={f.uri}
-                  icon={f.kind === "pdf" ? "document-outline" : "image-outline"}
-                  tone={f.kind === "pdf" ? "stamp" : "blue"}
-                  title={f.name}
-                  subtitle={f.kind === "pdf" ? "PDF" : "Capture d'écran"}
-                  right={<IconButton icon="close" label={`Retirer ${f.name}`} size={18} onPress={() => setFiles((list) => list.filter((x) => x.uri !== f.uri))} />}
-                />
-              ))}
-            </Group>
-          ) : null}
-          {error ? (
-            <Txt variant="subhead" color="stamp" style={styles.error} accessibilityRole="alert">
-              {error}
-            </Txt>
-          ) : null}
-          <Group style={styles.help}>
-            <Row icon="airplane-outline" tone="blue" title="Vol, train, bus et bateau" subtitle="Deux étapes par trajet : le départ et l'arrivée, avec leurs heures." accessibilityLabel="Vol, train, bus et bateau : deux étapes par trajet, le départ et l'arrivée avec leurs heures" />
-            <Row icon="bed-outline" tone="stamp" title="Hôtel" subtitle="Devient un séjour : dates, nuits, adresse, prix total et code." accessibilityLabel="Hôtel : devient un séjour avec dates, nuits, adresse, prix total et code" />
-            <Row icon="restaurant-outline" tone="gold" title="Restaurant ou billet" subtitle="Le jour, l'heure, l'adresse et le code." accessibilityLabel="Restaurant ou billet : le jour, l'heure, l'adresse et le code" />
-          </Group>
-          <Txt variant="caption" color="inkFaint" style={styles.note}>
-            La lecture se fait sur le téléphone, rien n'est envoyé. Les captures sont lues par la reconnaissance de texte du téléphone : plus elles sont nettes, meilleur est le résultat. Seuls les prix en euros sont lus.
-          </Txt>
-        </ScrollView>
-        <View style={styles.footer}>
-          <Button title="Lire la réservation" icon="search-outline" full loading={busy} disabled={!text.trim() && !files.length} onPress={read} />
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </TripInkContext.Provider>
   );
 }
 
 const styles = themedStyles(() => ({
   flex: { flex: 1 },
   safe: { flex: 1, backgroundColor: THEME.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: layout.gutter },
-  scrollContent: { padding: layout.gutter, paddingBottom: space.xxl },
-  intro: { marginBottom: space.lg },
+  center: { flex: 1, justifyContent: "center", paddingHorizontal: layout.gutter },
+  head: { gap: 6 },
+  block: { gap: 14 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
-  files: { marginTop: space.md },
-  error: { marginTop: space.md },
-  address: { marginTop: 2 },
-  keep: { marginTop: space.lg },
-  help: { marginTop: space.xl },
-  note: { marginTop: space.md },
-  item: { marginBottom: space.md },
-  dayPick: { gap: space.xs, marginTop: space.sm },
+  textBox: { minHeight: 150, textAlignVertical: "top" },
+
+  ticket: { backgroundColor: THEME.bgCard, overflow: "hidden", ...paperEdge() },
+  tkTitle: { paddingHorizontal: 22, paddingTop: 24, paddingBottom: 18 },
+  tkBtn: { paddingHorizontal: 22, paddingTop: 6, paddingBottom: 22 },
+
+  fileCards: { gap: 10 },
+  fileCard: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: THEME.bgCard, padding: 14, ...paperEdge() },
+  card: { backgroundColor: THEME.bgCard, overflow: "hidden", ...paperEdge() },
+  cardHead: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  cardTile: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  fact: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 12, minHeight: 64 },
+  factRule: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: THEME.hairStrong },
+  factText: { flex: 1, minWidth: 0, gap: 3 },
+  factLabel: { fontFamily: FONTS.bodyMed, fontSize: 14, lineHeight: 18, color: THEME.inkMuted },
+  factValue: { fontFamily: FONTS.monoMed, fontSize: 17, lineHeight: 24, letterSpacing: -0.3, color: THEME.ink },
+  factPlain: { fontFamily: FONTS.bodyMed, fontSize: 16, lineHeight: 22, color: THEME.ink },
+  dayPick: { gap: 6, paddingHorizontal: 16, paddingVertical: 12 },
   chips: { gap: space.sm, paddingRight: space.lg },
-  footer: { paddingHorizontal: layout.gutter, paddingTop: space.md, paddingBottom: space.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: THEME.hairStrong, backgroundColor: THEME.bg },
+
+  dock: { flexDirection: "row", gap: 12, paddingHorizontal: layout.gutter, paddingTop: 14, paddingBottom: 14, backgroundColor: THEME.bg, borderTopWidth: 1, borderTopColor: THEME.hairStrong },
 }));

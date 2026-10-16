@@ -3,7 +3,6 @@ import React, { useState, useCallback } from "react";
 import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import Icon from "../components/Icon";
 import { THEME, FONTS, space, type, themedStyles } from "../lib/theme";
 import { getTrip, addPhrases, addPhrase, removePhrase } from "../lib/trips";
 import { PHRASE_LANGUAGES, packFor, missingFromPack } from "../lib/phrases";

@@ -1,9 +1,9 @@
 // One list of a trip ("Avant le départ", "Bagages"): tick, add, remove.
 import React, { useState, useCallback } from "react";
-import { View, Text, ScrollView, LayoutAnimation, KeyboardAvoidingView, Platform } from "react-native";
+import { View, ScrollView, LayoutAnimation, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { THEME, space, type, themedStyles } from "../lib/theme";
+import { THEME, space, themedStyles } from "../lib/theme";
 import { getTrip, addChecklistItem, addChecklistItems, toggleChecklistItem, removeChecklistItem } from "../lib/trips";
 import { tripInk, TripInkContext } from "../lib/tripInk";
 import { Group, Field, IconButton, Button, ProgressBar, Txt } from "../components/ui";

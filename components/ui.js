@@ -51,9 +51,12 @@ const BUTTON_SIZES = {
   lg: { minHeight: 58, paddingHorizontal: 24, gap: space.sm, text: { fontSize: 20, lineHeight: 22, fontFamily: FONTS.head, letterSpacing: -0.1 }, icon: 22 },
 };
 
-export function Button({ title, icon, variant = "primary", tone, size = "md", loading, disabled, full, style, onPress, accessibilityLabel }) {
+// `fill="gold"`: the gold button of what comes next (gold shape, ink text), on every palette.
+export function Button({ title, icon, variant = "primary", tone, fill, size = "md", loading, disabled, full, style, onPress, accessibilityLabel }) {
   const onRaised = useContext(OnRaisedContext);
-  const t = tone && !goldOnPaper(tone)
+  const t = fill === "gold"
+    ? { bg: THEME.goldFill, fg: THEME.onGold, edge: "transparent" }
+    : tone && !goldOnPaper(tone)
     ? { bg: toneOf(tone).bg, fg: toneOf(tone).fg, edge: "transparent" }
     : variant === "secondary" && onRaised
       ? { bg: THEME.bgRaised, fg: THEME.ink, edge: THEME.light ? THEME.hairStrong : "transparent" }
@@ -282,7 +285,7 @@ export function Thumb({ uri, icon = "location", tone = "neutral", size = 48 }) {
 }
 
 // ---------- Section title ----------
-export function SectionTitle({ title, count, action, style }) {
+export function SectionTitle({ title, count, action, right, style }) {
   return (
     <View style={[styles.sectionTitle, style]}>
       <View style={styles.sectionTitleLeft}>
@@ -290,6 +293,7 @@ export function SectionTitle({ title, count, action, style }) {
         {count != null ? <Text style={[type.numeralSmall, { color: THEME.inkFaint }]}>{count}</Text> : null}
       </View>
       <View style={styles.sectionRule} />
+      {right || null}
       {action ? (
         <Pressable onPress={action.onPress} hitSlop={8} accessibilityRole="button" accessibilityLabel={action.label}>
           <Text style={[type.caption, { color: THEME.mark, fontFamily: type.label.fontFamily, textDecorationLine: THEME.light ? "underline" : "none" }]}>{action.label}</Text>
@@ -303,12 +307,11 @@ export function SectionTitle({ title, count, action, style }) {
 // The frame of a field (label, bordered box, then error or hint) around any
 // content. Field puts a text input in it; DateField puts a button.
 export function FieldFrame({ label, hint, error, multiline, active, style, children }) {
-  const onCard = useContext(OnCardContext);
   const borderColor = error ? THEME.stamp : active ? THEME.mark : THEME.hairStrong;
   return (
     <View style={[styles.field, style]}>
       {label ? <Text style={[type.caption, styles.fieldLabel]}>{label}</Text> : null}
-      <View style={[styles.inputWrap, round("md"), { borderColor }, onCard && { backgroundColor: THEME.surfaceSunk }, multiline && styles.inputWrapMulti]}>{children}</View>
+      <View style={[styles.inputWrap, round("md"), { borderColor }, multiline && styles.inputWrapMulti]}>{children}</View>
       {error ? <Text style={[type.caption, { color: THEME.stamp, marginTop: space.xs }]}>{error}</Text> : hint ? <Text style={[type.caption, styles.fieldHint]}>{hint}</Text> : null}
     </View>
   );
@@ -532,7 +535,7 @@ const styles = themedStyles(() => ({
   field: { marginBottom: space.lg },
   fieldLabel: { marginBottom: space.sm - 2, color: THEME.inkMuted },
   fieldHint: { marginTop: space.xs, color: THEME.inkFaint },
-  inputWrap: { flexDirection: "row", alignItems: "center", backgroundColor: THEME.bgCard, borderWidth: 1.5, minHeight: 50, paddingHorizontal: space.lg - 2 },
+  inputWrap: { flexDirection: "row", alignItems: "center", backgroundColor: THEME.surfaceSunk, borderWidth: 1.5, minHeight: 54, paddingHorizontal: space.lg },
   inputWrapMulti: { alignItems: "flex-start", paddingVertical: space.sm },
   input: { flex: 1, paddingVertical: space.md, minHeight: 48 },
   inputMulti: { minHeight: 96, textAlignVertical: "top", paddingTop: space.sm },

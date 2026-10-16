@@ -1,8 +1,8 @@
 // "Pratique": documents, phrases, lists and the facts of the country: what you look up while travelling.
 import React, { useState } from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import Icon from "../../components/Icon";
-import { THEME, space, type, themedStyles, paperEdge, FONTS } from "../../lib/theme";
+import { THEME, type, themedStyles, paperEdge, FONTS } from "../../lib/theme";
 import { detectCountry, timeDifference, timeDifferenceDate, plugAdvice } from "../../lib/countries";
 import { updateTripSettings } from "../../lib/trips";
 import { currencySymbol } from "../../lib/budget";

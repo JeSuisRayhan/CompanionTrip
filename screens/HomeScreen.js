@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, RefreshControl, Animated, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "../components/Icon";

@@ -12,6 +12,8 @@ import { scheduleDailySummaries, scheduleDepartureReminder, requestNotificationP
 import { requestGeofencingPermissions, scheduleHotelProximityAlerts, stopHotelProximityAlerts, isHotelProximityActiveForTrip, hotelStops } from "../lib/geofencing";
 import { Txt, Button, Chip, Group, Row, SectionTitle, Field, ModalHeader } from "../components/ui";
 import { PickerField, CurrencyPickerModal, currencyLabel } from "../components/CurrencyPicker";
+import { InkSwatches } from "../components/InkSwatches";
+import { inkNameOf } from "../lib/tripInk";
 
 const CATEGORY_LABELS = { transport: "Transport", hotel: "Hébergement", repas: "Repas" };
 
@@ -27,6 +29,7 @@ export default function TripSettingsScreen({ route, navigation }) {
   const [targets, setTargets] = useState({ transport: "", hotel: "", repas: "" });
   const [defaultLocation, setDefaultLocation] = useState("");
   const [emergency, setEmergency] = useState({ bloodType: "", allergies: "", contactName: "", contactPhone: "", embassy: "", notes: "" });
+  const [ink, setInk] = useState("teal"); // the colour of the trip
   const [pickerFor, setPickerFor] = useState(null); // "local" | "home" | null
   const [saving, setSaving] = useState(false);
   const [remindersBusy, setRemindersBusy] = useState(false);
@@ -48,6 +51,7 @@ export default function TripSettingsScreen({ route, navigation }) {
         setHomeCurrency(t.homeCurrency || "EUR");
         setRate(t.rate != null ? String(t.rate) : "1");
         setDefaultLocation(t.defaultLocation || "");
+        setInk(inkNameOf(t));
         setEmergency({
           bloodType: t.emergencyInfo?.bloodType || "",
           allergies: t.emergencyInfo?.allergies || "",
@@ -168,6 +172,7 @@ export default function TripSettingsScreen({ route, navigation }) {
         budgetTargets,
         defaultLocation: defaultLocation.trim() || null,
         emergencyInfo: emergency,
+        ink,
       });
       navigation.goBack();
     } finally {
@@ -209,6 +214,13 @@ export default function TripSettingsScreen({ route, navigation }) {
             onPress={() => navigation.navigate("Hotels", { tripId })}
           />
         </Group>
+
+        <Section title="Encre du voyage">
+          <InkSwatches value={ink} onChange={setInk} />
+          <Txt variant="caption" color="inkFaint" style={styles.note}>
+            Elle colore la couverture, le cachet, les tampons et les chiffres du voyage.
+          </Txt>
+        </Section>
 
         <Section title="Météo">
           <Field

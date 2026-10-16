@@ -10,7 +10,7 @@ import { Group, Row, Field, Sheet } from "./ui";
 export const currencyLabel = (code) => CURRENCY_PRESETS.find((c) => c.code === code)?.label || code;
 
 // A read-only Field that opens a picker: same look as its sibling inputs.
-export function PickerField({ label, value, onPress }) {
+export function PickerField({ label, value, onPress, style }) {
   return (
     <Pressable
       onPress={onPress}
@@ -19,7 +19,7 @@ export function PickerField({ label, value, onPress }) {
       style={({ pressed }) => (pressed ? styles.pressed : null)}
     >
       <View pointerEvents="none" importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
-        <Field label={label} value={value} editable={false} right={<Icon name="chevron-down" size={18} color={THEME.inkMuted} />} />
+        <Field label={label} value={value} editable={false} right={<Icon name="chevron-down" size={18} color={THEME.inkMuted} />} style={style} />
       </View>
     </Pressable>
   );

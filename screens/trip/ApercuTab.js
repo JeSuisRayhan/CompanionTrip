@@ -11,7 +11,7 @@ import { pendingBookings } from "../../lib/booking";
 import { reservationRows } from "../../lib/reservations";
 import { budgetOverview, formatMoney, formatFigure, currencySymbol, convertAmount } from "../../lib/budget";
 import { useTripInk } from "../../lib/tripInk";
-import { Stamp, Group, Row, Thumb, Button, IconButton, ProgressBar, round } from "../../components/ui";
+import { Stamp, Group, Row, IconButton, ProgressBar, round } from "../../components/ui";
 import { Section, Perforation, CheckRow, AmountCol, MAIN } from "../../components/mix";
 import Flip from "../../components/Flip";
 import TripCover from "../../components/TripCover";

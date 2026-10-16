@@ -4,8 +4,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, ScrollView, Pressable, TextInput, Linking, Alert, Platform } from "react-native";
 import Icon from "../../components/Icon";
-import { THEME, FONTS, space, type, themedStyles, paperEdge } from "../../lib/theme";
-import { TYPES } from "../../lib/constants";
+import { THEME, FONTS, type, themedStyles, paperEdge } from "../../lib/theme";
 import { splitTitlePlace } from "../../lib/script";
 import { directionsUrl } from "../../lib/map";
 import { driverCard } from "../../lib/driverCard";
@@ -24,6 +23,7 @@ import { Section, Perforation, DayNum, Tag, StepDot, DotLine, MAIN } from "../..
 import { stepTone, stepIcon, noteOf, priceOf } from "../../lib/stepLook";
 import Flip from "../../components/Flip";
 import { PendingBookings } from "./ApercuTab";
+import { scopedId } from "../../lib/parkDay";
 
 const REFRESH_MS = 30000; // the countdown moves with the clock
 
@@ -67,7 +67,6 @@ function WeatherTag({ day, dateISO, fallbackLocation }) {
 }
 
 export default function TodayTab({ trip, navigation, onChange, onOpenTab }) {
-  const ink = useTripInk();
   const [now, setNow] = useState(() => new Date());
   const [busy, setBusy] = useState(false);
 
@@ -155,6 +154,19 @@ export default function TodayTab({ trip, navigation, onChange, onOpenTab }) {
           {allDone ? <Tag mono icon="moon-outline" label="Soirée" style={styles.headTag} /> : <WeatherTag day={day} dateISO={today} fallbackLocation={trip.defaultLocation} />}
         </View>
       </View>
+
+      {isPark && total > 0 ? (
+        <Group>
+          <Row
+            icon="pulse"
+            tone="teal"
+            title="Jour J au parc"
+            subtitle="Attentes en direct, prochaine attraction"
+            chevron
+            onPress={() => navigation.navigate("ParkLive", { tripId: trip.tripType === "park" ? trip.id : scopedId(trip.id, dayId), dayId })}
+          />
+        </Group>
+      ) : null}
 
       {total === 0 ? (
         <EmptyState

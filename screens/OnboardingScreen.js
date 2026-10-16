@@ -1,62 +1,72 @@
+// "Nouveau voyage": one page, top to bottom. The cover that follows what is typed, the kind of trip, its name, place and
+// dates, then the money (all optional) and the ink of the trip. Pasting a ready-made programme stays possible, folded at
+// the bottom. Only the name is needed to create the trip.
 import React, { useState, useMemo, useEffect } from "react";
-import { View, Text, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "../components/Icon";
 
-import { THEME, space, layout, radius, type, themedStyles } from "../lib/theme";
+import { THEME, FONTS, space, layout, radius, type, shadow, themedStyles } from "../lib/theme";
 import { TRIP_TYPES, suggestRate } from "../lib/constants";
 import { buildNewTrip, buildEmptyDays, daysFromScript, createTrip, setCoverImage, MAX_PLANNED_DAYS } from "../lib/trips";
+import { loadTrips } from "../lib/storage";
 import { parseDateInput, addDaysISO, diffDaysISO, formatDateRange } from "../lib/dates";
 import DateField from "../components/DateField";
+import TripCover from "../components/TripCover";
 import { runScriptCorrection } from "../lib/script";
 import { searchDestinationPhoto, trackUnsplashDownload } from "../lib/unsplash";
 import { suggestedMoney } from "../lib/countries";
 import { rateOfTheDay } from "../lib/rates";
 import { parseBudgetInput } from "../lib/budget";
+import { freeInkName } from "../lib/tripInk";
 import VoiceInputButton from "../components/VoiceInputButton";
 import { PickerField, CurrencyPickerModal, currencyLabel } from "../components/CurrencyPicker";
-import { Txt, Button, IconButton, Group, Row, Field } from "../components/ui";
+import { Txt, Button, Chip, Stamp, Field, Group, Row, SectionTitle } from "../components/ui";
+import { TopButton } from "../components/mix";
+import { InkSwatches } from "../components/InkSwatches";
 
 // The person's own money: the budget is written in it. It can be changed later in the trip's settings.
 const HOME_CURRENCY = "EUR";
 
-const MODE_CHOICES = [
-  {
-    key: "build",
-    icon: "bulb",
-    label: "Construire mon voyage",
-    text: "Je note mes envies, l'app m'aide à les organiser jour par jour.",
-  },
-  {
-    key: "script",
-    icon: "document-text",
-    label: "J'ai déjà mon programme",
-    text: "Je colle mon programme, ou je remplis chaque journée.",
-  },
-];
+// A rate as it is typed here: "0,30" rather than "0.3" (a comma, two decimals at least; a tiny rate keeps its digits).
+function rateText(r) {
+  let s = String(r);
+  if (/e/i.test(s)) s = Number(r).toFixed(8).replace(/0+$/, "");
+  const [whole, dec = ""] = s.split(".");
+  return `${whole},${dec.padEnd(2, "0")}`;
+}
 
-// One line of context per trip type, and the tone it wears everywhere else
-// in the app (same mapping as the trip list on the home screen).
-const TYPE_META = {
-  long: { tone: "gold", text: "Plusieurs jours, plusieurs villes ou étapes." },
-  short: { tone: "teal", text: "Une escapade de quelques jours au même endroit." },
-  park: { tone: "pink", text: "Une ou deux journées à enchaîner les attractions." },
-};
+// What each kind of trip is called on its chip.
+const TYPE_LABELS = { long: "Voyage long", short: "Court / week-end", park: "Parc" };
 
 export default function OnboardingScreen({ navigation }) {
-  const [step, setStep] = useState(1);
   const [tripType, setTripType] = useState("long");
-  const [planMode, setPlanMode] = useState("script"); // "script" | "build"
   const [name, setName] = useState("");
   const [destination, setDestination] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [nbDays, setNbDays] = useState("");
+  const [daysOpen, setDaysOpen] = useState(false); // the number of days is typed instead of the return date
+  const [scriptOpen, setScriptOpen] = useState(false);
   const [script, setScript] = useState("");
   const [fixing, setFixing] = useState(false);
   const [fixError, setFixError] = useState("");
   const [fixStatus, setFixStatus] = useState("");
   const [creating, setCreating] = useState(false);
+
+  // The ink of the trip: the first one the other trips do not wear, until the person picks one.
+  const [trips, setTrips] = useState([]);
+  const [chosenInk, setChosenInk] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    loadTrips()
+      .then((list) => !cancelled && setTrips(list || []))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const inkName = chosenInk || freeInkName(trips, tripType);
 
   // Money and budget (all optional). The local currency follows what the name and the destination talk about until the
   // person picks one; the rate of the day is fetched on its own until the person types one.
@@ -71,25 +81,9 @@ export default function OnboardingScreen({ navigation }) {
   const suggestion = useMemo(() => suggestedMoney({ name, place: destination }), [name, destination]);
   const currency = chosenCurrency || (suggestion ? suggestion.currency : HOME_CURRENCY);
 
-  // The park type keeps the classic flow: the idea-based planner (distances
-  // between places) makes no sense inside a single park.
-  const mode = tripType === "park" ? "script" : planMode;
-  const steps = useMemo(() => {
-    const list = ["type"];
-    if (tripType !== "park") list.push("mode");
-    list.push("info", "money");
-    if (mode === "script") list.push("script");
-    return list;
-  }, [tripType, mode]);
-  const stepCount = steps.length;
-  const current = steps[Math.min(step, stepCount) - 1];
-  const isLastStep = step >= stepCount;
-
-  // Once the money step is reached, with a money other than the person's own: the rate of the day (or the approximate
-  // one, said so). It goes on if the person moves on to the next step before the answer comes.
-  const moneySeen = step >= steps.indexOf("money") + 1;
+  // With a money other than the person's own: the rate of the day (or the approximate one, said so).
   useEffect(() => {
-    if (!moneySeen || currency === HOME_CURRENCY || rateTouched) return undefined;
+    if (currency === HOME_CURRENCY || rateTouched) return undefined;
     let cancelled = false;
     setRate("");
     setRateNote({ text: "", warn: false });
@@ -97,7 +91,7 @@ export default function OnboardingScreen({ navigation }) {
     rateOfTheDay(currency, HOME_CURRENCY)
       .then((r) => {
         if (cancelled) return;
-        if (r.rate) setRate(String(r.rate));
+        if (r.rate) setRate(rateText(r.rate));
         setRateNote({ text: r.note, warn: r.warn });
         setRateBusy(false);
       })
@@ -108,7 +102,7 @@ export default function OnboardingScreen({ navigation }) {
       cancelled = true;
       setRateBusy(false);
     };
-  }, [moneySeen, currency, rateTouched, rateRefresh]);
+  }, [currency, rateTouched, rateRefresh]);
 
   function pickCurrency(code) {
     setChosenCurrency(code);
@@ -128,16 +122,9 @@ export default function OnboardingScreen({ navigation }) {
     return r > 0 ? r : suggestRate(currency, HOME_CURRENCY) || 1;
   }
 
-  function goBack() {
-    if (step === 1) {
-      navigation.goBack();
-    } else {
-      setStep(step - 1);
-    }
-  }
-
   const start = parseDateInput(startDate);
   const end = parseDateInput(endDate);
+  const fromScript = script.trim().length > 0; // a pasted programme makes the days, whatever the dates say
 
   // Departure, return and number of days stay consistent with each other:
   // changing one recomputes another as soon as the inputs make that possible.
@@ -167,7 +154,7 @@ export default function OnboardingScreen({ navigation }) {
     if (start && n >= 1 && n <= MAX_PLANNED_DAYS) setEndDate(addDaysISO(start, n - 1));
   }
 
-  // Number of empty days to create in "build" mode, or null when unknown.
+  // Number of empty days to create, or null when unknown.
   function resolvedDayCount() {
     const n = parseInt(nbDays, 10);
     if (n >= 1) return n;
@@ -175,10 +162,9 @@ export default function OnboardingScreen({ navigation }) {
     return null;
   }
 
-  // What blocks the "info" step, if anything (build mode only; script mode
-  // keeps its single optional date).
+  // What blocks the creation, if anything (a pasted programme brings its own days: the dates are not checked then).
   function infoProblem() {
-    if (mode !== "build") return null;
+    if (fromScript) return null;
     if (start && end && end < start) return "Le retour est avant le départ.";
     const n = parseInt(nbDays, 10);
     if (nbDays.trim() && !(n >= 1)) return "Indiquez au moins 1 jour.";
@@ -186,12 +172,12 @@ export default function OnboardingScreen({ navigation }) {
     return null;
   }
 
-  const problem = current === "info" ? infoProblem() : null;
-  const dayCount = mode === "build" ? resolvedDayCount() : null;
-  const canContinue = current !== "info" || (!!name.trim() && !problem);
+  const problem = infoProblem();
+  const dayCount = fromScript ? null : resolvedDayCount();
+  const canCreate = !!name.trim() && !problem && !creating;
+  const daysShown = daysOpen || !!nbDays; // once it holds a number (typed, or counted from the two dates) it stays
 
-  // Which field owns the message above (same order as infoProblem), so it can
-  // be shown right under that field.
+  // Which field owns the message above (same order as infoProblem), so it can be shown right under that field.
   const endBad = !!problem && !!start && !!end && end < start;
   const nbBad = !!problem && !endBad;
 
@@ -212,10 +198,11 @@ export default function OnboardingScreen({ navigation }) {
   }
 
   async function finish() {
-    if (!name.trim() || creating || infoProblem()) return;
+    if (!canCreate) return;
     setCreating(true);
     try {
-      const days = mode === "build" ? buildEmptyDays({ startDate: start, nbDays: resolvedDayCount() }) : daysFromScript(script, start);
+      // a trip of a park, or from a programme, keeps what it is given; otherwise empty days to fill, dated when the start is known
+      const days = fromScript ? daysFromScript(script, start) : buildEmptyDays({ startDate: start, nbDays: resolvedDayCount() });
       const trip = buildNewTrip({
         name,
         tripType,
@@ -225,8 +212,9 @@ export default function OnboardingScreen({ navigation }) {
         rate: rateToKeep(),
         budgetTotal: parseBudgetInput(budget),
         days,
-        planMode: mode,
+        planMode: fromScript || tripType === "park" ? "script" : "build",
         defaultLocation: destination,
+        ink: inkName,
       });
       await createTrip(trip);
 
@@ -246,146 +234,114 @@ export default function OnboardingScreen({ navigation }) {
         // no cover photo — the trip still works fine without one
       }
 
-      navigation.replace("Trip", { tripId: trip.id, initialTab: mode === "build" ? "ideas" : undefined });
+      // an empty trip opens on its programme, to note the first ideas; one made from a programme opens as any trip
+      navigation.replace("Trip", { tripId: trip.id, initialTab: trip.planMode === "build" ? "programme" : undefined });
     } finally {
       setCreating(false);
     }
   }
 
-  // Sentence under the date fields (build mode).
-  const willCreate = dayCount
-    ? `${dayCount} jour${dayCount !== 1 ? "s" : ""} vide${dayCount !== 1 ? "s" : ""} ${dayCount !== 1 ? "seront créés" : "sera créé"}` +
-      (start ? ` (${formatDateRange(start, addDaysISO(start, Math.min(dayCount, MAX_PLANNED_DAYS) - 1))})` : "") +
-      "."
-    : null;
+  // Sentence under the dates.
+  const willCreate = fromScript
+    ? "Les jours viennent du programme collé plus bas."
+    : dayCount
+      ? `${dayCount} jour${dayCount !== 1 ? "s" : ""} vide${dayCount !== 1 ? "s" : ""} ${dayCount !== 1 ? "seront créés" : "sera créé"}` +
+        (start ? ` (${formatDateRange(start, addDaysISO(start, Math.min(dayCount, MAX_PLANNED_DAYS) - 1))})` : "") +
+        "."
+      : "Sans durée, un seul jour est créé : vous en ajouterez ensuite.";
 
   const fixNote = fixing ? fixStatus || "Correction…" : fixStatus;
+
+  // What the cover shows while the form is filled in
+  const preview = {
+    id: "preview",
+    name: name.trim(),
+    tripType,
+    ink: inkName,
+    defaultLocation: destination.trim() || null,
+    startDate: start || null,
+    days: [{ id: "preview-day", title: "", date: start || null, activities: [] }],
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right", "bottom"]}>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <View style={styles.header}>
-          <IconButton icon="chevron-back" label="Retour" tone="neutral" onPress={goBack} style={styles.back} />
-          <StepBar count={stepCount} index={Math.min(step, stepCount)} />
+          <TopButton icon="chevron-back" label="Retour" onPress={() => navigation.goBack()} />
+          <Text style={styles.headTitle} numberOfLines={1} accessibilityRole="header">Nouveau voyage</Text>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          {current === "type" && (
-            <>
-              <Txt variant="title" accessibilityRole="header" style={styles.title}>
-                Quel type de voyage ?
-              </Txt>
-              <Group>
-                {TRIP_TYPES.map((t) => {
-                  const meta = TYPE_META[t.key] || { tone: "neutral" };
-                  return (
-                    <ChoiceRow
-                      key={t.key}
-                      icon={t.icon}
-                      tone={meta.tone}
-                      title={t.label}
-                      subtitle={meta.text}
-                      selected={tripType === t.key}
-                      onPress={() => setTripType(t.key)}
-                    />
-                  );
-                })}
-              </Group>
-            </>
-          )}
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <View style={styles.block}>
+            <View style={styles.coverCard} accessible accessibilityLabel="Aperçu de la couverture du voyage">
+              <TripCover trip={preview} height={120}>
+                <View style={styles.coverStamp} pointerEvents="none">
+                  <Stamp label="Aperçu" tone={inkName} small decorative />
+                </View>
+              </TripCover>
+            </View>
+            <View style={styles.chips} accessibilityRole="radiogroup">
+              {TRIP_TYPES.map((t) => (
+                <Chip key={t.key} label={TYPE_LABELS[t.key] || t.label} accessibilityLabel={t.label} selected={tripType === t.key} onPress={() => setTripType(t.key)} />
+              ))}
+            </View>
+          </View>
 
-          {current === "mode" && (
-            <>
-              <Txt variant="title" accessibilityRole="header" style={styles.title}>
-                Comment préparez-vous ce voyage ?
-              </Txt>
-              <Group>
-                {MODE_CHOICES.map((m) => (
-                  <ChoiceRow
-                    key={m.key}
-                    icon={m.icon}
-                    title={m.label}
-                    subtitle={m.text}
-                    selected={planMode === m.key}
-                    onPress={() => setPlanMode(m.key)}
-                  />
-                ))}
-              </Group>
-            </>
-          )}
+          <View style={styles.block}>
+            <Field label="Nom du voyage" value={name} onChangeText={setName} placeholder="Japon, septembre 2026" returnKeyType="next" style={styles.tight} />
+            <Field
+              label="Destination"
+              value={destination}
+              onChangeText={setDestination}
+              placeholder="Djerba, Tunisie"
+              hint="Pour la météo, les adresses et la monnaie."
+              returnKeyType="done"
+              style={styles.tight}
+            />
+            <View style={styles.twoCols}>
+              <DateField label="Départ" optional compact value={startDate} onChange={onStartChange} style={styles.col} />
+              <DateField label="Retour" optional compact value={endDate} min={start || undefined} onChange={onEndChange} error={endBad ? problem : undefined} style={styles.col} />
+            </View>
+            {!fromScript && !daysShown && !end ? (
+              <Pressable onPress={() => setDaysOpen(true)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Indiquer un nombre de jours à la place des dates">
+                <Text style={[type.subhead, styles.link]}>Pas de dates ? Indiquez un nombre de jours</Text>
+              </Pressable>
+            ) : null}
+            {!fromScript && daysShown ? (
+              <View style={styles.daysRow}>
+                <Field
+                  label="Nombre de jours"
+                  value={nbDays}
+                  onChangeText={onNbChange}
+                  placeholder="—"
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  error={nbBad ? problem : undefined}
+                  inputStyle={styles.numericInput}
+                  style={styles.daysField}
+                />
+                <Text style={[type.caption, styles.daysNote]}>{willCreate}</Text>
+              </View>
+            ) : null}
+            {fromScript ? <Text style={type.caption}>{willCreate}</Text> : null}
+            {end && !start && !nbDays.trim() && !fromScript ? <Text style={type.caption}>Ajoutez aussi le départ pour utiliser la date de retour.</Text> : null}
+          </View>
 
-          {current === "info" && (
-            <>
-              <Txt variant="title" accessibilityRole="header" style={styles.title}>
-                Quelques infos
-              </Txt>
-              <Field label="Nom du voyage" value={name} onChangeText={setName} placeholder="Japon, septembre 2026" />
-
-              <Field
-                label="Destination (optionnel)"
-                value={destination}
-                onChangeText={setDestination}
-                placeholder="Djerba, Tunisie"
-                hint="Sert à la météo, à la recherche des adresses et à proposer la monnaie."
-              />
-
-              <DateField label="Date de départ (optionnel)" optional value={startDate} onChange={mode === "build" ? onStartChange : setStartDate} />
-
-              {mode === "build" && (
-                <>
-                  <View style={[styles.twoCols, { marginBottom: problem ? space.lg : space.sm }]}>
-                    <DateField label="Date de retour" optional compact value={endDate} min={start || undefined} onChange={onEndChange} error={endBad ? problem : undefined} style={styles.colEnd} />
-                    <Field
-                      label="ou nombre de jours"
-                      value={nbDays}
-                      onChangeText={onNbChange}
-                      placeholder="7"
-                      keyboardType="number-pad"
-                      maxLength={2}
-                      error={nbBad ? problem : undefined}
-                      inputStyle={styles.numericInput}
-                      style={styles.colNb}
-                    />
+          <View style={styles.stack}>
+            <SectionTitle title="Argent" right={<Stamp label="Facultatif" tone="neutral" small tilt={0} decorative />} style={styles.sectionHead} />
+            <View style={styles.block}>
+              <View>
+                <PickerField label="Monnaie sur place" value={currencyLabel(currency)} onPress={() => setPickerOpen(true)} style={styles.tight} />
+                {suggestion && !chosenCurrency ? (
+                  <View style={styles.checkHint}>
+                    <Icon name="checkmark" size={16} color={THEME.teal} />
+                    <Text style={[type.caption, styles.checkHintText]}>{suggestion.country.name} : proposée d'après le nom ou la destination.</Text>
                   </View>
-                  {!problem && (
-                    <View style={styles.notes}>
-                      {dayCount ? (
-                        <Txt variant="caption">{willCreate}</Txt>
-                      ) : (
-                        <Txt variant="caption" color="inkFaint">
-                          Facultatif : sans durée, un seul jour est créé et vous en ajoutez ensuite. Vous pouvez toujours décaler ou ajouter des jours.
-                        </Txt>
-                      )}
-                      {end && !start && !nbDays.trim() ? (
-                        <Txt variant="caption" color="inkFaint">
-                          Ajoutez aussi la date de départ pour utiliser la date de retour.
-                        </Txt>
-                      ) : null}
-                    </View>
-                  )}
-                </>
-              )}
-            </>
-          )}
+                ) : null}
+              </View>
 
-          {current === "money" && (
-            <>
-              <Txt variant="title" accessibilityRole="header" style={styles.title}>
-                Budget et monnaie (optionnel)
-              </Txt>
-              <Txt variant="subhead" style={styles.intro}>
-                Facultatif : vous pouvez passer cette étape et tout régler plus tard, dans les réglages du voyage.
-              </Txt>
-
-              <PickerField label="Monnaie sur place" value={currencyLabel(currency)} onPress={() => setPickerOpen(true)} />
-              {suggestion && !chosenCurrency ? (
-                <Txt variant="caption" color="inkFaint" style={styles.moneyNote}>
-                  {suggestion.country.name} : monnaie proposée d'après le nom ou la destination. Vous pouvez la changer.
-                </Txt>
-              ) : null}
-
-              {currency !== HOME_CURRENCY && (
-                <>
+              {currency !== HOME_CURRENCY ? (
+                <View>
                   <View style={styles.rateRow}>
                     <Field
                       label="Taux de conversion"
@@ -396,20 +352,20 @@ export default function OnboardingScreen({ navigation }) {
                       }}
                       keyboardType="decimal-pad"
                       placeholder={rateBusy ? "…" : "0,00"}
-                      left={<Text style={[type.numeralSmall, styles.rateSide]}>1 {currency} =</Text>}
-                      right={<Text style={type.numeralSmall}>{HOME_CURRENCY}</Text>}
+                      left={<Text style={[type.caption, styles.rateSide]} numberOfLines={1}>1 {currency} =</Text>}
+                      right={<Text style={styles.unit}>€</Text>}
                       inputStyle={styles.numericInput}
                       style={styles.rateField}
                     />
                     <Button title="Taux du jour" variant="secondary" loading={rateBusy} disabled={rateBusy} onPress={refreshRate} />
                   </View>
                   {rateNote.text ? (
-                    <Txt variant="caption" color={rateNote.warn ? "stamp" : "teal"} style={styles.moneyNote} accessibilityLiveRegion="polite">
+                    <Text style={[type.caption, { color: rateNote.warn ? THEME.stamp : THEME.inkFaint, marginTop: 6 }]} accessibilityLiveRegion="polite">
                       {rateNote.text}
-                    </Txt>
+                    </Text>
                   ) : null}
-                </>
-              )}
+                </View>
+              ) : null}
 
               <Field
                 label="Budget total du voyage"
@@ -417,64 +373,72 @@ export default function OnboardingScreen({ navigation }) {
                 onChangeText={setBudget}
                 keyboardType="decimal-pad"
                 placeholder="Pas de budget fixé"
-                hint={`En ${HOME_CURRENCY} : ce que vous comptez dépenser en tout.`}
-                inputStyle={styles.numericInput}
-                right={<Text style={type.numeralSmall}>{HOME_CURRENCY}</Text>}
+                hint="En euros : ce que vous comptez dépenser en tout."
+                inputStyle={budget ? styles.numericInput : null}
+                right={<Text style={styles.unit}>€</Text>}
+                style={styles.tight}
               />
-            </>
-          )}
+            </View>
+          </View>
 
-          {current === "script" && (
-            <>
-              <Txt variant="title" accessibilityRole="header" style={styles.title}>
-                Programme (optionnel)
-              </Txt>
-              <View style={styles.helpRow}>
-                <Txt variant="subhead" style={styles.helpText}>
-                  Collez votre programme, même en vrac. Une ligne « Jour N - date - titre » pour démarrer une journée, puis des lignes « HH:MM activité [type] ».
-                </Txt>
-                <VoiceInputButton onResult={(t) => setScript((prev) => (prev ? prev + "\n" : "") + t)} />
-              </View>
-              <Field
-                multiline
-                value={script}
-                onChangeText={(t) => {
-                  setScript(t);
-                  setFixStatus("");
-                  setFixError("");
-                }}
-                placeholder={"Jour 1 - Rome\n09:00 Vol Paris - Rome [transport]"}
-                accessibilityLabel="Programme du voyage"
-                inputStyle={styles.scriptInput}
-              />
-              <Button
-                title="Vérifier / corriger le format"
-                icon="sparkles"
-                variant="secondary"
-                full
-                loading={fixing}
-                disabled={!script.trim()}
-                onPress={fixFormat}
-              />
-              {fixNote ? (
-                <Txt variant="caption" color={fixing ? "inkMuted" : "teal"} style={styles.note} accessibilityLiveRegion="polite">
-                  {fixNote}
-                </Txt>
+          <View style={styles.stack}>
+            <SectionTitle title="Encre du voyage" style={styles.sectionHead} />
+            <View style={styles.block}>
+              <InkSwatches value={inkName} onChange={setChosenInk} />
+              <Text style={type.caption}>Elle colore la couverture, le cachet, les tampons et les chiffres du voyage.</Text>
+            </View>
+          </View>
+
+          <View style={styles.stack}>
+            <SectionTitle title="Programme" right={<Stamp label="Facultatif" tone="neutral" small tilt={0} decorative />} style={styles.sectionHead} />
+            <View style={styles.block}>
+              <Group>
+                <Row
+                  icon="document-text-outline"
+                  title="J'ai déjà mon programme"
+                  subtitle={scriptOpen ? "Collez-le ci-dessous : les jours et les étapes sont créés pour vous." : fromScript ? "Programme collé" : "Le coller pour créer les jours et les étapes"}
+                  right={<Icon name={scriptOpen ? "chevron-up" : "chevron-down"} size={20} color={THEME.inkMuted} />}
+                  onPress={() => setScriptOpen((o) => !o)}
+                  accessibilityLabel={`J'ai déjà mon programme. ${scriptOpen ? "Replier" : "Déplier"}`}
+                />
+              </Group>
+              {scriptOpen ? (
+                <>
+                  <View style={styles.helpRow}>
+                    <Txt variant="subhead" style={styles.helpText}>
+                      Collez votre programme, même en vrac. Une ligne « Jour N - date - titre » pour démarrer une journée, puis des lignes « HH:MM activité [type] ».
+                    </Txt>
+                    <VoiceInputButton onResult={(t) => setScript((prev) => (prev ? prev + "\n" : "") + t)} />
+                  </View>
+                  <Field
+                    multiline
+                    value={script}
+                    onChangeText={(t) => {
+                      setScript(t);
+                      setFixStatus("");
+                      setFixError("");
+                    }}
+                    placeholder={"Jour 1 - Rome\n09:00 Vol Paris - Rome [transport]"}
+                    accessibilityLabel="Programme du voyage"
+                    inputStyle={styles.scriptInput}
+                    style={styles.tight}
+                  />
+                  <Button title="Vérifier / corriger le format" icon="sparkles" variant="secondary" full loading={fixing} disabled={!script.trim()} onPress={fixFormat} />
+                  {fixNote ? (
+                    <Text style={[type.caption, { color: fixing ? THEME.inkMuted : THEME.teal }]} accessibilityLiveRegion="polite">{fixNote}</Text>
+                  ) : null}
+                  {fixError ? (
+                    <Text style={[type.caption, { color: THEME.stamp }]} accessibilityLiveRegion="polite">{fixError}</Text>
+                  ) : null}
+                </>
               ) : null}
-              {fixError ? (
-                <Txt variant="caption" color="stamp" style={styles.note} accessibilityLiveRegion="polite">
-                  {fixError}
-                </Txt>
-              ) : null}
-            </>
-          )}
+            </View>
+          </View>
         </ScrollView>
 
-        <View style={styles.footer}>
-          {!isLastStep && <Button title="Continuer" size="lg" full disabled={!canContinue} onPress={() => setStep(step + 1)} />}
-          {isLastStep && (
-            <Button title="Créer le voyage" size="lg" full loading={creating} disabled={creating || !canContinue} onPress={finish} />
-          )}
+        <View style={styles.dock}>
+          {!name.trim() ? <Text style={[type.caption, styles.dockHint]}>Donnez un nom au voyage pour le créer.</Text> : null}
+          <Button title="Créer le voyage" size="lg" full loading={creating} disabled={!canCreate} onPress={finish} />
         </View>
       </KeyboardAvoidingView>
 
@@ -483,74 +447,37 @@ export default function OnboardingScreen({ navigation }) {
   );
 }
 
-// Progress through a real sequence: done = teal, current = gold, to come = sunk.
-function StepBar({ count, index }) {
-  return (
-    <View
-      style={styles.stepBar}
-      accessibilityRole="progressbar"
-      accessibilityLabel={`Étape ${index} sur ${count}`}
-      accessibilityValue={{ min: 1, max: count, now: index }}
-    >
-      {Array.from({ length: count }).map((_, i) => (
-        <View
-          key={i}
-          style={[styles.stepSegment, { backgroundColor: i + 1 < index ? THEME.teal : i + 1 === index ? THEME.mark : THEME.bgCardAlt }]}
-        />
-      ))}
-    </View>
-  );
-}
-
-// A big selectable row: icon tile, title, one line of context, and a
-// radio / gold check on the right. The selected row is lifted, not boxed.
-function ChoiceRow({ icon, tone, title, subtitle, selected, onPress }) {
-  return (
-    <Row
-      icon={icon}
-      tone={tone}
-      title={title}
-      subtitle={subtitle}
-      selected={selected}
-      onPress={onPress}
-      accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
-      right={
-        <Icon
-          name={selected ? "checkmark-circle" : "radio-button-off"}
-          size={24}
-          color={selected ? THEME.mark : THEME.inkFaint}
-        />
-      }
-      style={[styles.choiceRow, selected && styles.choiceRowOn]}
-    />
-  );
-}
-
 const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   flex: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: layout.gutter, paddingTop: space.sm },
-  back: { marginLeft: -space.sm },
-  stepBar: { flex: 1, flexDirection: "row", gap: space.xs },
-  stepSegment: { flex: 1, height: space.xs, borderRadius: radius.full },
-  scrollContent: { paddingHorizontal: layout.gutter, paddingTop: space.lg, paddingBottom: space.xl },
-  title: { marginBottom: space.xl },
-  choiceRow: { paddingVertical: space.lg },
-  choiceRowOn: { backgroundColor: THEME.bgCardAlt },
-  twoCols: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
-  colEnd: { flex: 3, marginBottom: 0 },
-  colNb: { flex: 2, marginBottom: 0 },
-  numericInput: { ...type.numeral },
-  intro: { marginBottom: space.lg },
-  moneyNote: { marginBottom: space.lg },
-  rateRow: { flexDirection: "row", alignItems: "flex-end", gap: space.md, marginBottom: space.sm },
+  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: layout.gutter, paddingTop: space.sm },
+  headTitle: { flex: 1, ...type.title, fontSize: 24, lineHeight: 28 },
+  scrollContent: { paddingHorizontal: layout.gutter, paddingTop: 20, paddingBottom: 28, gap: 22 },
+  block: { gap: 14 },
+  stack: { gap: 14 },
+  sectionHead: { marginBottom: 0 },
+  // the cover is a card with a fine edge
+  coverCard: { borderRadius: radius.lg + 2, overflow: "hidden", boxShadow: shadow.card },
+  coverStamp: { position: "absolute", left: 14, top: 14 },
+  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  tight: { marginBottom: 0 },
+  twoCols: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  col: { flex: 1, marginBottom: 0 },
+  daysRow: { flexDirection: "row", alignItems: "flex-end", gap: 14 },
+  daysField: { width: 132, marginBottom: 0 },
+  daysNote: { flex: 1, paddingBottom: 6 },
+  link: { color: THEME.mark, textDecorationLine: "underline" },
+  numericInput: { fontFamily: FONTS.monoMed, fontSize: 22, lineHeight: 26, minWidth: 0 },
+  unit: { fontFamily: FONTS.bodySemi, fontSize: 17, lineHeight: 22, color: THEME.ink },
+  checkHint: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 },
+  checkHintText: { flex: 1, color: THEME.inkFaint },
+  rateRow: { flexDirection: "row", alignItems: "flex-end", gap: 10 },
   rateField: { flex: 1, marginBottom: 0 },
-  rateSide: { marginRight: space.sm },
-  notes: { gap: space.xs, marginBottom: space.lg },
+  rateSide: { marginRight: space.sm, color: THEME.inkMuted, flexShrink: 0 },
   // The dictation error (rare) wraps onto its own line under the help text.
-  helpRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "flex-end", columnGap: space.md, rowGap: space.sm, marginBottom: space.lg },
+  helpRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "flex-end", columnGap: space.md, rowGap: space.sm },
   helpText: { flexGrow: 1, flexShrink: 1, flexBasis: space.xxxl * 4 },
   scriptInput: { minHeight: space.xxxl * 4 },
-  note: { marginTop: space.md },
-  footer: { paddingHorizontal: layout.gutter, paddingTop: space.md, paddingBottom: space.lg },
+  dock: { paddingHorizontal: layout.gutter, paddingTop: 14, paddingBottom: 14, gap: 10, backgroundColor: THEME.bg, borderTopWidth: 1, borderTopColor: THEME.hairStrong },
+  dockHint: { textAlign: "center" },
 }));

@@ -1,16 +1,12 @@
 // "Budget": what is left on the departure board, what is booked and spent, by category, then the expenses.
 import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
-import Icon from "../../components/Icon";
-import { THEME, TONES, LIT, FONTS, space, type, themedStyles, paperEdge } from "../../lib/theme";
+import { THEME, TONES, FONTS, space, type, themedStyles, paperEdge } from "../../lib/theme";
 import { isoDate, formatWeekdayDay } from "../../lib/dates";
 import { updateTripSettings } from "../../lib/trips";
-import {
-  budgetOverview, budgetSummary, expensesTotal, expensesByCategory, expenseCategory, EXPENSE_CATEGORIES, reservedItems, reservedTotal, reservedByCategory, plannedRest,
-  formatMoney, formatFigure, currencySymbol, currencyName, convertAmount, parseBudgetInput,
-} from "../../lib/budget";
+import { budgetOverview, budgetSummary, expensesTotal, expensesByCategory, expenseCategory, EXPENSE_CATEGORIES, reservedItems, reservedTotal, reservedByCategory, plannedRest, formatMoney, currencySymbol, currencyName, convertAmount, parseBudgetInput } from "../../lib/budget";
 import { useTripInk } from "../../lib/tripInk";
-import { Button, Field, Sheet, Group, Row, ProgressBar, round } from "../../components/ui";
+import { Button, Field, Sheet, Group, Row, round } from "../../components/ui";
 import { Section, PageHead, Perforation, AmountCol, SplitBar, MAIN } from "../../components/mix";
 import Flip, { Plate } from "../../components/Flip";
 import { convertAmount as conv } from "../../lib/budget";

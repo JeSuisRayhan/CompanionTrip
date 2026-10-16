@@ -130,7 +130,6 @@ export default function TripScreen({ route, navigation }) {
   }
 
   const status = tripStatus(trip, isoToday());
-  const isParkTrip = trip.tripType === "park";
   const first = FIRST_TABS[status] || FIRST_TABS.upcoming;
   const tabs = [first, ...OTHER_TABS];
   const tab = pick === "first" || !pick ? first.key : pick;

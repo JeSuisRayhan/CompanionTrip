@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import Icon from "./Icon";
 
-import { THEME, space, type, themedStyles } from "../lib/theme";
+import { THEME, FONTS, space, type, themedStyles } from "../lib/theme";
 import { isoDate, isValidISODate, monthGrid, monthTitle, shiftMonth, formatFullDate, formatShortDate, WEEKDAYS_MONDAY_FIRST } from "../lib/dates";
 import { FieldFrame, IconButton, Chip, Button, Sheet, Txt, round } from "./ui";
 
@@ -24,12 +24,12 @@ export default function DateField({ label, value, onChange, optional, min, max, 
           accessibilityLabel={valid ? `${label} : ${formatFullDate(valid)}. Modifier` : `${label} : choisir une date`}
           style={styles.button}
         >
-          <Icon name="calendar-outline" size={20} color={valid ? THEME.mark : THEME.inkMuted} />
-          <Text style={[type.body, styles.text, !valid && { color: THEME.placeholder }]} numberOfLines={2}>
-            {shown || placeholder}
+          {compact ? null : <Icon name="calendar-outline" size={20} color={valid ? THEME.mark : THEME.inkMuted} />}
+          <Text style={[type.body, styles.text, compact && styles.textCompact, !valid && { color: THEME.placeholder }]} numberOfLines={compact ? 1 : 2}>
+            {shown || (compact ? "Choisir" : placeholder)}
           </Text>
         </Pressable>
-        {optional && valid ? <IconButton icon="close" label={`Effacer : ${label}`} size={18} tone="neutral" onPress={() => onChange("")} /> : null}
+        {optional && valid && !compact ? <IconButton icon="close" label={`Effacer : ${label}`} size={18} tone="neutral" onPress={() => onChange("")} /> : null}
       </FieldFrame>
       <CalendarSheet
         visible={open}
@@ -143,6 +143,7 @@ export function CalendarSheet({ visible, title, value, min, max, optional, onPic
 const styles = themedStyles(() => ({
   button: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.sm, minHeight: 48, paddingVertical: space.sm },
   text: { flex: 1 },
+  textCompact: { fontFamily: FONTS.monoMed, fontSize: 16, lineHeight: 22 }, // a short date, read like a figure
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: space.sm },
   monthTitle: { flex: 1, textAlign: "center" },
   years: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap", gap: space.sm, marginBottom: space.md },

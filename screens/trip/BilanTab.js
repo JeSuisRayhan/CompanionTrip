@@ -3,8 +3,7 @@
 // the evenings and the photos kept of it.
 import React, { useState } from "react";
 import { View, Text, ScrollView, Pressable, Image, Modal, Share, Alert, Dimensions } from "react-native";
-import Icon from "../../components/Icon";
-import { THEME, TONES, FONTS, layout, space, type, themedStyles, paperEdge, withAlpha } from "../../lib/theme";
+import { THEME, TONES, FONTS, layout, type, themedStyles, paperEdge, withAlpha } from "../../lib/theme";
 import { isoDate, tripRange, tripStatus, formatTicketDates, formatLongDay, diffDaysISO } from "../../lib/dates";
 import { todayPlan } from "../../lib/today";
 import { tripRecap, recapText } from "../../lib/recap";

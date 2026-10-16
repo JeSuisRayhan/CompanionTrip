@@ -2,8 +2,8 @@
 import React, { useState, useMemo } from "react";
 import { View, Text, ScrollView, Pressable, Alert } from "react-native";
 import Icon from "../../components/Icon";
-import { THEME, space, type, themedStyles, withAlpha, FONTS } from "../../lib/theme";
-import { resolveDayDate, tripRange, tripStatus, isoDate, formatRangeLong, formatDateLabel } from "../../lib/dates";
+import { THEME, space, type, themedStyles } from "../../lib/theme";
+import { resolveDayDate, tripRange, isoDate, formatRangeLong, formatDateLabel } from "../../lib/dates";
 import { duplicateDay, moveDay, deleteDay, addDay, deleteDayMessage, updateTripSettings } from "../../lib/trips";
 import { addDaysISO } from "../../lib/dates";
 import { placementIndex, sortIdeas, getIdeaCategory, ideaAddressLine, formatIdeaDuration, placeIdeaOnDay } from "../../lib/ideas";
@@ -38,7 +38,6 @@ function daySubtitle(day, isPark) {
 }
 
 function DayRow({ day, index, date, state, isPark, linked, onPress, onLongPress }) {
-  const ink = useTripInk();
   const label = `Jour ${index + 1}, ${day.title}${date ? ", " + formatDateLabel(date) : ""}${state === "today" ? ", aujourd'hui" : state === "done" ? ", fait" : ""}`;
   return (
     <Pressable
@@ -80,7 +79,6 @@ export default function ProgrammeTab({ trip, navigation, onChange, onOpenTab, on
   const country = detectCountry(trip);
   const stepCount = trip.days.reduce((n, d) => n + d.activities.length, 0);
   const hasMap = !isPark && (trip.days.some((d) => d.activities.length > 0) || (trip.ideas || []).length > 0);
-  const status = tripStatus(trip, today);
 
   const placed = useMemo(() => placementIndex(trip), [trip]);
   const loose = sortIdeas((trip.ideas || []).filter((i) => !placed.has(i.id) && getIdeaCategory(trip, i.categoryId).activityType !== "hotel"));
@@ -192,7 +190,6 @@ export default function ProgrammeTab({ trip, navigation, onChange, onOpenTab, on
           <Group>
             {shownIdeas.map((idea) => {
               const cat = getIdeaCategory(trip, idea.categoryId);
-              const line = [ideaAddressLine(idea), formatIdeaDuration(idea.durationMin) ? `visite d'${formatIdeaDuration(idea.durationMin)}`.replace("d'1h", "d'1 h") : null].filter(Boolean).join(" · ");
               return (
                 <Row
                   key={idea.id}
