@@ -6,17 +6,20 @@ import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, space, layout, radius, type, themedStyles, withAlpha, paperEdge } from "../lib/theme";
-import { TRIP_TYPES } from "../lib/constants";
 import { loadTrips, storageStatus, acknowledgeRecovery } from "../lib/storage";
 import { backupReminder, snoozeBackupReminder } from "../lib/backupReminder";
 import { exportBackup } from "../lib/backup";
 import { useUpdatePending, restartApp } from "../lib/appUpdates";
 import { deleteTrip, createTrip } from "../lib/trips";
-import { tripRange, tripStatus, formatDateRange, isoDate, resolveDayDate } from "../lib/dates";
-import { fetchDayWeather, weatherInfo } from "../lib/weather";
+import { tripRange, tripStatus, formatRangeWithYear, formatTicketDates, isoDate, resolveDayDate } from "../lib/dates";
+import { inkNameOf, tripInk, TripInkContext } from "../lib/tripInk";
+import { detectCountry } from "../lib/countries";
 import UndoToast from "../components/UndoToast";
 import HomeNotices from "../components/HomeNotices";
-import { Txt, Stamp, Group, Row, Thumb, SectionTitle, EmptyState, IconButton, Fab, round } from "../components/ui";
+import { Txt, Stamp, Group, Row, Thumb, SectionTitle, EmptyState, Fab, round } from "../components/ui";
+import { TopButton, Perforation } from "../components/mix";
+import Logo from "../components/Logo";
+import Flip from "../components/Flip";
 import TripCover from "../components/TripCover";
 import Appear from "../components/Appear";
 import { usePressScale } from "../lib/motion";
@@ -32,14 +35,6 @@ function todayDayId(trip, today) {
 
 function todayHasDay(trip, today) {
   return !!todayDayId(trip, today);
-}
-
-function tripTypeMeta(trip) {
-  return TRIP_TYPES.find((t) => t.key === (trip.tripType || "long")) || TRIP_TYPES[0];
-}
-
-function tripTone(trip) {
-  return trip.tripType === "park" ? "pink" : trip.tripType === "short" ? "teal" : "gold";
 }
 
 function dayDiff(startISO, today) {
@@ -159,10 +154,13 @@ export default function HomeScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.teal} />}
       >
         <View style={styles.header}>
-          <Txt variant="display" style={{ flex: 1 }} accessibilityRole="header">
-            Vos voyages
-          </Txt>
-          <IconButton icon="settings-outline" label="Réglages" filled onPress={() => navigation.navigate("Settings")} />
+          <View style={styles.headerTitle}>
+            <Logo width={46} />
+            <Txt variant="display" style={{ flexShrink: 1 }} accessibilityRole="header">
+              Vos voyages
+            </Txt>
+          </View>
+          <TopButton icon="options-outline" label="Réglages de l'application" onPress={() => navigation.navigate("Settings")} />
         </View>
 
         {loading ? (
@@ -207,7 +205,7 @@ export default function HomeScreen({ navigation }) {
                       ? () =>
                           trip.tripType === "park"
                             ? navigation.navigate("DayDetail", { tripId: trip.id, dayId: todayDayId(trip, today) })
-                            : navigation.navigate("Today", { tripId: trip.id })
+                            : navigation.navigate("Trip", { tripId: trip.id, initialTab: "today" })
                       : null
                   }
                 />
@@ -222,7 +220,7 @@ export default function HomeScreen({ navigation }) {
 
             {listedUpcoming.length > 0 && (
               <View style={styles.section}>
-                <SectionTitle title={featuredNext ? "Ensuite" : "À venir"} />
+                <SectionTitle title={featuredNext ? "Ensuite" : "À venir"} count={listedUpcoming.length} />
                 <Group>
                   {listedUpcoming.map((trip) => (
                     <SwipeToDelete key={trip.id} trip={trip} onDeleteWithUndo={handleDeleteWithUndo} bg={THEME.bgCard}>
@@ -279,49 +277,20 @@ function SwipeToDelete({ trip, onDeleteWithUndo, children, style, bg = THEME.bg,
   );
 }
 
-function HomeWeatherPreview({ day, dateISO, fallbackLocation }) {
-  const [weather, setWeather] = useState(undefined);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!day || !dateISO) return;
-    fetchDayWeather(day, dateISO, fallbackLocation).then((w) => {
-      if (!cancelled) setWeather(w);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [day?.id, day?.location, dateISO, fallbackLocation]);
-
-  if (!weather) return null;
-  const info = weatherInfo(weather.code);
-  return (
-    <View style={styles.weatherRow}>
-      <Text style={styles.weatherEmoji}>{info.emoji}</Text>
-      <Text style={styles.weatherText}>
-        {weather.tempMax}° / {weather.tempMin}°
-      </Text>
-    </View>
-  );
-}
-
-// The trip's boarding pass: photo + name on top, perforation, then a stub with
-// the one thing that matters now (current: today's next step, next: countdown).
+// The trip's boarding pass: its cover (a drawing in the ink of the trip, or its photo) and its name on top,
+// a perforation, then a stub with the one thing that matters now: the countdown on the departure board
+// (next trip) or the day and what comes next (trip under way).
 function TripTicket({ mode, index = 0, trip, today, onPress, onPressToday }) {
   const press = usePressScale(0.985);
   const { start, end } = tripRange(trip);
   const cover = trip.coverImage;
   const isCurrent = mode === "current";
   const todayIndex = trip.days.findIndex((d, i) => resolveDayDate(trip, d, i) === today);
-  const weatherDay = isCurrent ? (todayIndex >= 0 ? trip.days[todayIndex] : trip.days[0]) : trip.days[0];
-  const weatherDate = isCurrent ? today : start;
   const diff = start ? dayDiff(start, today) : null;
-
-  // The cover (a drawing, with the photo over it when there is one) is a band on top of the ticket and the
-  // name sits on the ticket stock below it: ink on paper, whatever the photo is, and in full sun.
   const step = isCurrent ? nextStepFor(trip, today) : null;
 
   return (
+    <TripInkContext.Provider value={tripInk(trip)}>
     <Appear index={index}>
     <Animated.View style={[styles.ticket, round("xl"), { transform: [{ scale: press.scale }] }]}>
       <Pressable onPress={onPress} onPressIn={press.onPressIn} onPressOut={press.onPressOut} accessibilityRole="button" accessibilityLabel={`Ouvrir ${trip.name}`}>
@@ -339,10 +308,7 @@ function TripTicket({ mode, index = 0, trip, today, onPress, onPressToday }) {
           <Text style={[type.title, styles.ticketTitle]} numberOfLines={2}>
             {trip.name}
           </Text>
-          <View style={styles.ticketMetaRow}>
-            {start ? <Text style={styles.ticketDates}>{formatDateRange(start, end)}</Text> : null}
-            {weatherDate ? <HomeWeatherPreview day={weatherDay} dateISO={weatherDate} fallbackLocation={trip.defaultLocation} /> : null}
-          </View>
+          {start ? <Text style={styles.ticketDates}>{formatTicketDates(start, end)}</Text> : null}
         </View>
       </Pressable>
 
@@ -358,35 +324,35 @@ function TripTicket({ mode, index = 0, trip, today, onPress, onPressToday }) {
           style={({ pressed }) => [styles.stub, pressed && { backgroundColor: THEME.pressed }]}
         >
           <View style={styles.stubCounter}>
-            <Text style={[type.caption, { color: THEME.inkMuted }]}>Jour</Text>
-            <View style={styles.stubCounterRow}>
-              <Text style={styles.stubNumber}>{todayIndex >= 0 ? todayIndex + 1 : "–"}</Text>
-              <Text style={styles.stubOf}>/{trip.days.length}</Text>
+            <Text style={styles.stubCaption}>Jour</Text>
+            <View style={styles.stubFlipRow}>
+              {todayIndex >= 0 ? <Flip value={String(todayIndex + 1)} size="md" label={`Jour ${todayIndex + 1} sur ${trip.days.length}`} /> : <Text style={styles.stubWord}>–</Text>}
+              <Text style={styles.stubOf}>sur {trip.days.length}</Text>
             </View>
           </View>
           <View style={styles.stubBody}>
             {step && step.kind === "next" ? (
               <>
                 <View style={styles.stubNextRow}>
-                  <Text style={type.caption}>À suivre</Text>
+                  <Text style={styles.stubCaption}>À suivre</Text>
                   {step.act.time ? <Text style={[type.numeral, { color: THEME.gold }]}>{step.act.time}</Text> : null}
                 </View>
-                <Text style={type.label} numberOfLines={2}>
+                <Text style={styles.stubValue} numberOfLines={2}>
                   {step.act.title}
                 </Text>
               </>
             ) : step && step.kind === "done" ? (
               <View style={styles.stubNextRow}>
                 <Icon name="checkmark-circle" size={20} color={THEME.teal} />
-                <Text style={type.label}>Journée terminée</Text>
+                <Text style={styles.stubValue}>Journée terminée</Text>
               </View>
             ) : step && step.kind === "empty" ? (
               <>
-                <Text style={type.label}>Rien de prévu aujourd'hui</Text>
-                <Text style={type.caption}>Ouvrir la journée pour ajouter une étape</Text>
+                <Text style={styles.stubValue}>Rien de prévu aujourd'hui</Text>
+                <Text style={styles.stubCaption}>Ouvrir la journée pour ajouter une étape</Text>
               </>
             ) : (
-              <Text style={type.label}>Voir le programme</Text>
+              <Text style={styles.stubValue}>Voir le programme</Text>
             )}
           </View>
           <Icon name="chevron-forward" size={18} color={THEME.inkFaint} />
@@ -394,21 +360,12 @@ function TripTicket({ mode, index = 0, trip, today, onPress, onPressToday }) {
       ) : (
         <Pressable onPress={onPress} onPressIn={press.onPressIn} onPressOut={press.onPressOut} style={({ pressed }) => [styles.stub, pressed && { backgroundColor: THEME.pressed }]} accessibilityRole="button" accessibilityLabel={`Ouvrir ${trip.name}`}>
           <View style={styles.stubCounter}>
-            <Text style={[type.caption, { color: THEME.inkMuted }]}>Départ dans</Text>
-            <View style={styles.stubCounterRow}>
-              {diff != null && diff > 1 ? (
-                <>
-                  <Text style={styles.stubNumber}>{diff}</Text>
-                  <Text style={styles.stubOf}> jours</Text>
-                </>
-              ) : (
-                <Text style={styles.stubNumber}>{diff === 0 ? "Auj." : diff === 1 ? "Demain" : "–"}</Text>
-              )}
-            </View>
+            <Text style={styles.stubCaption}>{diff != null && diff > 1 ? "Départ dans" : "Départ"}</Text>
+            {diff != null && diff > 1 ? <Flip value={String(diff)} size="md" label={`${diff} jours`} /> : <Text style={styles.stubWord}>{diff === 0 ? "Aujourd'hui" : diff === 1 ? "Demain" : "–"}</Text>}
           </View>
           <View style={styles.stubBody}>
-            <Text style={type.caption}>Premier jour</Text>
-            <Text style={type.label} numberOfLines={2}>
+            <Text style={styles.stubCaption}>Premier jour</Text>
+            <Text style={styles.stubValue} numberOfLines={2}>
               {trip.days[0] ? trip.days[0].title : "À planifier"}
             </Text>
           </View>
@@ -417,36 +374,25 @@ function TripTicket({ mode, index = 0, trip, today, onPress, onPressToday }) {
       )}
     </Animated.View>
     </Appear>
-  );
-}
-
-// Tear-off line: two notches cut into the card edges and a dotted rule.
-function Perforation() {
-  return (
-    <View style={styles.perforation} pointerEvents="none">
-      <View style={[styles.notch, { left: -NOTCH / 2 }]} />
-      <View style={styles.dots}>
-        {Array.from({ length: 26 }).map((_, i) => (
-          <View key={i} style={styles.dot} />
-        ))}
-      </View>
-      <View style={[styles.notch, { right: -NOTCH / 2 }]} />
-    </View>
+    </TripInkContext.Provider>
   );
 }
 
 function UpcomingRow({ trip, today, onPress }) {
   const { start, end } = tripRange(trip);
-  const tone = tripTone(trip);
-  const meta = tripTypeMeta(trip);
+  const ink = inkNameOf(trip);
   const diff = start ? dayDiff(start, today) : null;
   const label = countdownText(diff);
+  const country = detectCountry(trip);
+  // the country is a second line of information: left out when the trip is named after it ("Japon")
+  const showCountry = country && country.name.toLowerCase() !== String(trip.name || "").trim().toLowerCase();
+  const meta = [start ? formatRangeWithYear(start, end) : "Pas encore daté", showCountry ? country.name : null].filter(Boolean).join(" · ");
   return (
     <Row
-      lead={<Thumb uri={trip.coverImage?.url} icon={meta.icon} tone={tone} />}
+      lead={<Thumb uri={trip.coverImage?.url} icon={trip.tripType === "park" ? "sparkles" : "airplane"} tone={ink} size={40} />}
       title={trip.name}
-      subtitle={start ? formatDateRange(start, end) : "Pas encore daté"}
-      right={label ? <Stamp label={label} tone={tone} small /> : null}
+      subtitle={meta}
+      right={label ? <Stamp label={label} tone={ink} small /> : null}
       chevron
       onPress={onPress}
     />
@@ -465,17 +411,16 @@ function PastRow({ trip, first, onPress }) {
       <Text style={[type.body, { flex: 1, color: THEME.inkMuted }]} numberOfLines={1}>
         {trip.name}
       </Text>
-      <Text style={[type.caption, { color: THEME.inkFaint }]}>{start ? formatDateRange(start, end) : ""}</Text>
+      <Text style={[type.caption, { color: THEME.inkFaint }]}>{start ? formatRangeWithYear(start, end) : ""}</Text>
     </Pressable>
   );
 }
-
-const NOTCH = 22;
 
 const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   scrollContent: { paddingHorizontal: layout.gutter, paddingTop: space.sm, paddingBottom: layout.tabBarClearance },
   header: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.xl },
+  headerTitle: { flex: 1, flexDirection: "row", alignItems: "center", gap: space.md },
   skeleton: { height: 300, backgroundColor: THEME.bgCard, opacity: 0.5 },
   section: { marginTop: space.xl },
   ticketGap: { marginBottom: space.md },
@@ -483,26 +428,19 @@ const styles = themedStyles(() => ({
   ticket: { backgroundColor: THEME.bgCard, overflow: "hidden", ...paperEdge() },
   ticketTop: { padding: space.lg },
   ticketBadgeRow: { flexDirection: "row" },
-  ticketTitleBlock: { gap: space.xs, paddingHorizontal: space.lg + 4, paddingTop: space.lg, paddingBottom: space.xs },
+  ticketTitleBlock: { gap: space.xs, paddingHorizontal: 22, paddingTop: 18, paddingBottom: space.xs },
   ticketTitle: { color: THEME.ink },
-  ticketMetaRow: { flexDirection: "row", alignItems: "center", gap: space.md },
   ticketDates: { ...type.subhead, color: THEME.inkMuted },
   // On the photo, a small label that reads on any picture.
   credit: { position: "absolute", right: space.sm, bottom: space.sm, ...type.caption, fontSize: 11, color: THEME.onAccent, backgroundColor: withAlpha(THEME.ink, 0.6), borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, overflow: "hidden", maxWidth: "70%" },
-  weatherRow: { flexDirection: "row", alignItems: "center", gap: space.xs + 2 },
-  weatherEmoji: { fontSize: 15 },
-  weatherText: { ...type.numeralSmall, color: THEME.inkMuted },
 
-  perforation: { height: NOTCH, justifyContent: "center" },
-  notch: { position: "absolute", width: NOTCH, height: NOTCH, borderRadius: NOTCH / 2, backgroundColor: THEME.bg },
-  dots: { flexDirection: "row", justifyContent: "space-between", marginHorizontal: NOTCH },
-  dot: { width: 4, height: 2, borderRadius: 1, backgroundColor: THEME.hairStrong },
-
-  stub: { flexDirection: "row", alignItems: "center", gap: space.lg, paddingHorizontal: space.lg + 4, paddingTop: space.xs, paddingBottom: space.lg + 2, minHeight: 84 },
-  stubCounter: { minWidth: 76 },
-  stubCounterRow: { flexDirection: "row", alignItems: "baseline" },
-  stubNumber: { ...type.numeralLarge, fontSize: 34, lineHeight: 38, color: THEME.ink },
-  stubOf: { ...type.numeral, color: THEME.inkFaint },
+  stub: { flexDirection: "row", alignItems: "center", gap: space.lg, paddingHorizontal: 22, paddingTop: space.xs, paddingBottom: 18, minHeight: 84 },
+  stubCounter: { gap: 6 },
+  stubFlipRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  stubCaption: { ...type.caption, color: THEME.inkMuted },
+  stubWord: { ...type.heading, color: THEME.ink },
+  stubOf: { ...type.caption, color: THEME.inkMuted },
+  stubValue: { ...type.name, color: THEME.ink },
   stubBody: { flex: 1, gap: 2 },
   stubNextRow: { flexDirection: "row", alignItems: "center", gap: space.sm },
 

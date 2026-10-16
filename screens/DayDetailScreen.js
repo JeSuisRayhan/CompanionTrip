@@ -1,35 +1,39 @@
-import React, { useState, useCallback, useEffect, useContext } from "react";
+import React, { useState, useCallback, useEffect, useContext, useRef } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking, Alert, Platform } from "react-native";
 import { SafeAreaView, SafeAreaInsetsContext } from "react-native-safe-area-context";
 import Icon from "../components/Icon";
 import { Swipeable } from "react-native-gesture-handler";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { THEME, space, layout, radius, type, themedStyles, paperEdge } from "../lib/theme";
+import { THEME, FONTS, space, layout, radius, type, themedStyles, paperEdge } from "../lib/theme";
 import { TYPES } from "../lib/constants";
 import { scopedId } from "../lib/parkDay";
 import { splitTitlePlace } from "../lib/script";
 import { directionsUrl } from "../lib/map";
 import { driverCard } from "../lib/driverCard";
 import { isPdfDoc } from "../lib/documents";
-import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal, deleteDay, deleteDayMessage } from "../lib/trips";
+import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal, deleteDay, deleteDayMessage, duplicateDay } from "../lib/trips";
 import { bookingOf, deadlineInfo } from "../lib/booking";
-import { resolveDayDate, formatDayLabel, isoDate } from "../lib/dates";
-import { formatMoney } from "../lib/budget";
-import { dayLegs, formatDistance } from "../lib/travelTime";
+import { resolveDayDate, formatFullDate, isoDate } from "../lib/dates";
+import { formatMoney, convertAmount } from "../lib/budget";
+import { dayLegs, formatDistance, legShort, legAdvice, legIcon } from "../lib/travelTime";
 import { withLegEdit } from "../lib/leg";
 import { proximityOrder } from "../lib/dayOrder";
 import { journalOf, canWriteJournal, MAX_JOURNAL } from "../lib/journal";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
 import { fetchQueueTimes, liveByRideId } from "../lib/queueTimes";
 import { fetchFlightStatus, hasFlightStatusKey } from "../lib/flightStatus";
+import { stepTone, stepIcon, noteOf, priceOf } from "../lib/stepLook";
+import { dayState } from "../lib/dayState";
+import { tripInk, TripInkContext, useTripInk } from "../lib/tripInk";
 import UndoToast from "../components/UndoToast";
 import DayDoneStamp from "../components/DayDoneStamp";
 import WaitBadge from "../components/WaitBadge";
 import QueueTimesCredit from "../components/QueueTimesCredit";
-import LegLine from "../components/LegLine";
 import LegSheet from "../components/LegSheet";
 import { Txt, Button, IconButton, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
+import { TripTopBar, TopButton, DayChip, StepDot, DotLine, Tag } from "../components/mix";
+
 
 export function WeatherBadge({ day, dateISO, compact, fallbackLocation }) {
   const [weather, setWeather] = useState(undefined); // undefined = loading, null = no data
@@ -115,6 +119,14 @@ export default function DayDetailScreen({ route, navigation }) {
       cancelled = true;
     };
   }, [qtId]);
+
+  // another day opened from the strip: nothing of the previous one stays on screen
+  useEffect(() => {
+    setToast({ visible: false, message: "", undoActivity: null, undoOrder: null });
+    setDayDone(false);
+    setJournalOpen(false);
+    setLegFor(null);
+  }, [dayId]);
 
   if (loading || !trip) {
     return (
@@ -258,212 +270,274 @@ export default function DayDetailScreen({ route, navigation }) {
     }, 350);
   }
 
+  // Duplicating a day puts a copy (without its date) right after it: back to the programme, where it shows.
+  function askDuplicateDay() {
+    setTypeMenuOpen(false);
+    setTimeout(async () => {
+      await duplicateDay(tripId, dayId);
+      navigation.goBack();
+    }, 350);
+  }
+
   function addStep() {
     navigation.navigate("ActivityEditor", { tripId, dayId, activity: null });
   }
 
-  const plural = day.activities.length !== 1 ? "s" : "";
-  const stepLabel = `étape${plural} faite${plural}`;
+  // the day is being lived: today, or already started
+  const today = isoDate(new Date());
+  const living = date === today || doneCount > 0;
+  const home = trip.homeCurrency || trip.currency || "EUR";
+  const rate = trip.rate || 1;
+  const sameCurrency = (trip.currency || home) === home;
+  const ink = tripInk(trip);
+
+  // "5 étapes · de 9 h 30 à 16 h 15 · ≈ 40 € prévus"
+  const clock = (t) => `${Number(t.slice(0, 2))} h ${t.slice(3)}`;
+  const timed = sorted.filter((a) => a.time);
+  // what the tags of the steps add up to (each one rounded, as it is told), so the total matches what is read
+  const planned = day.activities.reduce((sum, a) => sum + (Number(a.price) > 0 ? Math.round(convertAmount(Number(a.price), rate)) : 0), 0);
+  const summary = [
+    sorted.length === 0 ? "Aucune étape" : `${sorted.length} étape${sorted.length > 1 ? "s" : ""}`,
+    timed.length > 1 ? `de ${clock(timed[0].time)} à ${clock(timed[timed.length - 1].time)}` : null,
+    planned > 0 ? `${sameCurrency ? "" : "≈ "}${formatMoney(planned, home)} prévus` : null,
+    doneCount > 0 && day.dayType !== "park" ? `${doneCount} faite${doneCount > 1 ? "s" : ""}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <View style={styles.topBar}>
-        <IconButton icon="chevron-back" label="Retour" filled onPress={() => navigation.goBack()} />
-        <Txt variant="subhead" numberOfLines={1} style={styles.tripName}>
-          {trip.name}
-        </Txt>
-        {hasMapPin ? <IconButton icon="map-outline" label="Voir le jour sur la carte" onPress={() => navigation.navigate("TripMap", { tripId, dayId })} /> : null}
-        <IconButton icon="ellipsis-horizontal" label="Type de jour" onPress={openDayTypeMenu} />
-      </View>
+    <TripInkContext.Provider value={ink}>
+      <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+        <TripTopBar
+          name={`${trip.name} · jour ${dayIndex + 1} sur ${trip.days.length}`}
+          onBack={() => navigation.goBack()}
+          backLabel="Retour"
+          right={<TopButton icon="ellipsis-horizontal" label="Options du jour" onPress={openDayTypeMenu} />}
+        />
 
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: layout.tabBarClearance + (insets ? insets.bottom : 0) }]}>
-        <View style={styles.titleBlock}>
-          <Txt variant="title" numberOfLines={2} accessibilityRole="header">
-            {day.title}
-          </Txt>
-          {date ? <Txt variant="subhead">{formatDayLabel(date)}</Txt> : null}
-          <View style={styles.metaRow}>
-            {date ? <WeatherBadge day={day} dateISO={date} fallbackLocation={trip.defaultLocation} /> : null}
-            <Chip
-              icon="location-outline"
-              label={location || "Ajouter un lieu"}
-              onPress={() => setLocationModalOpen(true)}
-              accessibilityLabel={location ? `Lieu du jour : ${location}. Modifier` : "Ajouter un lieu pour ce jour"}
-              style={styles.locationChip}
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          {trip.days.length > 1 ? (
+            <DayStrip
+              trip={trip}
+              today={today}
+              selectedId={dayId}
+              onSelect={(id) => id !== dayId && navigation.setParams({ dayId: id })}
             />
+          ) : null}
+
+          <View style={styles.titleBlock}>
+            {date ? <Text style={type.subhead}>{formatFullDate(date)}</Text> : null}
+            <Text style={type.display} numberOfLines={2} accessibilityRole="header">{day.title}</Text>
+            <Text style={type.subhead}>{summary}</Text>
+            <View style={styles.metaRow}>
+              {date ? <WeatherBadge day={day} dateISO={date} fallbackLocation={trip.defaultLocation} /> : null}
+              <Chip
+                icon="location-outline"
+                label={location || "Ajouter un lieu"}
+                onPress={() => setLocationModalOpen(true)}
+                accessibilityLabel={location ? `Lieu du jour : ${location}. Modifier` : "Ajouter un lieu pour ce jour"}
+                style={styles.locationChip}
+              />
+              {hasMapPin ? <Chip icon="map-outline" label="Carte" onPress={() => navigation.navigate("TripMap", { tripId, dayId })} accessibilityLabel="Voir le jour sur la carte" /> : null}
+            </View>
           </View>
+
+          {day.dayType === "flight" ? <FlightDayBanner day={day} dateISO={date} /> : null}
+          {day.dayType === "flight" ? (
+            <TicketsBlock
+              docs={(trip.documents || []).filter((d) => d.dayId === dayId)}
+              hasRoute={!!(day.flightInfo && (day.flightInfo.origin || day.flightInfo.destination || day.flightInfo.flightNumber || day.flightInfo.seat))}
+              onScan={() => navigation.navigate("TicketScanner", { tripId, dayId })}
+              onGallery={() => navigation.navigate("Trip", { tripId, addFrom: "library", dayId })}
+              onOpen={(doc) => navigation.navigate("Trip", { tripId, viewDocId: doc.id })}
+              onEdit={() => setFlightOpen(true)}
+            />
+          ) : null}
+          {day.dayType === "park" ? (
+            <ParkDayBanner
+              day={day}
+              park={isParkTrip ? trip.park : day.park}
+              attractionCount={isParkTrip ? 0 : ((day.park && trip.parkLists && trip.parkLists[day.park.qtId]) || []).length}
+              ownPark={!isParkTrip}
+              onAttractions={() => navigation.navigate("DayAttractions", { tripId, dayId })}
+              onPlan={() => navigation.navigate("ParkPlan", { tripId: parkTripId, dayId })}
+              onLive={() => navigation.navigate("ParkLive", { tripId: parkTripId, dayId })}
+            />
+          ) : null}
+
+          {sorted.length === 0 ? (
+            <EmptyState icon="calendar-outline" title="La page est blanche" text="À vous de l'écrire." />
+          ) : (
+            <View style={styles.timeline}>
+              {sorted.map((a, i) => {
+                const following = sorted[i + 1];
+                return (
+                  <StepRow
+                    key={a.id}
+                    activity={a}
+                    trip={trip}
+                    idea={parkIdeaOf(a)}
+                    ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
+                    isCurrent={i === firstUndoneIndex}
+                    living={living}
+                    last={i === sorted.length - 1}
+                    home={home}
+                    rate={rate}
+                    sameCurrency={sameCurrency}
+                    nextLeg={legs && following && !following.done ? legs.get(following.id) || null : null}
+                    nextTime={following ? following.time : null}
+                    nextName={following ? splitTitlePlace(following.title).title : ""}
+                    onLeg={() => following && setLegFor(following.id)}
+                    onToggleDone={() => onToggleDone(a.id)}
+                    onBook={() => onBook(a)}
+                    onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
+                    onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
+                    onDeleteWithUndo={() => onDeleteWithUndo(a)}
+                  />
+                );
+              })}
+            </View>
+          )}
+
+          {offer ? (
+            <Group style={styles.orderOffer}>
+              <Row
+                icon="swap-vertical-outline"
+                tone="neutral"
+                title="Un autre ordre raccourcit la journée"
+                subtitle={`${formatDistance(offer.saved)} de moins entre les étapes sans heure`}
+                chevron
+                onPress={() => setOrderOpen(true)}
+                accessibilityLabel={`Un autre ordre raccourcit la journée de ${formatDistance(offer.saved)}. Voir`}
+              />
+            </Group>
+          ) : null}
+
+          {journal ? (
+            <Pressable
+              onPress={() => setJournalOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Note du soir : ${journal}. Modifier`}
+              style={({ pressed }) => [styles.journalCard, round("lg"), pressed && { opacity: 0.85 }]}
+            >
+              <View style={styles.journalHead}>
+                <Icon name="moon-outline" size={18} color={THEME.inkMuted} />
+                <Text style={type.caption}>Note du soir</Text>
+              </View>
+              <Text style={type.body}>{journal}</Text>
+            </Pressable>
+          ) : mayWriteJournal && sorted.length > 0 ? (
+            <Group style={styles.journalAdd}>
+              <Row icon="moon-outline" tone="neutral" title="Ajouter une note du soir" subtitle="Une phrase pour se souvenir de cette journée" chevron onPress={() => setJournalOpen(true)} accessibilityLabel="Ajouter une note du soir" />
+            </Group>
+          ) : null}
+          {live && sorted.length > 0 ? <QueueTimesCredit /> : null}
+        </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: Math.max(insets ? insets.bottom : 0, 12) }]}>
+          <Button title="Ajouter une étape" icon="add" size="lg" full onPress={addStep} />
         </View>
 
-        {day.activities.length > 0 && day.dayType !== "park" ? (
-          <View style={styles.progressRow}>
-            <ProgressBar value={doneCount / day.activities.length} height={6} style={styles.progressBar} />
-            <Text style={type.caption}>
-              <Text style={styles.progressNumber}>
-                {doneCount}/{day.activities.length}
-              </Text>
-              {` ${stepLabel}`}
-            </Text>
-          </View>
-        ) : null}
-
-        {day.dayType === "flight" ? <FlightDayBanner day={day} dateISO={date} /> : null}
-        {day.dayType === "flight" ? (
-          <TicketsBlock
-            docs={(trip.documents || []).filter((d) => d.dayId === dayId)}
-            hasRoute={!!(day.flightInfo && (day.flightInfo.origin || day.flightInfo.destination || day.flightInfo.flightNumber || day.flightInfo.seat))}
-            onScan={() => navigation.navigate("TicketScanner", { tripId, dayId })}
-            onGallery={() => navigation.navigate("Trip", { tripId, addFrom: "library", dayId })}
-            onOpen={(doc) => navigation.navigate("Trip", { tripId, viewDocId: doc.id })}
-            onEdit={() => setFlightOpen(true)}
-          />
-        ) : null}
-        {day.dayType === "park" ? (
-          <ParkDayBanner
-            day={day}
-            park={isParkTrip ? trip.park : day.park}
-            attractionCount={isParkTrip ? 0 : ((day.park && trip.parkLists && trip.parkLists[day.park.qtId]) || []).length}
-            ownPark={!isParkTrip}
-            onAttractions={() => navigation.navigate("DayAttractions", { tripId, dayId })}
-            onPlan={() => navigation.navigate("ParkPlan", { tripId: parkTripId, dayId })}
-            onLive={() => navigation.navigate("ParkLive", { tripId: parkTripId, dayId })}
-          />
-        ) : null}
-
-        {sorted.length === 0 ? (
-          <EmptyState
-            icon="calendar-outline"
-            title="La page est blanche"
-            text="À vous de l'écrire."
-            action={{ label: "Ajouter une étape", icon: "add", onPress: addStep }}
-          />
-        ) : (
-          <View>
-            {sorted.map((a, i) => (
-              <React.Fragment key={a.id}>
-                {legs && legs.get(a.id) ? <LegLine compact leg={legs.get(a.id)} arriveAt={a.time} currency={trip.currency} onPress={() => setLegFor(a.id)} /> : null}
-                <ActivityRow
-                  activity={a}
-                  trip={trip}
-                  idea={parkIdeaOf(a)}
-                  ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
-                  isCurrent={i === firstUndoneIndex}
-                  onToggleDone={() => onToggleDone(a.id)}
-                  onBook={() => onBook(a)}
-                  onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
-                  onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
-                  onDeleteWithUndo={() => onDeleteWithUndo(a)}
-                />
-              </React.Fragment>
-            ))}
-          </View>
-        )}
-
-        {offer ? (
-          <Group style={styles.orderOffer}>
-            <Row
-              icon="swap-vertical-outline"
-              tone="neutral"
-              title="Un autre ordre raccourcit la journée"
-              subtitle={`${formatDistance(offer.saved)} de moins entre les étapes sans heure`}
-              chevron
-              onPress={() => setOrderOpen(true)}
-              accessibilityLabel={`Un autre ordre raccourcit la journée de ${formatDistance(offer.saved)}. Voir`}
-            />
-          </Group>
-        ) : null}
-
-        {sorted.length > 0 ? <Button title="Ajouter une étape" icon="add" variant="secondary" full onPress={addStep} style={styles.addStep} /> : null}
-
-        {journal ? (
-          <Pressable
-            onPress={() => setJournalOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={`Note du soir : ${journal}. Modifier`}
-            style={({ pressed }) => [styles.journalCard, round("lg"), pressed && { opacity: 0.85 }]}
-          >
-            <View style={styles.journalHead}>
-              <Icon name="moon-outline" size={18} color={THEME.inkMuted} />
-              <Text style={type.caption}>Note du soir</Text>
-            </View>
-            <Text style={type.body}>{journal}</Text>
-          </Pressable>
-        ) : mayWriteJournal && sorted.length > 0 ? (
-          <Group style={styles.journalAdd}>
-            <Row icon="moon-outline" tone="neutral" title="Ajouter une note du soir" subtitle="Une phrase pour se souvenir de cette journée" chevron onPress={() => setJournalOpen(true)} accessibilityLabel="Ajouter une note du soir" />
-          </Group>
-        ) : null}
-        {live && sorted.length > 0 ? <QueueTimesCredit /> : null}
-      </ScrollView>
-
-      <LocationModal
-        visible={locationModalOpen}
-        initial={day.location || ""}
-        onClose={() => setLocationModalOpen(false)}
-        onSave={async (loc) => {
-          await setDayLocation(tripId, dayId, loc);
-          setLocationModalOpen(false);
-          refresh();
-        }}
-      />
-
-      <LegSheet
-        visible={!!legFor && !!legs && legs.has(legFor)}
-        leg={legFor && legs ? legs.get(legFor) || null : null}
-        toTitle={legFor && day.activities.some((a) => a.id === legFor) ? splitTitlePlace(day.activities.find((a) => a.id === legFor).title).title : ""}
-        currency={trip.currency}
-        onClose={() => setLegFor(null)}
-        onSave={onSaveLeg}
-      />
-
-      <FlightSheet
-        visible={flightOpen}
-        initial={day.flightInfo}
-        onClose={() => setFlightOpen(false)}
-        onSave={async (info) => {
-          setFlightOpen(false);
-          await setDayType(tripId, dayId, "flight", info);
-          refresh();
-        }}
-      />
-
-      <Sheet visible={typeMenuOpen} onClose={() => setTypeMenuOpen(false)} title="Type de jour">
-        <Txt variant="subhead" style={styles.sheetHelp}>
-          Donne un habillage et des rappels adaptés à ce jour.
-        </Txt>
-        <Group style={styles.typeGroup}>
-          <Row icon="today-outline" title="Jour normal" selected={!day.dayType} right={!day.dayType ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType(null)} />
-          <Row icon="airplane-outline" title="Jour de vol ou de train" selected={day.dayType === "flight"} right={day.dayType === "flight" ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("flight")} />
-          <Row icon="happy-outline" title="Jour parc d'attractions" selected={day.dayType === "park"} right={day.dayType === "park" ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("park")} />
-        </Group>
-        <Group style={styles.typeGroup}>
-          <Row icon="trash-outline" tone="stamp" title="Supprimer ce jour" onPress={askDeleteDay} />
-        </Group>
-      </Sheet>
-
-      <JournalSheet
-        visible={journalOpen}
-        title={day.title}
-        initial={journal}
-        onClose={() => setJournalOpen(false)}
-        onSave={async (text) => {
-          setJournalOpen(false);
-          await setDayJournal(tripId, dayId, text);
-          refresh();
-        }}
-      />
-
-      <OrderSheet visible={orderOpen && !!offer} trip={trip} offer={offer} onClose={() => setOrderOpen(false)} onApply={onApplyOrder} />
-
-      <UndoToast visible={toast.visible} message={toast.message} onUndo={onUndoDelete} onDismiss={onToastDismiss} undoLabel={toast.undoOrder ? "Annuler le changement d'ordre" : undefined} />
-      {dayDone ? (
-        <DayDoneStamp
-          onHide={() => {
-            setDayDone(false);
-            if (!journal && mayWriteJournal) setJournalOpen(true); // the day is done: a line to remember it by
+        <LocationModal
+          visible={locationModalOpen}
+          initial={day.location || ""}
+          onClose={() => setLocationModalOpen(false)}
+          onSave={async (loc) => {
+            await setDayLocation(tripId, dayId, loc);
+            setLocationModalOpen(false);
+            refresh();
           }}
         />
-      ) : null}
-    </SafeAreaView>
+
+        <LegSheet
+          visible={!!legFor && !!legs && legs.has(legFor)}
+          leg={legFor && legs ? legs.get(legFor) || null : null}
+          toTitle={legFor && day.activities.some((a) => a.id === legFor) ? splitTitlePlace(day.activities.find((a) => a.id === legFor).title).title : ""}
+          currency={trip.currency}
+          onClose={() => setLegFor(null)}
+          onSave={onSaveLeg}
+        />
+
+        <FlightSheet
+          visible={flightOpen}
+          initial={day.flightInfo}
+          onClose={() => setFlightOpen(false)}
+          onSave={async (info) => {
+            setFlightOpen(false);
+            await setDayType(tripId, dayId, "flight", info);
+            refresh();
+          }}
+        />
+
+        <Sheet visible={typeMenuOpen} onClose={() => setTypeMenuOpen(false)} title="Ce jour">
+          <Txt variant="subhead" style={styles.sheetHelp}>
+            Le type de jour donne un habillage et des rappels adaptés.
+          </Txt>
+          <Group style={styles.typeGroup}>
+            <Row icon="today-outline" title="Jour normal" selected={!day.dayType} right={!day.dayType ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType(null)} />
+            <Row icon="airplane-outline" title="Jour de vol ou de train" selected={day.dayType === "flight"} right={day.dayType === "flight" ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("flight")} />
+            <Row icon="happy-outline" title="Jour parc d'attractions" selected={day.dayType === "park"} right={day.dayType === "park" ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("park")} />
+          </Group>
+          <Group style={styles.typeGroup}>
+            <Row icon="copy-outline" title="Dupliquer ce jour" subtitle="Une copie sans date, juste après" onPress={askDuplicateDay} />
+            <Row icon="trash-outline" tone="stamp" title="Supprimer ce jour" onPress={askDeleteDay} />
+          </Group>
+        </Sheet>
+
+        <JournalSheet
+          visible={journalOpen}
+          title={day.title}
+          initial={journal}
+          onClose={() => setJournalOpen(false)}
+          onSave={async (text) => {
+            setJournalOpen(false);
+            await setDayJournal(tripId, dayId, text);
+            refresh();
+          }}
+        />
+
+        <OrderSheet visible={orderOpen && !!offer} trip={trip} offer={offer} onClose={() => setOrderOpen(false)} onApply={onApplyOrder} />
+
+        <UndoToast visible={toast.visible} message={toast.message} onUndo={onUndoDelete} onDismiss={onToastDismiss} undoLabel={toast.undoOrder ? "Annuler le changement d'ordre" : undefined} />
+        {dayDone ? (
+          <DayDoneStamp
+            onHide={() => {
+              setDayDone(false);
+              if (!journal && mayWriteJournal) setJournalOpen(true); // the day is done: a line to remember it by
+            }}
+          />
+        ) : null}
+      </SafeAreaView>
+    </TripInkContext.Provider>
+  );
+}
+
+// The days of the trip as a strip of tickets: one tap opens that day.
+function DayStrip({ trip, today, selectedId, onSelect }) {
+  const ref = useRef(null);
+  const index = trip.days.findIndex((d) => d.id === selectedId);
+  useEffect(() => {
+    // bring the open day into view when the trip has more days than the strip shows
+    if (ref.current && index > 3) ref.current.scrollTo({ x: Math.max(0, index * 64 - 90), animated: false });
+  }, [index]);
+  return (
+    <ScrollView ref={ref} horizontal showsHorizontalScrollIndicator={false} style={styles.strip} contentContainerStyle={styles.stripContent}>
+      {trip.days.map((d, i) => {
+        const date = resolveDayDate(trip, d, i);
+        const state = dayState(d, date, today);
+        return (
+          <DayChip
+            key={d.id}
+            date={date}
+            index={i}
+            state={state}
+            selected={d.id === selectedId}
+            onPress={() => onSelect(d.id)}
+            label={`Jour ${i + 1}, ${d.title}${state === "today" ? ", aujourd'hui" : ""}`}
+          />
+        );
+      })}
+    </ScrollView>
   );
 }
 
@@ -471,41 +545,43 @@ export default function DayDetailScreen({ route, navigation }) {
 // small tag instead of a sentence repeated on every step.
 const WAIT_NOTE = /^Attente estimée : (\d+) min$/;
 
-// One step of the day, as a small ticket: a stub with the time and the kind of
-// step, then the name with what matters under it. Next (first undone) = gold
-// stub and outline; done = teal, softened. The round box on the right marks it done.
-function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onBook, onPress, onShowDriver, onDeleteWithUndo }) {
-  const t = TYPES[activity.type] || TYPES.activite;
+// One step of the day on the timeline: its hour, the node that ticks it, then its name with what matters under it (its
+// place, its note, its price, what is left to book) and the way to the next step. Swipe the body to delete it.
+function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, rate, sameCurrency, nextLeg, nextTime, nextName, onLeg, onToggleDone, onBook, onPress, onShowDriver, onDeleteWithUndo }) {
+  const ink = useTripInk();
   const done = !!activity.done;
-  const hasPrice = activity.price != null;
   const land = idea ? idea.land : null;
   const split = activity.address ? { title: activity.title, place: null } : splitTitlePlace(activity.title);
   const place = land || activity.address || split.place;
   // "Electric Railway (American Waterfront)" next to its zone "American Waterfront": the zone is said once
   const name = land && split.title.toLowerCase().endsWith(`(${land.toLowerCase()})`) ? split.title.slice(0, -(land.length + 2)).trim() : split.title;
   const waitMatch = activity.note ? activity.note.match(WAIT_NOTE) : null;
-  const note = waitMatch ? "" : activity.note;
+  const note = waitMatch ? "" : noteOf(activity);
   // the queue of the moment when Queue-Times has it (a show has none), else the estimate; nothing once done
   const liveWait = !done && !!ride && (!ride.open || ride.wait != null) && !(idea && (idea.categoryId === "spectacle" || idea.showTime));
   const estimate = !done && !liveWait && waitMatch ? waitMatch[1] : null;
-  const stubBg = done ? THEME.bgCardAlt : isCurrent ? THEME.goldFill : t.dim;
-  const stubInk = done ? THEME.inkFaint : isCurrent ? THEME.onGold : t.color;
-  // the usual "activité" pin says nothing: an icon only for the other kinds, or when there is no time to show
-  const showIcon = !activity.time || activity.type !== "activite";
+  const tone = stepTone(activity);
+  const state = done ? "done" : isCurrent ? "next" : "todo";
+  const price = priceOf(activity, rate, home, sameCurrency);
   const label = `${activity.title}${activity.time ? ", " + activity.time : ""}${done ? ", fait" : isCurrent ? ", à suivre" : ""}`;
-  // a step that is not done yet and has an address or a position can be gone to
-  const goUrl = done ? null : directionsUrl(activity, Platform.OS);
+  // on the day being lived, a step not done yet with an address or a position can be gone to, or shown to a driver
+  const goUrl = done || !living ? null : directionsUrl(activity, Platform.OS);
   const goThere = () => Linking.openURL(goUrl).catch(() => Alert.alert("Impossible d'ouvrir l'application de cartes"));
-  // the address held out to a driver: for a step with a place that is not done yet
-  const card = done || idea ? null : driverCard(activity);
+  const card = done || idea || !living ? null : driverCard(activity);
   // still to book (with the deadline when there is one), or booked
   const bookState = done ? null : bookingOf(activity);
   const bookInfo = bookState === "todo" && activity.bookBy ? deadlineInfo(activity.bookBy, isoDate(new Date())) : null;
+  const hasTags = !!(note || price || liveWait || estimate || bookState || activity.confirmationCode);
 
   return (
-    <View style={styles.stepWrap}>
+    <View style={[styles.stepRow, !last && { minHeight: 74 }]}>
+      <Text style={[styles.time, isCurrent && { fontFamily: FONTS.monoSemi }, done && { color: THEME.inkFaint }]} numberOfLines={1}>{activity.time || "—"}</Text>
+      <View style={styles.nodeCol}>
+        <StepDot icon={stepIcon(activity)} tone={tone} state={state} label={label} hint={done ? "Annuler" : "Marquer comme fait"} onPress={onToggleDone} />
+        {!last ? <DotLine color={ink.color} /> : null}
+      </View>
       <Swipeable
-        containerStyle={styles.swipeContainer}
+        containerStyle={styles.swipe}
         renderRightActions={() => (
           <Pressable style={styles.deleteAction} onPress={onDeleteWithUndo} accessibilityRole="button" accessibilityLabel={`Supprimer ${activity.title}`}>
             <Icon name="trash-outline" size={20} color={THEME.bg} />
@@ -513,75 +589,82 @@ function ActivityRow({ activity, trip, idea, ride, isCurrent, onToggleDone, onBo
         )}
         overshootRight={false}
       >
-        <View style={[styles.card, isCurrent && !done && styles.cardCurrent, done && styles.cardDone]}>
-          <Pressable
-            onPress={onPress}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            style={({ pressed }) => [styles.cardMain, pressed && { backgroundColor: THEME.pressed }]}
-          >
-            <View style={[styles.stub, { backgroundColor: stubBg }]}>
-              {activity.time ? <Text style={[styles.stubTime, { color: stubInk }]}>{activity.time}</Text> : null}
-              {showIcon ? <Icon name={t.icon} size={activity.time ? 14 : 18} color={stubInk} /> : null}
-            </View>
-            <View style={styles.body}>
-              <View style={styles.stepTitleRow}>
-                <Text style={[styles.stepTitle, done && { color: THEME.inkMuted }]}>{name}</Text>
+        <View style={styles.stepBody}>
+          <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} accessibilityHint="Modifier l'étape" style={({ pressed }) => [{ gap: 6 }, pressed && { opacity: 0.7 }]}>
+            <Text style={[styles.ttl, done && styles.ttlDone]}>{name}</Text>
+            {place ? (
+              <View style={styles.metaLine}>
+                <Icon name="location-outline" size={14} color={THEME.inkFaint} style={{ marginTop: 3 }} />
+                <Text style={[type.subhead, styles.metaText]} numberOfLines={2}>{place}</Text>
               </View>
-              {place || liveWait || estimate || activity.confirmationCode || hasPrice || goUrl || card || bookState ? (
-                <View style={styles.detailLine}>
-                  {place ? (
-                    <View style={styles.metaLine}>
-                      <Icon name="location-outline" size={14} color={THEME.inkFaint} />
-                      <Text style={[type.caption, styles.metaText]} numberOfLines={2}>{place}</Text>
-                    </View>
-                  ) : null}
-                  {liveWait ? <WaitBadge ride={ride} idea={idea} /> : null}
-                  {estimate ? <Badge label={`~${estimate} min`} icon="hourglass-outline" tone="neutral" /> : null}
-                  {bookState === "todo" ? (
-                    <Pressable
-                      onPress={onBook}
-                      hitSlop={space.sm}
-                      accessibilityRole="button"
-                      accessibilityLabel={`À réserver${bookInfo ? ", " + bookInfo.text : ""}. Marquer comme réservé : ${activity.title}`}
-                      style={({ pressed }) => pressed && { opacity: 0.7 }}
-                    >
-                      <Badge label={bookInfo ? `À réserver · ${bookInfo.text}` : "À réserver"} icon="ticket-outline" tone={bookInfo && bookInfo.tone === "stamp" ? "stamp" : "neutral"} />
-                    </Pressable>
-                  ) : null}
-                  {bookState === "done" ? <Badge label="Réservé" icon="checkmark" tone="teal" /> : null}
-                  {activity.confirmationCode ? <Badge label={activity.confirmationCode} icon="key-outline" tone="neutral" /> : null}
-                  {hasPrice ? <Text style={styles.stepPrice}>{formatMoney(activity.price, trip.currency)}</Text> : null}
-                  {goUrl ? (
-                    <Pressable onPress={goThere} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Y aller : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
-                      <Icon name="navigate" size={13} color={THEME.blue} />
-                      <Text style={[type.caption, { color: THEME.blue }]}>Y aller</Text>
-                    </Pressable>
-                  ) : null}
-                  {card ? (
-                    <Pressable onPress={() => onShowDriver(card)} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Montrer l'adresse au chauffeur : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
-                      <Icon name="car-outline" size={14} color={THEME.blue} />
-                      <Text style={[type.caption, { color: THEME.blue }]}>Montrer</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
+            ) : null}
+            {hasTags ? (
+              <View style={styles.meta}>
+                {note ? <Text style={[type.subhead, styles.metaText]} numberOfLines={2}>{note}</Text> : null}
+                {price ? <Tag mono tone={price === "Gratuit" ? "nature" : tone} label={price} accessibilityLabel={price === "Gratuit" ? "Gratuit" : `Prix : ${formatMoney(activity.price, trip.currency)}`} /> : null}
+                {liveWait ? <WaitBadge ride={ride} idea={idea} /> : null}
+                {estimate ? <Badge label={`~${estimate} min`} icon="hourglass-outline" tone="neutral" /> : null}
+                {bookState === "todo" ? (
+                  <Pressable
+                    onPress={onBook}
+                    hitSlop={space.sm}
+                    accessibilityRole="button"
+                    accessibilityLabel={`À réserver${bookInfo ? ", " + bookInfo.text : ""}. Marquer comme réservé : ${activity.title}`}
+                    style={({ pressed }) => pressed && { opacity: 0.7 }}
+                  >
+                    <Badge label={bookInfo ? `À réserver · ${bookInfo.text}` : "À réserver"} icon="ticket-outline" tone={bookInfo && bookInfo.tone === "stamp" ? "stamp" : "neutral"} />
+                  </Pressable>
+                ) : null}
+                {bookState === "done" ? <Badge label="Réservé" icon="checkmark" tone="teal" /> : null}
+                {activity.confirmationCode ? <Tag mono icon="key-outline" label={activity.confirmationCode} /> : null}
+              </View>
+            ) : null}
+          </Pressable>
+          {goUrl || card ? (
+            <View style={styles.pills}>
+              {goUrl ? (
+                <Pressable onPress={goThere} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Y aller : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
+                  <Icon name="navigate" size={14} color={THEME.blue} />
+                  <Text style={[type.caption, { color: THEME.blue }]}>Y aller</Text>
+                </Pressable>
               ) : null}
-              {note ? <Text style={[type.subhead, done && { color: THEME.inkFaint }]}>{note}</Text> : null}
+              {card ? (
+                <Pressable onPress={() => onShowDriver(card)} hitSlop={space.sm} accessibilityRole="button" accessibilityLabel={`Montrer l'adresse au chauffeur : ${activity.title}`} style={({ pressed }) => [styles.goPill, pressed && { opacity: 0.7 }]}>
+                  <Icon name="car-outline" size={14} color={THEME.blue} />
+                  <Text style={[type.caption, { color: THEME.blue }]}>Montrer</Text>
+                </Pressable>
+              ) : null}
             </View>
-          </Pressable>
-          <Pressable
-            onPress={onToggleDone}
-            hitSlop={space.sm}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: done }}
-            accessibilityLabel={`Fait : ${activity.title}`}
-            style={({ pressed }) => [styles.checkHit, pressed && { opacity: 0.7 }]}
-          >
-            <View style={[styles.check, done && styles.checkDone]}>{done ? <Icon name="checkmark" size={16} color={THEME.onAccent} /> : null}</View>
-          </Pressable>
+          ) : null}
+          {nextLeg ? <LegNote leg={nextLeg} toName={nextName} arriveAt={nextTime} advise={living && !done} currency={trip.currency} onPress={onLeg} /> : null}
         </View>
       </Swipeable>
     </View>
+  );
+}
+
+// The way to the next step, on one line: "10 min à pied". A tap opens the price of the way. The advice
+// ("Partir à 14:20") only on the day being lived, or when the two hours are closer than the way.
+function LegNote({ leg, toName, arriveAt, advise, currency, onPress }) {
+  const advice = legAdvice(leg, arriveAt, null);
+  const showAdvice = advice && (advice.tone === "stamp" || advise);
+  const price = leg.price != null ? formatMoney(leg.price, currency) : null;
+  const text = legShort(leg);
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={space.xs}
+      accessibilityRole="button"
+      accessibilityLabel={`${text}${toName ? ` jusqu'à ${toName}` : ""}${showAdvice ? ". " + advice.text : ""}${price ? `. Prix : ${price}` : ""}. ${price ? "Modifier le prix du trajet" : "Ajouter le prix du trajet"}`}
+      style={({ pressed }) => [styles.leg, pressed && { opacity: 0.7 }]}
+    >
+      <Icon name={legIcon(leg)} size={16} color={THEME.inkFaint} style={{ marginTop: 2 }} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={type.subhead}>{text}</Text>
+        {showAdvice ? <Text style={[type.caption, advice.tone === "stamp" && { color: THEME.stamp }]}>{advice.text}</Text> : null}
+      </View>
+      {price ? <Tag mono label={price} /> : null}
+    </Pressable>
   );
 }
 
@@ -884,10 +967,8 @@ const styles = themedStyles(() => ({
   safe: { flex: 1, backgroundColor: THEME.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
-  topBar: { flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: layout.gutter, paddingTop: space.xs, paddingBottom: space.xs },
-  tripName: { flex: 1 },
-  scrollContent: { paddingHorizontal: layout.gutter },
-  titleBlock: { gap: space.xs, paddingTop: space.sm, paddingBottom: space.lg },
+  scrollContent: { paddingHorizontal: layout.gutter, paddingTop: 12, paddingBottom: space.xl },
+  titleBlock: { gap: 6, paddingTop: space.sm, paddingBottom: space.xl },
   metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", columnGap: space.md, rowGap: space.sm, marginTop: space.xs },
   locationChip: { maxWidth: "100%" },
 
@@ -896,10 +977,6 @@ const styles = themedStyles(() => ({
   weatherTemps: { ...type.numeral, color: THEME.inkMuted },
   weatherTempsSmall: { ...type.numeralSmall },
   weatherUnavailable: { ...type.caption, color: THEME.inkFaint, flexShrink: 1 },
-
-  progressRow: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.lg },
-  progressBar: { flex: 1 },
-  progressNumber: { ...type.numeral },
 
   panel: { marginBottom: space.lg },
   panelRow: { flexDirection: "row", alignItems: "center", gap: space.md },
@@ -924,34 +1001,24 @@ const styles = themedStyles(() => ({
   flightLiveTime: { ...type.numeralSmall, color: THEME.teal },
   flightNote: { color: THEME.inkFaint, marginTop: space.md },
 
-  stepWrap: { marginBottom: space.sm },
-  swipeContainer: { borderRadius: radius.md },
-  card: { flexDirection: "row", alignItems: "stretch", overflow: "hidden", borderRadius: radius.md, borderWidth: 1, borderColor: THEME.light ? THEME.border : THEME.hair, backgroundColor: THEME.bgCard },
-  cardCurrent: { borderColor: THEME.gold, borderWidth: 1.5 },
-  cardDone: { opacity: 0.65 },
-  cardMain: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "stretch" },
-  stub: { width: 64, alignItems: "center", justifyContent: "center", gap: space.xs, paddingVertical: space.md },
-  stubTime: { ...type.numeral },
-  body: { flex: 1, minWidth: 0, gap: space.xs + 2, paddingVertical: space.md, paddingLeft: space.md, paddingRight: space.xs },
-  stepTitleRow: { flexDirection: "row", alignItems: "flex-start", gap: space.md },
-  stepTitle: { ...type.name, flex: 1, minWidth: 0 },
-  stepPrice: { ...type.numeral, color: THEME.inkMuted, flexShrink: 0 },
-  detailLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: space.md, rowGap: space.xs + 2 },
-  metaLine: { flexShrink: 1, flexDirection: "row", alignItems: "flex-start", gap: space.xs + 2 },
+  timeline: { marginTop: space.xs },
+  stepRow: { flexDirection: "row", gap: 10 },
+  time: { width: 54, fontFamily: FONTS.monoMed, fontSize: 17, lineHeight: 34, letterSpacing: -0.35, textAlign: "right", color: THEME.ink },
+  nodeCol: { width: 34, alignItems: "center" },
+  swipe: { flex: 1, minWidth: 0 },
+  stepBody: { flex: 1, minWidth: 0, paddingBottom: 18, gap: 6, backgroundColor: THEME.bg },
+  ttl: { fontFamily: FONTS.headSemi, fontSize: 18, lineHeight: 24, letterSpacing: -0.1, color: THEME.ink },
+  ttlDone: { color: THEME.inkFaint, textDecorationLine: "line-through" },
+  meta: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", columnGap: 8, rowGap: 6 },
+  metaLine: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
   metaText: { flexShrink: 1 },
-  goPill: { flexDirection: "row", alignItems: "center", gap: space.xs, paddingHorizontal: space.md, minHeight: 28, borderRadius: radius.full, backgroundColor: THEME.blueDim },
-  checkHit: { width: 52, alignItems: "center", paddingTop: space.md - 2 },
-  check: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: THEME.hairStrong, alignItems: "center", justifyContent: "center" },
-  checkDone: { backgroundColor: THEME.teal, borderColor: THEME.teal },
-  deleteAction: {
-    width: 72,
-    marginLeft: space.sm,
-    borderRadius: radius.md,
-    backgroundColor: THEME.stamp,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  addStep: { marginTop: space.xl },
+  leg: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  pills: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  goPill: { flexDirection: "row", alignItems: "center", gap: space.xs, paddingHorizontal: space.md, minHeight: 30, borderRadius: radius.full, backgroundColor: THEME.blueDim },
+  deleteAction: { width: 72, marginLeft: space.sm, marginBottom: 18, borderRadius: radius.md, backgroundColor: THEME.stamp, alignItems: "center", justifyContent: "center" },
+  strip: { marginHorizontal: -layout.gutter, flexGrow: 0 },
+  stripContent: { flexGrow: 1, gap: 8, paddingHorizontal: layout.gutter, paddingTop: 4, paddingBottom: 12 },
+  footer: { paddingHorizontal: layout.gutter, paddingTop: 12, borderTopWidth: 1, borderTopColor: THEME.hair, backgroundColor: THEME.bg },
   orderOffer: { marginTop: space.lg },
   journalCard: { gap: space.sm, backgroundColor: THEME.bgCard, ...paperEdge(), borderWidth: 1, borderColor: THEME.hairStrong, padding: space.md, marginTop: space.lg },
   journalHead: { flexDirection: "row", alignItems: "center", gap: space.sm },

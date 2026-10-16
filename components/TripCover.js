@@ -3,17 +3,18 @@ import { View, Text, Image, StyleSheet } from "react-native";
 import Svg, { Path, Circle } from "react-native-svg";
 import { TONES, space, type, themedStyles } from "../lib/theme";
 import { tripRange } from "../lib/dates";
+import { inkNameOf } from "../lib/tripInk";
 
-// The cover of a trip: a drawing on the tone of its kind (long trip = gold, short = teal, park = pink), with
-// a postmark that says where and when. The photo of the trip, when there is one, is laid over it: with no
-// network (or no photo) the cover is still a picture, never an empty block.
+// The cover of a trip: a drawing in the ink of the trip (each trip has its own colour), with a postmark that
+// says where and when. The photo of the trip, when there is one, is laid over it: with no network (or no
+// photo) the cover is still a picture, never an empty block.
 //   long trip  -> a flight route over a globe grid
 //   short trip -> ripples around a point, like a map's contour lines
 //   park       -> bunting and stars
 // Children are drawn on top (stamp, buttons...).
 
 export function coverTone(trip) {
-  return trip.tripType === "park" ? "pink" : trip.tripType === "short" ? "teal" : "gold";
+  return inkNameOf(trip);
 }
 
 const MONTHS = ["JANV", "FÉVR", "MARS", "AVR", "MAI", "JUIN", "JUIL", "AOÛT", "SEPT", "OCT", "NOV", "DÉC"];
@@ -25,10 +26,12 @@ export function postmarkCity(trip) {
   return (word || "VOYAGE").slice(0, 10).toUpperCase();
 }
 
-export function postmarkDate(trip) {
-  const { start } = tripRange(trip);
-  if (!start) return "À DATER";
-  return `${parseInt(start.slice(8, 10), 10)} ${MONTHS[parseInt(start.slice(5, 7), 10) - 1] || ""}`.trim();
+// `at`: "start" (the day the trip begins) or "end" (the day it ends: the cover of the bilan).
+export function postmarkDate(trip, at = "start") {
+  const range = tripRange(trip);
+  const day = at === "end" ? range.end || range.start : range.start;
+  if (!day) return "À DATER";
+  return `${parseInt(day.slice(8, 10), 10)} ${MONTHS[parseInt(day.slice(5, 7), 10) - 1] || ""}`.trim();
 }
 
 // A four-point star centred on (x, y).
@@ -81,7 +84,7 @@ function Art({ kind, fg }) {
 }
 
 // The cancellation of a letter: wavy lines, then the ring with the place and the day.
-function Postmark({ trip, fg, style }) {
+function Postmark({ trip, fg, style, at }) {
   return (
     <View style={[styles.postmark, style]} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Svg width={64} height={44} viewBox="0 0 64 44">
@@ -96,7 +99,7 @@ function Postmark({ trip, fg, style }) {
           </Text>
           <View style={[styles.rule, { backgroundColor: fg }]} />
           <Text style={[styles.day, { color: fg }]} numberOfLines={1}>
-            {postmarkDate(trip)}
+            {postmarkDate(trip, at)}
           </Text>
         </View>
       </View>
@@ -104,18 +107,18 @@ function Postmark({ trip, fg, style }) {
   );
 }
 
-export default function TripCover({ trip, height = 148, photoUri, postmarkStyle, showPostmark = true, style, children }) {
+export default function TripCover({ trip, height = 148, photoUri, postmarkStyle, postmarkAt = "start", showPostmark = true, style, children }) {
   const tone = coverTone(trip);
   const t = TONES[tone];
   return (
     <View style={[styles.cover, { height, backgroundColor: t.bg }, style]}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <Svg width="100%" height="100%" viewBox="0 0 360 200" preserveAspectRatio="xMidYMid slice">
-          <Art kind={tone === "pink" ? "park" : tone === "teal" ? "short" : "long"} fg={t.fg} />
+          <Art kind={trip.tripType === "park" ? "park" : trip.tripType === "short" ? "short" : "long"} fg={t.fg} />
         </Svg>
       </View>
       {photoUri ? <Image source={{ uri: photoUri }} style={StyleSheet.absoluteFill} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
-      {!photoUri && showPostmark ? <Postmark trip={trip} fg={t.fg} style={postmarkStyle} /> : null}
+      {!photoUri && showPostmark ? <Postmark trip={trip} fg={t.fg} style={postmarkStyle} at={postmarkAt} /> : null}
       {children}
     </View>
   );

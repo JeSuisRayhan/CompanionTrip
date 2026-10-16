@@ -9,7 +9,7 @@ import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import { BricolageGrotesque_500Medium, BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold } from "@expo-google-fonts/inter";
-import { IBMPlexMono_400Regular, IBMPlexMono_500Medium } from "@expo-google-fonts/ibm-plex-mono";
+import { IBMPlexMono_400Regular, IBMPlexMono_500Medium, IBMPlexMono_600SemiBold } from "@expo-google-fonts/ibm-plex-mono";
 
 import { THEME, type, subscribeTheme, getThemeVersion } from "./lib/theme";
 import { loadPalette } from "./lib/appearance";
@@ -30,6 +30,10 @@ import OnboardingScreen from "./screens/OnboardingScreen";
 import TripScreen from "./screens/TripScreen";
 import DayDetailScreen from "./screens/DayDetailScreen";
 import TodayScreen from "./screens/TodayScreen";
+import ChecklistScreen from "./screens/ChecklistScreen";
+import ExpenseScreen from "./screens/ExpenseScreen";
+import PhrasesScreen from "./screens/PhrasesScreen";
+import IdeasScreen, { AttractionsScreen } from "./screens/IdeasScreen";
 import ShowDriverScreen from "./screens/ShowDriverScreen";
 import ShowPhraseScreen from "./screens/ShowPhraseScreen";
 import ActivityEditorScreen from "./screens/ActivityEditorScreen";
@@ -105,6 +109,7 @@ function AppContent({ onReady }) {
     Inter_600SemiBold,
     IBMPlexMono_400Regular,
     IBMPlexMono_500Medium,
+    IBMPlexMono_600SemiBold,
   });
 
   useEffect(() => {
@@ -221,6 +226,11 @@ function AppContent({ onReady }) {
             <Stack.Screen name="Trip" component={TripScreen} options={{ headerShown: false }} />
             <Stack.Screen name="DayDetail" component={DayDetailScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Today" component={TodayScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Checklist" component={ChecklistScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Expense" component={ExpenseScreen} options={{ headerShown: false, presentation: "modal" }} />
+            <Stack.Screen name="Phrases" component={PhrasesScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Ideas" component={IdeasScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Attractions" component={AttractionsScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ShowDriver" component={ShowDriverScreen} options={{ headerShown: false, presentation: "fullScreenModal" }} />
             <Stack.Screen name="ShowPhrase" component={ShowPhraseScreen} options={{ headerShown: false, presentation: "fullScreenModal" }} />
             <Stack.Screen

@@ -1,8 +1,9 @@
 import React from "react";
-import { View } from "react-native";
+import { View, Text } from "react-native";
 
-import { THEME, space, themedStyles } from "../lib/theme";
+import { THEME, space, type, radius, themedStyles } from "../lib/theme";
 import { Txt, Button, Surface } from "./ui";
+import Icon from "./Icon";
 
 // Two things the home screen must say before anything else: the trips could
 // not be read (nothing is saved until they can), or a safe copy was used.
@@ -27,17 +28,11 @@ export default function HomeNotices({ storage, backup, busy, updatePending, onRe
         />
       ) : null}
       {updatePending ? (
-        <Notice
-          tone="gold"
-          title="Mise à jour prête"
-          text="Une nouvelle version de l'application est téléchargée. Redémarrez pour l'utiliser."
-          actions={
-            <>
-              <Button title="Redémarrer" size="sm" onPress={onRestart} />
-              <Button title="Plus tard" size="sm" variant="ghost" onPress={onLater} />
-            </>
-          }
-        />
+        <View style={styles.update} accessibilityRole="alert">
+          <Icon name="refresh" size={22} color={THEME.gold} />
+          <Text style={styles.updateText} numberOfLines={2}>Mise à jour prête</Text>
+          <Button title="Redémarrer" size="sm" onPress={onRestart} />
+        </View>
       ) : null}
       {backup.due ? (
         <Notice
@@ -71,6 +66,9 @@ function Notice({ tone, title, text, actions }) {
 }
 
 const styles = themedStyles(() => ({
+  // The update is one line: what it is, and the button.
+  update: { flexDirection: "row", alignItems: "center", gap: space.md, paddingVertical: space.md, paddingLeft: 14, paddingRight: space.md, marginBottom: space.lg, borderRadius: radius.md, borderWidth: 1, borderColor: THEME.goldFill, backgroundColor: THEME.goldDim },
+  updateText: { ...type.label, flex: 1, fontFamily: type.label.fontFamily, color: THEME.ink },
   notice: { marginBottom: space.lg, borderWidth: 1 },
   stamp: { borderColor: THEME.stamp },
   gold: { borderColor: THEME.gold },

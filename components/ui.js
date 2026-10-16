@@ -8,7 +8,7 @@ import React, { useContext, useState } from "react";
 import { View, Text, TextInput, Pressable, ActivityIndicator, Image, Modal, KeyboardAvoidingView, ScrollView, StyleSheet, Platform, Animated } from "react-native";
 import Icon from "./Icon";
 import { SafeAreaInsetsContext } from "react-native-safe-area-context";
-import { THEME, TONES, space, layout, radius, type, shadow, paperEdge, themedStyles } from "../lib/theme";
+import { THEME, TONES, FONTS, space, layout, radius, type, shadow, paperEdge, themedStyles } from "../lib/theme";
 import { useThump } from "../lib/motion";
 import TicketArt from "./TicketArt";
 
@@ -44,10 +44,11 @@ const buttonVariants = () => ({
   ghost: { bg: "transparent", fg: THEME.mark, edge: "transparent" },
   danger: { bg: THEME.stampDim, fg: THEME.stamp, edge: "transparent" },
 });
+// A button is a 44 pt target at least (sm), 48 for the usual one, 58 for the one that matters on its screen.
 const BUTTON_SIZES = {
-  sm: { minHeight: 36, paddingHorizontal: space.md, gap: space.xs + 2, font: "caption", icon: 16 },
-  md: { minHeight: 48, paddingHorizontal: space.lg, gap: space.sm, font: "label", icon: 20 },
-  lg: { minHeight: 56, paddingHorizontal: space.xl, gap: space.sm, font: "label", icon: 22 },
+  sm: { minHeight: 44, paddingHorizontal: 14, gap: space.sm, text: { fontSize: 15, lineHeight: 17 }, icon: 18 },
+  md: { minHeight: 48, paddingHorizontal: 18, gap: space.sm, text: { fontSize: 16, lineHeight: 18 }, icon: 20 },
+  lg: { minHeight: 58, paddingHorizontal: 24, gap: space.sm, text: { fontSize: 20, lineHeight: 22, fontFamily: FONTS.head, letterSpacing: -0.1 }, icon: 22 },
 };
 
 export function Button({ title, icon, variant = "primary", tone, size = "md", loading, disabled, full, style, onPress, accessibilityLabel }) {
@@ -66,7 +67,7 @@ export function Button({ title, icon, variant = "primary", tone, size = "md", lo
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
       disabled={inactive}
       onPress={onPress}
-      hitSlop={size === "sm" ? 6 : 0}
+      hitSlop={0}
       style={({ pressed }) => [
         styles.buttonBase,
         round("md"),
@@ -82,7 +83,7 @@ export function Button({ title, icon, variant = "primary", tone, size = "md", lo
       ) : (
         <>
           {icon ? <Icon name={icon} size={s.icon} color={t.fg} /> : null}
-          <Text style={[type[s.font], { color: t.fg, fontFamily: type.label.fontFamily }, full && { flexShrink: 1, textAlign: "center" }]} numberOfLines={full ? 2 : 1}>
+          <Text style={[type.label, s.text, { color: t.fg }, full && { flexShrink: 1, textAlign: "center" }]} numberOfLines={full ? 2 : 1}>
             {title}
           </Text>
         </>
@@ -127,7 +128,7 @@ export function Chip({ label, icon, selected, tone = "gold", count, onPress, onL
       accessibilityState={{ selected: !!selected }}
       onPress={onPress}
       onLongPress={onLongPress}
-      hitSlop={4}
+      hitSlop={0}
       style={({ pressed }) => [
         styles.chip,
         selected
@@ -141,7 +142,7 @@ export function Chip({ label, icon, selected, tone = "gold", count, onPress, onL
         style,
       ]}
     >
-      {icon ? <Icon name={icon} size={15} color={fg} /> : null}
+      {icon ? <Icon name={icon} size={17} color={fg} /> : null}
       <Text style={[type.caption, styles.chipText, { color: selected ? selectedFg : THEME.ink }]} numberOfLines={1}>
         {label}
       </Text>
@@ -155,7 +156,7 @@ export function Badge({ label, tone = "neutral", icon, solid, style }) {
   const t = toneOf(tone);
   return (
     <View style={[styles.badge, { backgroundColor: solid ? t.fg : t.bg }, style]}>
-      {icon ? <Icon name={icon} size={12} color={solid ? THEME.onAccent : t.fg} /> : null}
+      {icon ? <Icon name={icon} size={14} color={solid ? THEME.onAccent : t.fg} /> : null}
       <Text style={[type.caption, styles.badgeText, { color: solid ? THEME.onAccent : t.fg }]} numberOfLines={1}>
         {label}
       </Text>
@@ -188,7 +189,7 @@ export function Stamp({ label, tone = "stamp", icon, small, large, tilt = -3, de
     >
       <View style={[styles.stampInner, { borderColor: t.fg }, small && styles.stampInnerSmall, large && styles.stampInnerLarge]}>
         {icon ? <Icon name={icon} size={large ? 22 : small ? 11 : 13} color={t.fg} /> : null}
-        <Text style={[small ? type.numeralSmall : large ? type.heading : type.caption, styles.stampText, { color: t.fg }]} numberOfLines={1}>
+        <Text style={[styles.stampText, small ? styles.stampTextSmall : large ? styles.stampTextLarge : null, { color: t.fg }]} numberOfLines={1}>
           {label}
         </Text>
       </View>
@@ -214,14 +215,14 @@ export function Surface({ tone = "card", r = "lg", pad, style, children, ...prop
 }
 
 // Rows on one shared surface, separated by inset hairlines.
-export function Group({ children, style, inset = true }) {
+export function Group({ children, style, inset = true, separators = true }) {
   const items = React.Children.toArray(children).filter(Boolean);
   return (
     <OnCardContext.Provider value={true}>
       <View style={[round("lg"), styles.group, style]}>
         {items.map((child, i) => (
           <React.Fragment key={child.key != null ? child.key : i}>
-            {i > 0 ? <View style={[styles.separator, inset && { marginLeft: space.lg }]} /> : null}
+            {i > 0 && separators ? <View style={[styles.separator, inset && { marginLeft: space.lg }]} /> : null}
             {child}
           </React.Fragment>
         ))}
@@ -498,27 +499,29 @@ const styles = themedStyles(() => ({
     flexDirection: "row",
     alignItems: "center",
     gap: space.xs + 2,
-    minHeight: 36,
-    paddingHorizontal: space.md + 2,
+    minHeight: 44,
+    paddingHorizontal: space.lg,
     borderRadius: radius.full,
     borderWidth: 1.5,
   },
-  chipText: { fontFamily: type.label.fontFamily, flexShrink: 1 },
-  badge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: space.xs, height: 24, paddingHorizontal: space.sm + 2, borderRadius: radius.sm - 2, borderCurve: "continuous" },
-  badgeText: { fontFamily: type.label.fontFamily, flexShrink: 1 },
+  chipText: { fontFamily: type.label.fontFamily, fontSize: 15, lineHeight: 18, flexShrink: 1 },
+  badge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: space.xs, height: 26, paddingHorizontal: 9, borderRadius: 6, borderCurve: "continuous" },
+  badgeText: { fontFamily: type.label.fontFamily, fontSize: 13, lineHeight: 16, flexShrink: 1 },
   stampOuter: { alignSelf: "flex-start", borderWidth: 2, borderRadius: 7, padding: 2, backgroundColor: THEME.bgCard },
   stampOuterSmall: { borderWidth: 1.5, borderRadius: 6, padding: 1.5 },
   stampInner: { flexDirection: "row", alignItems: "center", gap: space.xs, borderWidth: 1, borderRadius: 4, paddingHorizontal: space.sm, paddingVertical: 3 },
-  stampInnerSmall: { paddingHorizontal: space.xs + 2, paddingVertical: 1 },
+  stampInnerSmall: { paddingHorizontal: 6, paddingVertical: 1 },
   stampOuterLarge: { borderWidth: 3, borderRadius: 10, padding: 3 },
   stampInnerLarge: { gap: space.sm, paddingHorizontal: space.lg, paddingVertical: space.sm, borderRadius: 6 },
-  stampText: { fontFamily: type.label.fontFamily, letterSpacing: 1.1, textTransform: "uppercase" },
+  stampText: { fontFamily: FONTS.bodySemi, fontSize: 12, lineHeight: 16, letterSpacing: 1.1, textTransform: "uppercase" },
+  stampTextSmall: { fontFamily: FONTS.monoMed, letterSpacing: 0.4 },
+  stampTextLarge: { fontFamily: FONTS.head, fontSize: 19, lineHeight: 24 },
   // What makes a card a ticket on paper: a fine warm edge and a shadow like a sheet lying on a desk.
   // On the dark palettes depth comes from the lighter surface alone.
   ticketEdge: { ...paperEdge() },
   group: { backgroundColor: THEME.bgCard, overflow: "hidden", ...paperEdge() },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: THEME.hairStrong },
-  row: { flexDirection: "row", alignItems: "center", gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md, minHeight: 56 },
+  row: { flexDirection: "row", alignItems: "center", gap: space.md, paddingHorizontal: space.lg, paddingVertical: space.md, minHeight: 64 },
   rowTile: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   rowText: { flex: 1, gap: 2 },
   rowSubtitle: { color: THEME.inkMuted },
