@@ -15,9 +15,9 @@ import { isPdfDoc } from "../lib/documents";
 import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal, deleteDay, deleteDayMessage, duplicateDay } from "../lib/trips";
 import { bookingOf, deadlineInfo } from "../lib/booking";
 import { resolveDayDate, formatFullDate, isoDate } from "../lib/dates";
-import { formatMoney, convertAmount } from "../lib/budget";
+import { formatMoney, convertAmount, moneyOf } from "../lib/budget";
 import { dayLegs, formatDistance, legShort, legAdvice, legIcon } from "../lib/travelTime";
-import { withLegEdit } from "../lib/leg";
+import { withLegEdit, legPrice } from "../lib/leg";
 import { proximityOrder } from "../lib/dayOrder";
 import { journalOf, canWriteJournal, MAX_JOURNAL } from "../lib/journal";
 import { fetchDayWeather, weatherInfo } from "../lib/weather";
@@ -294,8 +294,8 @@ export default function DayDetailScreen({ route, navigation }) {
   // "5 étapes · de 9 h 30 à 16 h 15 · ≈ 40 € prévus"
   const clock = (t) => `${Number(t.slice(0, 2))} h ${t.slice(3)}`;
   const timed = sorted.filter((a) => a.time);
-  // what the tags of the steps add up to (each one rounded, as it is told), so the total matches what is read
-  const planned = day.activities.reduce((sum, a) => sum + (Number(a.price) > 0 ? Math.round(convertAmount(Number(a.price), rate)) : 0), 0);
+  // what the tags of the steps and of the ways between them add up to (each one rounded, as it is told), so the total matches what is read
+  const planned = day.activities.reduce((sum, a) => sum + (Number(a.price) > 0 ? Math.round(convertAmount(Number(a.price), rate)) : 0) + (legPrice(a) > 0 ? Math.round(convertAmount(legPrice(a), rate)) : 0), 0);
   const summary = [
     sorted.length === 0 ? "Aucune étape" : `${sorted.length} étape${sorted.length > 1 ? "s" : ""}`,
     timed.length > 1 ? `de ${clock(timed[0].time)} à ${clock(timed[timed.length - 1].time)}` : null,
@@ -453,7 +453,7 @@ export default function DayDetailScreen({ route, navigation }) {
           visible={!!legFor && !!legs && legs.has(legFor)}
           leg={legFor && legs ? legs.get(legFor) || null : null}
           toTitle={legFor && day.activities.some((a) => a.id === legFor) ? splitTitlePlace(day.activities.find((a) => a.id === legFor).title).title : ""}
-          currency={trip.currency}
+          money={moneyOf(trip)}
           onClose={() => setLegFor(null)}
           onSave={onSaveLeg}
         />
@@ -636,7 +636,7 @@ function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, ra
               ) : null}
             </View>
           ) : null}
-          {nextLeg ? <LegNote leg={nextLeg} toName={nextName} arriveAt={nextTime} advise={living && !done} currency={trip.currency} onPress={onLeg} /> : null}
+          {nextLeg ? <LegNote leg={nextLeg} toName={nextName} arriveAt={nextTime} advise={living && !done} price={priceOf(nextLeg, rate, home, sameCurrency)} onPress={onLeg} /> : null}
         </View>
       </Swipeable>
     </View>
@@ -645,10 +645,10 @@ function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, ra
 
 // The way to the next step, on one line: "10 min à pied". A tap opens the price of the way. The advice
 // ("Partir à 14:20") only on the day being lived, or when the two hours are closer than the way.
-function LegNote({ leg, toName, arriveAt, advise, currency, onPress }) {
+// `price`: what the way cost, told like the price of a step (in the person's currency, "≈" when it is worked out from a rate).
+function LegNote({ leg, toName, arriveAt, advise, price, onPress }) {
   const advice = legAdvice(leg, arriveAt, null);
   const showAdvice = advice && (advice.tone === "stamp" || advise);
-  const price = leg.price != null ? formatMoney(leg.price, currency) : null;
   const text = legShort(leg);
   return (
     <Pressable

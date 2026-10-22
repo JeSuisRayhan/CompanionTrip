@@ -8,7 +8,7 @@ import { isoDate, tripRange, tripStatus, formatTicketDates, formatLongDay, diffD
 import { todayPlan } from "../../lib/today";
 import { tripRecap, recapText } from "../../lib/recap";
 import { journalEntries } from "../../lib/journal";
-import { budgetOverview, expensesByCategory, reservedByCategory, reservedTotal, expensesTotal, EXPENSE_CATEGORIES, formatMoney, formatFigure, currencySymbol } from "../../lib/budget";
+import { budgetOverview, expensesByCategory, reservedByCategory, plannedByCategory, reservedTotal, expensesTotal, EXPENSE_CATEGORIES, formatMoney, formatFigure, currencySymbol } from "../../lib/budget";
 import { souvenirsOf, souvenirsLeft, pickSouvenirs, addSouvenirs, removeSouvenir, MAX_SOUVENIRS } from "../../lib/souvenirs";
 import { useTripInk } from "../../lib/tripInk";
 import { Stamp, Button, IconButton, Group, Row, round } from "../../components/ui";
@@ -64,10 +64,12 @@ export default function BilanTab({ trip, navigation, onChange }) {
   const m = (n) => formatMoney(Math.round(n), home);
   const reserved = reservedByCategory(trip);
   const spentBy = expensesByCategory(trip);
+  const doneBy = plannedByCategory(trip, { onlyDone: true }); // priced steps (and the way to them) done without a booking or an expense noted
   const bookedHome = reservedTotal(trip) * rate;
-  const spentHome = expensesTotal(trip) * rate;
+  const spentHome = (expensesTotal(trip) + doneBy.repas + doneBy.transport + doneBy.hotel + doneBy.other) * rate; // on the spot
   const outlay = bookedHome + spentHome;
-  const rows = CATEGORY_ORDER.map((key) => ({ cat: EXPENSE_CATEGORIES.find((c) => c.key === key), amount: (reserved[key] + spentBy[key]) * rate })).filter((r) => r.cat && r.amount > 0);
+  const rows = CATEGORY_ORDER.map((key) => ({ cat: EXPENSE_CATEGORIES.find((c) => c.key === key), amount: (reserved[key] + spentBy[key] + doneBy[key]) * rate })).filter((r) => r.cat && r.amount > 0);
+  const budgetLeft = overview ? overview.target - outlay : 0; // under (positive) or over (negative) the budget, in what the trip really cost
   const tile = Math.floor((Dimensions.get("window").width - layout.gutter * 2 - 8 - GAP * (COLUMNS - 1)) / COLUMNS);
 
   async function add(source) {
@@ -194,9 +196,9 @@ export default function BilanTab({ trip, navigation, onChange }) {
               </View>
               {overview ? (
                 <Stamp
-                  label={overview.over ? `${m(-overview.left)} au-dessus du budget` : `${m(overview.left)} sous le budget`}
-                  tone={overview.over ? "stamp" : "teal"}
-                  icon={overview.over ? "alert" : "checkmark"}
+                  label={budgetLeft < 0 ? `${m(-budgetLeft)} au-dessus du budget` : `${m(budgetLeft)} sous le budget`}
+                  tone={budgetLeft < 0 ? "stamp" : "teal"}
+                  icon={budgetLeft < 0 ? "alert" : "checkmark"}
                   small
                   style={{ alignSelf: "flex-start" }}
                 />

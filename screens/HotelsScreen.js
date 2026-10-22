@@ -7,10 +7,11 @@ import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip, listHotelStays } from "../lib/trips";
 import { saveHotelStay, deleteHotelStay } from "../lib/ideas";
 import { addDaysISO, formatDateRange } from "../lib/dates";
-import { formatMoney } from "../lib/budget";
+import { formatMoney, moneyOf, keptFromTyped, typedText } from "../lib/budget";
 import { driverCard } from "../lib/driverCard";
 import { Txt, Button, IconButton, Group, Row, Field, EmptyState, Sheet, BackHeader, Fab } from "../components/ui";
 import DateField from "../components/DateField";
+import MoneyField, { useEntry } from "../components/MoneyField";
 
 export default function HotelsScreen({ route, navigation }) {
   const { tripId } = route.params;
@@ -134,7 +135,7 @@ export default function HotelsScreen({ route, navigation }) {
       <HotelFormModal
         visible={!!editing}
         initial={editing}
-        currency={trip.currency}
+        money={moneyOf(trip)}
         onClose={() => setEditing(null)}
         onSave={async (values) => {
           await saveHotelStay(tripId, { stayId: editing?.stayId, ideaId: editing?.ideaId, lat: editing?.lat, lng: editing?.lng, ...values });
@@ -146,12 +147,13 @@ export default function HotelsScreen({ route, navigation }) {
   );
 }
 
-function HotelFormModal({ visible, initial, currency, onClose, onSave }) {
+function HotelFormModal({ visible, initial, money, onClose, onSave }) {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
+  const [priceEntry, choosePriceEntry, reopenPriceEntry] = useEntry(false); // local or the person's own currency
   const [confirmationCode, setConfirmationCode] = useState("");
   const [error, setError] = useState("");
 
@@ -161,11 +163,13 @@ function HotelFormModal({ visible, initial, currency, onClose, onSave }) {
       setAddress(initial?.address || "");
       setCheckIn(initial?.checkIn || "");
       setCheckOut(initial?.checkIn && initial?.nights ? addDaysStr(initial.checkIn, initial.nights) : "");
-      setTotalPrice(initial?.nights && initial?.pricePerNight ? String(Math.round(initial.nights * initial.pricePerNight * 100) / 100) : "");
+      const known = !!(initial?.nights && initial?.pricePerNight);
+      setTotalPrice(known ? typedText(initial.nights * initial.pricePerNight) : "");
+      reopenPriceEntry(known); // a saved price is shown in the local currency; a new one the way it was last left
       setConfirmationCode(initial?.confirmationCode || "");
       setError("");
     }
-  }, [visible, initial]);
+  }, [visible, initial, reopenPriceEntry]);
 
   function addDaysStr(dateISO, n) {
     const d = new Date(dateISO + "T00:00:00");
@@ -189,13 +193,13 @@ function HotelFormModal({ visible, initial, currency, onClose, onSave }) {
     if (!isValidDate(checkIn) || !isValidDate(checkOut)) return setError("Choisissez les dates d'arrivée et de départ.");
     const nights = Math.round((new Date(checkOut + "T00:00:00") - new Date(checkIn + "T00:00:00")) / 86400000);
     if (nights < 1) return setError("La date de départ doit être après la date d'arrivée.");
-    const price = parseFloat(totalPrice.replace(",", "."));
+    const price = keptFromTyped(totalPrice, money, priceEntry); // in the local currency, whatever it was typed in
     onSave({
       name,
       address,
       checkIn,
       nights,
-      totalPrice: !isNaN(price) ? price : 0,
+      totalPrice: price != null ? price : 0,
       confirmationCode,
     });
   }
@@ -211,7 +215,7 @@ function HotelFormModal({ visible, initial, currency, onClose, onSave }) {
         <DateField label="Départ" compact value={checkOut} min={checkIn ? addDaysStr(checkIn, 1) : undefined} onChange={setCheckOut} style={styles.flex} />
       </View>
 
-      <Field label={`Prix total du séjour (${currency})`} value={totalPrice} onChangeText={setTotalPrice} placeholder="0" keyboardType="decimal-pad" inputStyle={type.numeral} />
+      <MoneyField label="Prix total du séjour" money={money} entry={priceEntry} onEntryChange={choosePriceEntry} value={totalPrice} onChangeText={setTotalPrice} placeholder="0" />
 
       <Field label="Code de réservation (optionnel)" value={confirmationCode} onChangeText={setConfirmationCode} placeholder="ABC123" autoCapitalize="characters" />
 

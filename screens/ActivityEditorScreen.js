@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, ScrollView, KeyboardAvoidingView, Platform, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "../components/Icon";
@@ -9,9 +9,11 @@ import { getTrip, addActivity, editActivity, deleteActivity } from "../lib/trips
 import { resolveDayDate, parseTimeInput, maskTimeInput, isoDate } from "../lib/dates";
 import { scheduleActivityReminder, cancelScheduledNotification, getNotificationPermission, requestNotificationPermission } from "../lib/notifications";
 import { BOOKING_STATES, bookingOf } from "../lib/booking";
+import { moneyOf, keptFromTyped, typedText } from "../lib/budget";
 import { transportDeparturePlace, TRANSPORT_MODES, CONFIRMATION_TYPES } from "../lib/constants";
 import { Txt, Button, Chip, Group, Row, Field, ModalHeader, round } from "../components/ui";
 import DateField from "../components/DateField";
+import MoneyField, { useEntry } from "../components/MoneyField";
 
 // Same tone per step type everywhere (route rows, editor chips).
 function typeTone(key) {
@@ -24,7 +26,10 @@ export default function ActivityEditorScreen({ route, navigation }) {
   const [title, setTitle] = useState(activity?.title || "");
   const [time, setTime] = useState(activity?.time || "");
   const [type, setType] = useState(activity?.type || "activite");
-  const [price, setPrice] = useState(activity?.price != null ? String(activity.price) : "");
+  const [price, setPrice] = useState(activity?.price != null ? typedText(activity.price) : "");
+  // Written in the local currency or in the person's own: the way it was left last time, the local one for a saved price.
+  const [priceEntry, choosePriceEntry] = useEntry(activity?.price != null);
+  const [money, setMoney] = useState(null); // the two currencies of the trip, once it is read
   const [note, setNote] = useState(activity?.note || "");
   const [address, setAddress] = useState(activity?.address || "");
   const [localAddress, setLocalAddress] = useState(activity?.localAddress || "");
@@ -38,6 +43,16 @@ export default function ActivityEditorScreen({ route, navigation }) {
 
   const isEditing = !!activity;
 
+  useEffect(() => {
+    let alive = true;
+    getTrip(tripId).then((t) => {
+      if (alive && t) setMoney(moneyOf(t));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [tripId]);
+
   const normalizedTime = () => parseTimeInput(time);
 
   async function save() {
@@ -50,7 +65,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
       return;
     }
     setSaving(true);
-    const parsedPrice = price.trim() ? parseFloat(price.replace(",", ".")) : null;
+    const keptPrice = price.trim() ? keptFromTyped(price, money, priceEntry) : null; // in the local currency, whatever it was typed in
     const resolvedTime = normalizedTime();
     let notificationId = activity?.notificationId || null;
 
@@ -91,7 +106,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
         title: title.trim(),
         time: resolvedTime,
         type,
-        price: !isNaN(parsedPrice) ? parsedPrice : null,
+        price: keptPrice,
         note: note.trim(),
         address: address.trim() || null,
         localAddress: localAddress.trim() || null,
@@ -174,14 +189,7 @@ export default function ActivityEditorScreen({ route, navigation }) {
           </View>
 
           {(type === "transport" || type === "hotel" || type === "repas" || type === "activite") && (
-            <Field
-              label="Prix (optionnel)"
-              value={price}
-              onChangeText={setPrice}
-              placeholder="0"
-              keyboardType="decimal-pad"
-              inputStyle={ramp.numeral}
-            />
+            <MoneyField label="Prix (optionnel)" money={money} entry={priceEntry} onEntryChange={choosePriceEntry} value={price} onChangeText={setPrice} placeholder="0" />
           )}
 
           {type === "transport" && (

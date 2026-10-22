@@ -18,6 +18,7 @@ import { searchDestinationPhoto, trackUnsplashDownload } from "../lib/unsplash";
 import { suggestedMoney } from "../lib/countries";
 import { rateOfTheDay } from "../lib/rates";
 import { parseBudgetInput } from "../lib/budget";
+import MoneyField from "../components/MoneyField";
 import { freeInkName } from "../lib/tripInk";
 import VoiceInputButton from "../components/VoiceInputButton";
 import { PickerField, CurrencyPickerModal, currencyLabel } from "../components/CurrencyPicker";
@@ -78,6 +79,7 @@ export default function OnboardingScreen({ navigation }) {
   const [rateNote, setRateNote] = useState({ text: "", warn: false });
   const [rateRefresh, setRateRefresh] = useState(0);
   const [budget, setBudget] = useState("");
+  const [budgetEntry, setBudgetEntry] = useState("home"); // the currency the budget is written in: "home" | "local"
   const suggestion = useMemo(() => suggestedMoney({ name, place: destination }), [name, destination]);
   const currency = chosenCurrency || (suggestion ? suggestion.currency : HOME_CURRENCY);
 
@@ -211,6 +213,7 @@ export default function OnboardingScreen({ navigation }) {
         homeCurrency: HOME_CURRENCY,
         rate: rateToKeep(),
         budgetTotal: parseBudgetInput(budget),
+        budgetIn: currency !== HOME_CURRENCY ? budgetEntry : "home",
         days,
         planMode: fromScript || tripType === "park" ? "script" : "build",
         defaultLocation: destination,
@@ -367,15 +370,16 @@ export default function OnboardingScreen({ navigation }) {
                 </View>
               ) : null}
 
-              <Field
+              <MoneyField
                 label="Budget total du voyage"
+                money={{ home: HOME_CURRENCY, local: currency, rate: rateToKeep(), different: currency !== HOME_CURRENCY }}
+                entry={budgetEntry}
+                onEntryChange={setBudgetEntry}
                 value={budget}
                 onChangeText={setBudget}
-                keyboardType="decimal-pad"
                 placeholder="Pas de budget fixé"
-                hint="En euros : ce que vous comptez dépenser en tout."
+                hint="Ce que vous comptez dépenser en tout, dans la devise de votre choix."
                 inputStyle={budget ? styles.numericInput : null}
-                right={<Text style={styles.unit}>€</Text>}
                 style={styles.tight}
               />
             </View>

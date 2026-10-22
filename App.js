@@ -13,6 +13,7 @@ import { IBMPlexMono_400Regular, IBMPlexMono_500Medium, IBMPlexMono_600SemiBold 
 
 import { THEME, type, subscribeTheme, getThemeVersion } from "./lib/theme";
 import { loadPalette } from "./lib/appearance";
+import { loadEntryPref } from "./lib/entryPref";
 import { installErrorHandlers } from "./lib/errorLog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PaperGrain from "./components/PaperGrain";
@@ -114,7 +115,7 @@ function AppContent({ onReady }) {
 
   useEffect(() => {
     (async () => {
-      await loadPalette();
+      await Promise.all([loadPalette(), loadEntryPref()]);
       removeSetting("anthropicApiKey").catch(() => {}); // the app no longer uses an AI: a key saved by an older version is erased
       syncParkAlertTask(); // registers or removes the background check to match the trips' settings
       const pinSet = await hasPin();

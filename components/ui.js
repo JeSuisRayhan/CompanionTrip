@@ -235,7 +235,7 @@ export function Group({ children, style, inset = true, separators = true }) {
 }
 
 // One row of a Group: optional leading tile/thumb, title + subtitle, trailing node.
-export function Row({ icon, tone = "neutral", lead, title, subtitle, right, chevron, onPress, onLongPress, selected, style, accessibilityLabel, children }) {
+export function Row({ icon, tone = "neutral", lead, title, subtitle, subtitleLines = 2, right, chevron, onPress, onLongPress, selected, style, accessibilityLabel, children }) {
   const t = toneOf(tone);
   const body = (
     <>
@@ -246,7 +246,7 @@ export function Row({ icon, tone = "neutral", lead, title, subtitle, right, chev
       ) : null}
       <View style={styles.rowText}>
         {title != null ? <Text style={type.name} numberOfLines={2}>{title}</Text> : null}
-        {subtitle ? <Text style={[type.subhead, styles.rowSubtitle]} numberOfLines={2}>{subtitle}</Text> : null}
+        {subtitle ? <Text style={[type.subhead, styles.rowSubtitle]} numberOfLines={subtitleLines}>{subtitle}</Text> : null}
         {children}
       </View>
       {right ? right : null}

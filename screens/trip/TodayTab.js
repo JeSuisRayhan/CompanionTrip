@@ -13,6 +13,7 @@ import { toggleActivityDone, setDayJournal } from "../../lib/trips";
 import { isoDate, formatLongDay, tripStatus, tripRange, daysUntilLabel, formatShortDate, resolveDayDate } from "../../lib/dates";
 import { todayPlan } from "../../lib/today";
 import { dayLegs, legShort, legAdvice } from "../../lib/travelTime";
+import { legPrice } from "../../lib/leg";
 import { budgetOverview, formatMoney, formatFigure, currencySymbol, convertAmount } from "../../lib/budget";
 import { journalOf, MAX_JOURNAL } from "../../lib/journal";
 import { fetchDayWeather, weatherInfo } from "../../lib/weather";
@@ -45,7 +46,8 @@ function wantsDriver(step) {
 }
 
 // The sum of the prices of the steps of a day, in the person's currency.
-const plannedOf = (steps, rate) => steps.reduce((sum, s) => sum + (Number(s.price) > 0 ? Number(s.price) : 0), 0) * rate;
+// what the steps of the day count on, with the way to each of them (the price typed on the line between two steps)
+const plannedOf = (steps, rate) => steps.reduce((sum, s) => sum + (Number(s.price) > 0 ? Number(s.price) : 0) + legPrice(s), 0) * rate;
 
 function WeatherTag({ day, dateISO, fallbackLocation }) {
   const [weather, setWeather] = useState(null);

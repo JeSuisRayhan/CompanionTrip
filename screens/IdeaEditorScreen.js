@@ -7,6 +7,7 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import { THEME, TONES, space, layout, type, themedStyles } from "../lib/theme";
 import { getTrip } from "../lib/trips";
+import { moneyOf, keptFromTyped, typedText } from "../lib/budget";
 import { resolveDayDate, formatDateLabel } from "../lib/dates";
 import {
   getIdeaCategories,
@@ -25,6 +26,7 @@ import {
 } from "../lib/ideas";
 import { searchPlacesWithFallback, centroidOf } from "../lib/geocode";
 import DayPickerModal from "../components/DayPickerModal";
+import MoneyField, { useEntry } from "../components/MoneyField";
 import { Txt, Button, IconButton, Chip, Badge, Surface, Group, Row, Field, ModalHeader } from "../components/ui";
 
 // A category stores its colour; the tone with the same foreground gives the
@@ -63,6 +65,7 @@ export default function IdeaEditorScreen({ route, navigation }) {
   const [durationTouched, setDurationTouched] = useState(false);
   const [mealSlot, setMealSlot] = useState("any");
   const [price, setPrice] = useState("");
+  const [priceEntry, choosePriceEntry, reopenPriceEntry] = useEntry(false); // local or the person's own currency
   const [sourceUrl, setSourceUrl] = useState("");
   const [note, setNote] = useState("");
   // Duration, price, link and note are folded away: most ideas only need a name,
@@ -98,7 +101,8 @@ export default function IdeaEditorScreen({ route, navigation }) {
         setDurationMin(existing.durationMin);
         setDurationTouched(true);
         setMealSlot(existing.mealSlot || "any");
-        setPrice(existing.price != null ? String(existing.price) : "");
+        setPrice(existing.price != null ? typedText(existing.price) : "");
+        reopenPriceEntry(existing.price != null); // a saved price is shown in the local currency, in which it is kept
         setSourceUrl(existing.sourceUrl || "");
         setNote(existing.note || "");
         setMoreOpen(existing.price != null || !!existing.sourceUrl || !!existing.note);
@@ -111,7 +115,7 @@ export default function IdeaEditorScreen({ route, navigation }) {
     return () => {
       cancelled = true;
     };
-  }, [tripId, ideaId]);
+  }, [tripId, ideaId, reopenPriceEntry]);
 
   // Coming back from the Hôtels screen (a stay may have just been created from
   // this idea): refresh the trip only, never the form fields being edited.
@@ -214,7 +218,7 @@ export default function IdeaEditorScreen({ route, navigation }) {
       priority,
       durationMin,
       mealSlot,
-      price,
+      price: keptFromTyped(price, moneyOf(trip), priceEntry), // in the local currency, whatever it was typed in
       sourceUrl,
       note,
     };
@@ -417,7 +421,7 @@ export default function IdeaEditorScreen({ route, navigation }) {
               )}
 
               {!isHotel && (
-                <Field label={`Prix estimé (${trip.currency}) — optionnel`} value={price} onChangeText={setPrice} placeholder="0" keyboardType="decimal-pad" inputStyle={type.numeral} />
+                <MoneyField label="Prix estimé — optionnel" money={moneyOf(trip)} entry={priceEntry} onEntryChange={choosePriceEntry} value={price} onChangeText={setPrice} placeholder="0" />
               )}
 
               <Field

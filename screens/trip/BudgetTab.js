@@ -4,9 +4,10 @@ import { View, Text, ScrollView, Pressable } from "react-native";
 import { THEME, TONES, FONTS, space, type, themedStyles, paperEdge } from "../../lib/theme";
 import { isoDate, formatWeekdayDay } from "../../lib/dates";
 import { updateTripSettings } from "../../lib/trips";
-import { budgetOverview, budgetSummary, expensesTotal, expensesByCategory, expenseCategory, EXPENSE_CATEGORIES, reservedItems, reservedTotal, reservedByCategory, plannedRest, formatMoney, currencySymbol, currencyName, convertAmount, parseBudgetInput } from "../../lib/budget";
+import { budgetOverview, budgetSummary, budgetEntryOf, budgetTypedOf, budgetTargetOf, expensesTotal, expensesByCategory, expenseCategory, EXPENSE_CATEGORIES, reservedItems, reservedTotal, reservedByCategory, plannedByCategory, plannedRest, formatMoney, currencySymbol, currencyName, convertAmount, moneyOf, parseBudgetInput } from "../../lib/budget";
 import { useTripInk } from "../../lib/tripInk";
 import { Button, Field, Sheet, Group, Row, round } from "../../components/ui";
+import MoneyField from "../../components/MoneyField";
 import { Section, PageHead, Perforation, AmountCol, SplitBar, MAIN } from "../../components/mix";
 import Flip, { Plate } from "../../components/Flip";
 import { convertAmount as conv } from "../../lib/budget";
@@ -30,6 +31,7 @@ export default function BudgetTab({ trip, navigation, onChange }) {
   const mx = (n) => formatMoney(n, home); // keeps the cents of a small amount
 
   const reserved = reservedByCategory(trip);
+  const planned = plannedByCategory(trip);
   const stays = reservedItems(trip).filter((i) => i.kind === "stay");
   const spentBy = expensesByCategory(trip);
   const expenses = [...(trip.expenses || [])].reverse().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
@@ -43,19 +45,27 @@ export default function BudgetTab({ trip, navigation, onChange }) {
   const over = hasBudget && overview.over;
   const figureValue = hasBudget ? Math.abs(Math.round(overview.left)) : Math.round(bookedHome + spentHome);
   const figure = String(figureValue);
+  // a category counts everything it holds: what is booked, what was spent, and what the programme still plans (local currency)
   const rows = CATEGORY_ORDER.map((key) => {
     const cat = EXPENSE_CATEGORIES.find((c) => c.key === key);
-    const amount = reserved[key] + spentBy[key]; // local currency
-    return { key, cat, amount, reserved: reserved[key], spent: spentBy[key], target: trip.budgetTargets && trip.budgetTargets[key] };
-  }).filter((r) => r.amount > 0 || (r.target != null && r.target > 0));
+    const amount = reserved[key] + spentBy[key] + planned[key];
+    return { key, cat, amount, reserved: reserved[key], spent: spentBy[key], planned: planned[key], target: budgetTargetOf(trip, key) };
+  }).filter((r) => r.amount > 0 || r.target != null);
   const denominator = hasBudget ? overview.target : Math.max(bookedHome + spentHome, 1);
+
+  // a small amount keeps its cents ("9 €", "4,50 €"); a bigger one is rounded
+  const small = (n) => (n < 10 ? mx(n) : m(n));
+  // the goal of a category as it was written (in the local currency or in the person's own)
+  const inLocal = budgetEntryOf(trip) === "local";
+  const goalText = (r) => (inLocal ? formatMoney(trip.budgetTargets[r.key], local) : m(r.target));
 
   function subtitleOf(r) {
     const parts = [];
     if (r.key === "hotel" && r.reserved > 0) parts.push(stays.length === 1 ? `${stays[0].title} · réservée` : `${stays.length} séjours réservés`);
-    else if (r.reserved > 0) parts.push(`${m(r.reserved * rate)} réservés`);
-    if (r.spent > 0) parts.push(r.reserved > 0 ? `${m(r.spent * rate)} dépensés` : `${spentCount(r.key)} dépense${spentCount(r.key) > 1 ? "s" : ""}`);
-    if (r.target != null && r.target > 0) parts.push(`objectif ${m(r.target)}`);
+    else if (r.reserved > 0) parts.push(`${small(r.reserved * rate)} réservés`);
+    if (r.spent > 0) parts.push(r.reserved > 0 || r.planned > 0 ? `${small(r.spent * rate)} dépensés` : `${spentCount(r.key)} dépense${spentCount(r.key) > 1 ? "s" : ""}`);
+    if (r.planned > 0) parts.push(`${small(r.planned * rate)} prévus`); // priced steps and rides of the programme, not booked yet
+    if (r.target != null) parts.push(`objectif ${goalText(r)}`);
     return parts.join(" · ");
   }
 
@@ -73,7 +83,7 @@ export default function BudgetTab({ trip, navigation, onChange }) {
         onPress={() => setGoalOpen(true)}
         style={({ pressed }) => [styles.card, round("xl"), pressed && { opacity: 0.92 }]}
       >
-        <Plate cap={hasBudget ? (over ? "Dépassé de" : "Il reste") : "Réservé et dépensé"} capRight={hasBudget ? `Sur ${m(overview.target)}` : "Budget à fixer"} style={styles.plate}>
+        <Plate cap={hasBudget ? (over ? "Dépassé de" : "Il reste") : "Réservé et dépensé"} capRight={hasBudget ? `Sur ${inLocal ? `${formatMoney(budgetTypedOf(trip), local)} · ` : ""}${m(overview.target)}` : "Budget à fixer"} style={styles.plate}>
           <View style={styles.figureRow}>
             <Flip value={figure} size={figure.length > 4 ? "lg" : "xl"} tone={over ? "red" : "trip"} label={`${figure} ${currencySymbol(home)}`} />
             <Text style={styles.symbol}>{currencySymbol(home)}</Text>
@@ -115,7 +125,7 @@ export default function BudgetTab({ trip, navigation, onChange }) {
 
       <Section title="Par catégorie">
         {rows.length === 0 ? (
-          <Text style={type.subhead}>Rien de réservé ni de dépensé pour l'instant. Les vols, séjours et réservations du programme s'ajoutent ici tout seuls.</Text>
+          <Text style={type.subhead}>Rien de prévu, de réservé ni de dépensé pour l'instant. Les prix du programme, les réservations et vos dépenses s'ajoutent ici tout seuls.</Text>
         ) : (
           <Group>
             {rows.map((r) => {
@@ -129,6 +139,7 @@ export default function BudgetTab({ trip, navigation, onChange }) {
                   tone={r.cat.tone}
                   title={r.cat.label}
                   subtitle={subtitleOf(r)}
+                  subtitleLines={3}
                   right={<AmountCol main={m(value)} local={different ? formatMoney(r.amount, local) : null} />}
                 >
                   <View style={styles.catBar}>
@@ -167,11 +178,10 @@ export default function BudgetTab({ trip, navigation, onChange }) {
 
       <BudgetGoalSheet
         visible={goalOpen}
-        current={hasBudget ? overview.target : null}
-        code={home}
+        trip={trip}
         onClose={() => setGoalOpen(false)}
-        onSave={async (value) => {
-          await updateTripSettings(trip.id, { budgetTotal: value });
+        onSave={async (value, entry) => {
+          await updateTripSettings(trip.id, { budgetTotal: value, budgetIn: entry });
           setGoalOpen(false);
           onChange();
         }}
@@ -185,23 +195,27 @@ function formatRate(rate) {
   return (Math.round(rate * 10000) / 10000).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 }
 
-// Set, change or remove the budget total (in the person's own currency).
-function BudgetGoalSheet({ visible, current, code, onClose, onSave }) {
+// Set, change or remove the budget total, written in the person's own currency or in the local one.
+function BudgetGoalSheet({ visible, trip, onClose, onSave }) {
+  const money = moneyOf(trip);
+  const current = budgetTypedOf(trip);
   const [amount, setAmount] = useState("");
+  const [entry, setEntry] = useState("home");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
     setAmount(current ? String(current).replace(".", ",") : "");
+    setEntry(budgetEntryOf(trip));
     setError("");
     setBusy(false);
-  }, [visible, current]);
+  }, [visible]);
 
   async function save(value) {
     setBusy(true);
     try {
-      await onSave(value);
+      await onSave(value, money.different ? entry : "home");
     } catch (e) {
       setError("Échec de l'enregistrement.");
       setBusy(false);
@@ -210,12 +224,20 @@ function BudgetGoalSheet({ visible, current, code, onClose, onSave }) {
 
   return (
     <Sheet visible={visible} onClose={onClose} title="Budget total">
-      <Field
-        label={`Pour tout le voyage (${code})`}
+      <MoneyField
+        label="Pour tout le voyage"
+        money={money}
+        entry={entry}
+        onEntryChange={(e) => {
+          setEntry(e);
+          setError("");
+        }}
         value={amount}
-        onChangeText={setAmount}
+        onChangeText={(v) => {
+          setAmount(v);
+          setError("");
+        }}
         placeholder="3000"
-        keyboardType="decimal-pad"
         hint="Ce qui reste = ce budget, moins ce qui est réservé, moins ce que vous dépensez."
         error={error || undefined}
       />

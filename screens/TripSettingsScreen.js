@@ -6,6 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { BUDGET_TYPES } from "../lib/constants";
 import { getTrip, updateTripSettings } from "../lib/trips";
+import { budgetEntryOf, budgetTypedOf, parseBudgetInput, retypeAmount } from "../lib/budget";
 import { reminderSettings, REMINDER_MINUTES } from "../lib/stepReminders";
 import { rateOfTheDay } from "../lib/rates";
 import { scheduleDailySummaries, scheduleDepartureReminder, requestNotificationPermission } from "../lib/notifications";
@@ -13,6 +14,7 @@ import { requestGeofencingPermissions, scheduleHotelProximityAlerts, stopHotelPr
 import { Txt, Button, Chip, Group, Row, SectionTitle, Field, ModalHeader } from "../components/ui";
 import { PickerField, CurrencyPickerModal, currencyLabel } from "../components/CurrencyPicker";
 import { InkSwatches } from "../components/InkSwatches";
+import CurrencySwitch from "../components/CurrencySwitch";
 import { inkNameOf } from "../lib/tripInk";
 
 const CATEGORY_LABELS = { transport: "Transport", hotel: "Hébergement", repas: "Repas" };
@@ -27,6 +29,8 @@ export default function TripSettingsScreen({ route, navigation }) {
   const [rateBusy, setRateBusy] = useState(false);
   const [rateNote, setRateNote] = useState("");
   const [targets, setTargets] = useState({ transport: "", hotel: "", repas: "" });
+  const [budgetTotal, setBudgetTotal] = useState(""); // the budget of the whole trip, as typed
+  const [budgetEntry, setBudgetEntry] = useState("home"); // the currency the budget is written in: "home" | "local"
   const [defaultLocation, setDefaultLocation] = useState("");
   const [emergency, setEmergency] = useState({ bloodType: "", allergies: "", contactName: "", contactPhone: "", embassy: "", notes: "" });
   const [ink, setInk] = useState("teal"); // the colour of the trip
@@ -65,6 +69,8 @@ export default function TripSettingsScreen({ route, navigation }) {
           hotel: t.budgetTargets?.hotel != null ? String(t.budgetTargets.hotel) : "",
           repas: t.budgetTargets?.repas != null ? String(t.budgetTargets.repas) : "",
         });
+        setBudgetTotal(budgetTypedOf(t) != null ? String(budgetTypedOf(t)).replace(".", ",") : "");
+        setBudgetEntry(budgetEntryOf(t));
         setStepRem(reminderSettings(t));
         setLoading(false);
         setGeofenceEnabled(await isHotelProximityActiveForTrip(tripId));
@@ -170,6 +176,8 @@ export default function TripSettingsScreen({ route, navigation }) {
         homeCurrency,
         rate: !isNaN(parsedRate) ? parsedRate : 1,
         budgetTargets,
+        budgetTotal: parseBudgetInput(budgetTotal), // empty: no budget
+        budgetIn: currency !== homeCurrency ? budgetEntry : "home",
         defaultLocation: defaultLocation.trim() || null,
         emergencyInfo: emergency,
         ink,
@@ -178,6 +186,17 @@ export default function TripSettingsScreen({ route, navigation }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  // The budget is written in one currency for the whole section; turning the switch shows every figure in the other one.
+  const parsedRate = parseFloat(String(rate).replace(",", "."));
+  const budgetCode = budgetEntry === "local" && currency !== homeCurrency ? currency : homeCurrency;
+  function switchBudgetEntry(next) {
+    if (next === budgetEntry) return;
+    const r = parsedRate > 0 ? parsedRate : 1;
+    setBudgetTotal((v) => retypeAmount(v, budgetEntry, next, r));
+    setTargets((t) => Object.fromEntries(Object.entries(t).map(([k, v]) => [k, retypeAmount(v, budgetEntry, next, r)])));
+    setBudgetEntry(next);
   }
 
   const cancel ={ label: "Annuler", onPress: () => navigation.goBack() };
@@ -258,20 +277,35 @@ export default function TripSettingsScreen({ route, navigation }) {
           ) : null}
         </Section>
 
-        <Section title="Objectifs de budget (optionnel)">
+        <Section title="Budget (optionnel)">
           <Txt variant="subhead" style={styles.intro}>
-            En {homeCurrency} — votre devise de référence, même si vos dépenses sont en {currency}. Laissez vide pour ne pas fixer de limite sur une catégorie.
+            Écrivez-le dans la devise que vous voulez{currency !== homeCurrency ? " : en " + homeCurrency + " ou en " + currency : ""}. Laissez vide pour ne pas fixer de limite.
           </Txt>
+          {currency !== homeCurrency ? (
+            <View style={styles.entryRow}>
+              <Txt variant="caption" color="inkMuted" style={{ flex: 1 }}>Montants écrits en</Txt>
+              <CurrencySwitch value={budgetEntry} onChange={switchBudgetEntry} local={currency} home={homeCurrency} />
+            </View>
+          ) : null}
+          <Field
+            label="Budget total du voyage"
+            value={budgetTotal}
+            onChangeText={setBudgetTotal}
+            keyboardType="decimal-pad"
+            placeholder="Pas de budget"
+            inputStyle={styles.numericInput}
+            right={<Text style={type.numeralSmall}>{budgetCode}</Text>}
+          />
           {BUDGET_TYPES.map((key, i) => (
             <Field
               key={key}
-              label={CATEGORY_LABELS[key]}
+              label={`${CATEGORY_LABELS[key]} — objectif`}
               value={targets[key]}
               onChangeText={(v) => setTargets((t) => ({ ...t, [key]: v }))}
               keyboardType="decimal-pad"
               placeholder="Pas de limite"
               inputStyle={styles.numericInput}
-              right={<Text style={type.numeralSmall}>{homeCurrency}</Text>}
+              right={<Text style={type.numeralSmall}>{budgetCode}</Text>}
               style={i === BUDGET_TYPES.length - 1 ? styles.fieldTight : undefined}
             />
           ))}
@@ -417,4 +451,5 @@ const styles = themedStyles(() => ({
   numericInput: { ...type.numeral },
   rateRow: { flexDirection: "row", alignItems: "flex-end", gap: space.md },
   rateField: { flex: 1, marginBottom: 0 },
+  entryRow: { flexDirection: "row", alignItems: "center", gap: space.md, marginBottom: space.lg },
 }));
