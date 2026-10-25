@@ -143,6 +143,31 @@ export default function ProgrammeTab({ trip, navigation, onChange, onOpenTab, on
     <ScrollView contentContainerStyle={MAIN} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <PageHead title="Programme" sub={sub} right={<TopButton icon="ellipsis-horizontal" label="Plus d'actions pour ce voyage" plain onPress={() => setMenuOpen(true)} style={{ marginRight: -8 }} />} />
 
+      {!isPark ? (
+        <Section title="Ajouter une idée">
+          <Group>
+            <Row
+              icon="link-outline"
+              tone={ink.name}
+              title="Importer un lien TikTok ou YouTube"
+              subtitle="Copiez le lien de la vidéo, puis touchez ici."
+              accessibilityLabel="Importer un lien TikTok ou YouTube. Copiez d'abord le lien de la vidéo : le lieu et son adresse sont lus."
+              onPress={() => navigation.navigate("ImportIdeas", { tripId: trip.id, autoPaste: true })}
+              chevron
+              style={{ minHeight: 68 }}
+            />
+            <Row
+              icon="create-outline"
+              title="Écrire une idée"
+              subtitle="Un lieu, un resto, une activité à noter."
+              onPress={() => navigation.navigate("IdeaEditor", { tripId: trip.id })}
+              chevron
+              style={{ minHeight: 68 }}
+            />
+          </Group>
+        </Section>
+      ) : null}
+
       {trip.days.length >= 6 && !isPark ? (
         <Field placeholder="Rechercher un jour, une étape…" value={query} onChangeText={setQuery} style={{ marginBottom: 0 }} accessibilityLabel="Rechercher" left={<Icon name="search" size={18} color={THEME.inkFaint} style={{ marginRight: space.sm }} />} />
       ) : null}
@@ -185,8 +210,14 @@ export default function ProgrammeTab({ trip, navigation, onChange, onOpenTab, on
         )}
       </Section>
 
-      {!isPark ? (
-        <Section title="Idées à placer" count={loose.length || null} action={(trip.ideas || []).length > 0 ? { label: "Tout voir", onPress: () => navigation.navigate("Ideas", { tripId: trip.id }) } : undefined}>
+      {isPark ? (
+        <Section title="Attractions">
+          <Group>
+            <Row icon="rocket-outline" tone={ink.name} title="Attractions du parc" subtitle="Ce qui vous fait envie, les temps d'attente" onPress={() => navigation.navigate("Attractions", { tripId: trip.id })} chevron />
+          </Group>
+        </Section>
+      ) : (trip.ideas || []).length > 0 ? (
+        <Section title="Idées à placer" count={loose.length || null} action={{ label: "Tout voir", onPress: () => navigation.navigate("Ideas", { tripId: trip.id }) }}>
           <Group>
             {shownIdeas.map((idea) => {
               const cat = getIdeaCategory(trip, idea.categoryId);
@@ -201,28 +232,15 @@ export default function ProgrammeTab({ trip, navigation, onChange, onOpenTab, on
                 />
               );
             })}
-            <Row
-              lead={
-                <View style={styles.dashTile}>
-                  <Icon name="add" size={24} color={THEME.inkMuted} />
-                </View>
-              }
-              title="Ajouter une idée"
-              subtitle="Un lieu, un lien, une adresse"
-              onPress={() => navigation.navigate("IdeaEditor", { tripId: trip.id })}
-            />
+            {loose.length === 0 ? (
+              <Row icon="checkmark-circle-outline" tone="teal" title="Tout est placé" subtitle="Voir le carnet d'idées" onPress={() => navigation.navigate("Ideas", { tripId: trip.id })} chevron />
+            ) : null}
             {loose.length > shownIdeas.length ? (
               <Row title={`Voir les ${loose.length} idées à placer`} onPress={() => navigation.navigate("Ideas", { tripId: trip.id })} chevron style={{ minHeight: 58 }} />
             ) : null}
           </Group>
         </Section>
-      ) : (
-        <Section title="Attractions">
-          <Group>
-            <Row icon="rocket-outline" tone={ink.name} title="Attractions du parc" subtitle="Ce qui vous fait envie, les temps d'attente" onPress={() => navigation.navigate("Attractions", { tripId: trip.id })} chevron />
-          </Group>
-        </Section>
-      )}
+      ) : null}
 
       <DayPickerModal
         visible={!!pickerIdea}

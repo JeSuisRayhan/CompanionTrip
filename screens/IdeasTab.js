@@ -97,7 +97,7 @@ export default function IdeasTab({ trip, navigation, onChange }) {
     ]);
   }
 
-  // With ideas, Importer and Hôtels sit in the "…" menu; the empty state shows them as buttons.
+  // With ideas, Importer is a button next to "Ajouter une idée" and Hôtels sits in the "…" menu; the empty state shows both as buttons.
   const openHotels = () => navigation.navigate("Hotels", { tripId: trip.id });
   const openImport = () => navigation.navigate("ImportIdeas", { tripId: trip.id });
   const hotelsButton = <Button title={`Hôtels${staysCount ? ` (${staysCount})` : ""}`} icon="bed-outline" variant="ghost" size="sm" style={styles.selfCenter} onPress={openHotels} />;
@@ -109,7 +109,8 @@ export default function IdeasTab({ trip, navigation, onChange }) {
       {ideas.length > 0 && (
         <>
           <View style={styles.actionRow}>
-            <Button title="Ajouter une idée" icon="add" onPress={() => openEditor(undefined)} style={styles.flex} />
+            <Button title="Ajouter" icon="add" accessibilityLabel="Ajouter une idée" onPress={() => openEditor(undefined)} style={styles.flex} />
+            <Button title="Importer" icon="download-outline" variant="secondary" accessibilityLabel="Importer des idées depuis un lien TikTok ou YouTube, ou un texte" onPress={openImport} style={styles.flex} />
             <IconButton icon="ellipsis-horizontal" label="Plus d'actions" filled size={20} onPress={() => setMenuOpen(true)} />
           </View>
           {canGenerate && (
@@ -233,7 +234,6 @@ export default function IdeasTab({ trip, navigation, onChange }) {
         onClose={() => setMenuOpen(false)}
         title="Plus d'actions"
         actions={[
-          { icon: "download-outline", title: "Importer des idées", subtitle: "Depuis un lien ou un texte", onPress: openImport },
           { icon: "bed-outline", title: staysCount ? `Hôtels (${staysCount})` : "Hôtels", subtitle: "Ajouter ou modifier vos hôtels", onPress: openHotels },
           { icon: "map-outline", title: "Voir les idées sur la carte", onPress: () => navigation.navigate("TripMap", { tripId: trip.id }) },
         ]}

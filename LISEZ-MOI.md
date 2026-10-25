@@ -127,8 +127,9 @@ Depuis une autre appli : **Partager → Compagnon de voyage**. L'app demande pou
 quel voyage (rien à choisir s'il n'y en a qu'un), puis :
 
 - **Un lien ou un lieu** (TikTok, YouTube, Google Maps, navigateur) : ouvre
-  l'import d'idées avec le lien déjà en place, il ne reste qu'à appuyer sur
-  **Analyser** et à cocher les lieux reconnus.
+  l'import d'idées, qui lit le lien tout de suite (légende TikTok et lieu
+  indiqué sur la vidéo, description YouTube, adresses comprises). Il ne reste
+  qu'à cocher les lieux reconnus.
 - **Une réservation** (le texte d'un mail de confirmation, une capture d'écran,
   un PDF ou plusieurs captures) : ouvre « Réservation » qui la lit tout de
   suite et propose les étapes (vol, train, bus, bateau, hôtel…) à cocher avant de
@@ -192,6 +193,24 @@ APK** (la version de l'app est passée à `1.1.0` pour cette raison). Les mises 
 jour publiées avec cette version ne vont qu'aux APK `1.1.0` ; l'ancien APK
 continue de recevoir celles de la version `1.0.0`. Dans un ancien APK, lire une
 capture ou un PDF affiche « installez la dernière version » au lieu de planter.
+
+## Importer des idées (TikTok, YouTube, texte)
+
+Depuis l'onglet **Programme** (bloc **Ajouter une idée**, tout en haut) ou
+l'écran **Idées** (bouton **Importer**). Copiez le lien de la vidéo, touchez
+**Importer un lien TikTok ou YouTube** : le lien copié est collé et lu seul.
+Tout est lu **sur le téléphone, sans IA et sans clé**.
+
+- Les pages sont lues comme le ferait un navigateur : la légende et le lieu
+  indiqué sur TikTok, la description complète sur YouTube. Si un service refuse
+  ou change de forme, l'écran le dit et propose de coller la description à la
+  place (Instagram ne peut jamais être lu).
+- Les adresses écrites dans le texte sont repérées (rue + numéro + ville, codes
+  postaux, adresses japonaises, liens Google Maps) et rattachées au nom du lieu :
+  la recherche de position s'en sert et l'adresse reste sur l'idée.
+- On peut aussi coller une liste (un lieu par ligne, ou 📍 devant chaque lieu),
+  des chapitres de vidéo (« 01:20 Fushimi Inari ») ou une description entière.
+  Rien n'est ajouté avant que vous ayez coché ce qui est juste.
 
 ## Vérification avant chaque build
 

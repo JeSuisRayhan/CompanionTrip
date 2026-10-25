@@ -51,7 +51,7 @@ function Choices({ label, children }) {
 }
 
 export default function IdeaEditorScreen({ route, navigation }) {
-  const { tripId, ideaId, categoryId: initialCategoryId } = route.params;
+  const { tripId, ideaId, categoryId: initialCategoryId, prefill } = route.params; // prefill: { name, address, city, sourceUrl, note } of a new idea
 
   const [trip, setTrip] = useState(null);
   const [name, setName] = useState("");
@@ -110,12 +110,20 @@ export default function IdeaEditorScreen({ route, navigation }) {
         const cat = getIdeaCategory(t, initialCategoryId || "activite");
         setCategoryId(cat.id);
         setDurationMin(cat.durationMin);
+        if (prefill) {
+          if (prefill.name) setName(prefill.name);
+          if (prefill.address) setAddress(prefill.address);
+          if (prefill.city) setCity(prefill.city);
+          if (prefill.sourceUrl) setSourceUrl(prefill.sourceUrl);
+          if (prefill.note) setNote(prefill.note);
+          setMoreOpen(!!(prefill.sourceUrl || prefill.note));
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [tripId, ideaId, reopenPriceEntry]);
+  }, [tripId, ideaId, reopenPriceEntry, prefill]);
 
   // Coming back from the Hôtels screen (a stay may have just been created from
   // this idea): refresh the trip only, never the form fields being edited.
