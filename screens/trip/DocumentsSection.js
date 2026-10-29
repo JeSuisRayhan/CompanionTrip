@@ -1,15 +1,16 @@
 // "Documents": the tickets, bookings and plans of a trip: a flat list, the way to add one (photo, scan, PDF),
 // and the viewer. Also takes the tickets that come back from the scanner or from a day.
 import React, { useState, useEffect } from "react";
-import { View, Text, Pressable, Alert, Image, Modal } from "react-native";
+import { View, Text, Alert, Image } from "react-native";
 import Icon from "../../components/Icon";
 import { THEME, space, type, themedStyles } from "../../lib/theme";
 import { setDayType } from "../../lib/trips";
 import { resolveDayDate, formatDateLabel } from "../../lib/dates";
 import { decodeBoardingPass, resolveJulianDate } from "../../lib/boardingPass";
 import { pickImage, pickPdfFile, openDocumentFile, isPdfDoc, addDocument, removeDocument, setDocumentCategory, DOCUMENT_CATEGORIES, documentCategory, suggestDocumentCategory } from "../../lib/documents";
-import { Button, IconButton, Chip, Group, Row, Thumb, Field, Sheet, ActionSheet, round } from "../../components/ui";
+import { Button, Chip, Group, Row, Thumb, Field, Sheet, ActionSheet, round } from "../../components/ui";
 import { Section } from "../../components/mix";
+import PhotoViewer from "../../components/PhotoViewer";
 
 export default function DocumentsSection({ trip, onChange, navigation, incomingScan, onConsumeIncomingScan, incomingAction, onConsumeIncomingAction }) {
   const [pendingUri, setPendingUri] = useState(null);
@@ -18,7 +19,7 @@ export default function DocumentsSection({ trip, onChange, navigation, incomingS
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [viewingDoc, setViewingDoc] = useState(null);
+  const [viewer, setViewer] = useState(null); // { items, index } while a photo is open: the other photos are a swipe away
   const [forDayId, setForDayId] = useState(null); // the flight or train day a ticket is being added for
   const [chosenCategory, setChosenCategory] = useState(null); // set once the person picks a drawer; until then it follows the best guess
   const [openCats, setOpenCats] = useState({}); // drawer key → opened or closed by hand
@@ -27,6 +28,8 @@ export default function DocumentsSection({ trip, onChange, navigation, incomingS
   const byCategory = {};
   for (const c of DOCUMENT_CATEGORIES) byCategory[c.key] = [];
   for (const d of docs) byCategory[documentCategory(d)].push(d);
+  // Every document in one list, the drawers' order (tickets first).
+  const ordered = DOCUMENT_CATEGORIES.flatMap((c) => byCategory[c.key]);
   const category = chosenCategory || suggestDocumentCategory(trip, { title, scannedCode: pendingScannedCode, dayId: forDayId });
   // A drawer with documents is open; with none at all, the first one is, to say what goes there.
   const isOpen = (key) => (openCats[key] !== undefined ? openCats[key] : byCategory[key].length > 0 || (docs.length === 0 && key === DOCUMENT_CATEGORIES[0].key));
@@ -103,9 +106,12 @@ export default function DocumentsSection({ trip, onChange, navigation, incomingS
     onConsumeIncomingAction();
   }, [incomingAction]);
 
-  // A photo opens in the viewer; a PDF goes to the phone's own readers.
+  // A photo opens in the viewer, among the other photos of the list (a swipe goes to the next one); a PDF goes to the phone's own readers.
   function openDoc(doc) {
-    if (!isPdfDoc(doc)) return setViewingDoc(doc);
+    if (!isPdfDoc(doc)) {
+      const photos = ordered.filter((d) => !isPdfDoc(d));
+      return setViewer({ items: photos, index: Math.max(0, photos.findIndex((d) => d.id === doc.id)) });
+    }
     openDocumentFile(doc).catch(() => setError("Impossible d'ouvrir ce PDF depuis l'application."));
   }
 
@@ -183,8 +189,7 @@ export default function DocumentsSection({ trip, onChange, navigation, incomingS
   }
 
 
-  // Every document in one list, the drawers' order (tickets first), a tint per kind.
-  const ordered = DOCUMENT_CATEGORIES.flatMap((c) => byCategory[c.key]);
+  // A tint per kind.
   const catOf = (doc) => DOCUMENT_CATEGORIES.find((c) => c.key === documentCategory(doc)) || DOCUMENT_CATEGORIES[0];
   const dayTitleOf = (doc) => {
     const day = doc.dayId ? trip.days.find((d) => d.id === doc.dayId) : null;
@@ -290,23 +295,21 @@ export default function DocumentsSection({ trip, onChange, navigation, incomingS
         </Group>
       </Sheet>
 
-      <Modal visible={!!viewingDoc} transparent animationType="fade" onRequestClose={() => setViewingDoc(null)}>
-        <Pressable style={styles.viewerOverlay} onPress={() => setViewingDoc(null)} accessibilityLabel="Fermer le document">
-          {viewingDoc && <Image source={{ uri: viewingDoc.uri }} style={styles.viewerImage} resizeMode="contain" />}
-          {viewingDoc?.scannedCode && (
-            <View style={[styles.scannedCodeBadge, { position: "absolute", bottom: 90, left: 20, right: 20 }]}>
+      <PhotoViewer
+        viewer={viewer}
+        onClose={() => setViewer(null)}
+        renderTitle={(doc) => doc.title}
+        renderFooter={(doc) =>
+          doc.scannedCode ? (
+            <View style={[styles.scannedCodeBadge, { flex: 1, marginTop: 0 }]}>
               <Icon name="qr-code-outline" size={14} color={THEME.teal} />
               <Text style={styles.scannedCodeText} numberOfLines={1}>
-                {viewingDoc.scannedCode}
+                {doc.scannedCode}
               </Text>
             </View>
-          )}
-          <View style={styles.viewerTitleBar}>
-            <Text style={[type.label, { flex: 1 }]}>{viewingDoc?.title}</Text>
-            <IconButton icon="close" label="Fermer" size={24} onPress={() => setViewingDoc(null)} tone="neutral" />
-          </View>
-        </Pressable>
-      </Modal>
+          ) : null
+        }
+      />
 
       <Sheet visible={!!pendingUri} onClose={closePending} title="Nouveau document">
         {pendingUri && pendingKind === "pdf" ? (
@@ -357,7 +360,4 @@ const styles = themedStyles(() => ({
   pdfPreview: { width: "100%", height: 120, backgroundColor: THEME.bgCardAlt, alignItems: "center", justifyContent: "center", gap: space.sm },
   scannedCodeBadge: { flexDirection: "row", alignItems: "center", gap: space.sm, backgroundColor: THEME.tealDim, borderRadius: 8, paddingHorizontal: space.md, paddingVertical: space.sm, marginTop: space.md },
   scannedCodeText: { ...type.numeralSmall, color: THEME.teal, flex: 1 },
-  viewerOverlay: { flex: 1, backgroundColor: "#000000EE", alignItems: "center", justifyContent: "center" },
-  viewerImage: { width: "100%", height: "80%" },
-  viewerTitleBar: { position: "absolute", top: 50, left: 0, right: 0, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 20 },
 }));

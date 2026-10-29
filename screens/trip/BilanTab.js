@@ -2,7 +2,7 @@
 // days since the return, the trip in figures on a departure board, the budget against what was planned, the notes of
 // the evenings and the photos kept of it.
 import React, { useState } from "react";
-import { View, Text, ScrollView, Pressable, Image, Modal, Share, Alert, Dimensions } from "react-native";
+import { View, Text, ScrollView, Pressable, Image, Share, Alert, Dimensions } from "react-native";
 import { THEME, TONES, FONTS, layout, type, themedStyles, paperEdge, withAlpha } from "../../lib/theme";
 import { isoDate, tripRange, tripStatus, formatTicketDates, formatLongDay, diffDaysISO } from "../../lib/dates";
 import { todayPlan } from "../../lib/today";
@@ -11,10 +11,11 @@ import { journalEntries } from "../../lib/journal";
 import { budgetOverview, expensesByCategory, reservedByCategory, plannedByCategory, reservedTotal, expensesTotal, EXPENSE_CATEGORIES, formatMoney, formatFigure, currencySymbol } from "../../lib/budget";
 import { souvenirsOf, souvenirsLeft, pickSouvenirs, addSouvenirs, removeSouvenir, MAX_SOUVENIRS } from "../../lib/souvenirs";
 import { useTripInk } from "../../lib/tripInk";
-import { Stamp, Button, IconButton, Group, Row, round } from "../../components/ui";
+import { Stamp, Button, Group, Row, round } from "../../components/ui";
 import { Section, Perforation, DayNum, SplitBar, MAIN } from "../../components/mix";
 import Flip, { Plate } from "../../components/Flip";
 import TripCover from "../../components/TripCover";
+import PhotoViewer from "../../components/PhotoViewer";
 
 const CATEGORY_ORDER = ["hotel", "transport", "repas", "other"];
 const COLUMNS = 3;
@@ -48,7 +49,7 @@ export default function BilanTab({ trip, navigation, onChange }) {
   const ink = useTripInk();
   const today = isoDate(new Date());
   const [busy, setBusy] = useState(false);
-  const [viewing, setViewing] = useState(null);
+  const [viewing, setViewing] = useState(null); // { items, index } while a photo is open: the others are a swipe away
 
   const status = tripStatus(trip, today);
   const recap = tripRecap(trip);
@@ -243,7 +244,7 @@ export default function BilanTab({ trip, navigation, onChange }) {
             {photos.map((p, i) => (
               <Pressable
                 key={p.id}
-                onPress={() => setViewing(p)}
+                onPress={() => setViewing({ items: photos, index: i })}
                 accessibilityRole="button"
                 accessibilityLabel={`Photo souvenir ${i + 1} sur ${photos.length}`}
                 style={({ pressed }) => [styles.print, { width: tile, transform: [{ rotate: `${TURNS[i % TURNS.length]}deg` }] }, pressed && { opacity: 0.85 }]}
@@ -263,15 +264,11 @@ export default function BilanTab({ trip, navigation, onChange }) {
 
       <Button title="Partager le bilan" icon="share-outline" size="lg" full onPress={share} />
 
-      <Modal visible={!!viewing} transparent animationType="fade" onRequestClose={() => setViewing(null)}>
-        <Pressable style={styles.viewer} onPress={() => setViewing(null)} accessibilityLabel="Fermer la photo">
-          {viewing ? <Image source={{ uri: viewing.uri }} style={styles.viewerImage} resizeMode="contain" /> : null}
-          <View style={styles.viewerBar}>
-            <Button title="Supprimer" icon="trash-outline" variant="danger" size="sm" onPress={() => viewing && confirmRemove(viewing)} accessibilityLabel="Supprimer cette photo" />
-            <IconButton icon="close" label="Fermer" size={24} onPress={() => setViewing(null)} tone="neutral" />
-          </View>
-        </Pressable>
-      </Modal>
+      <PhotoViewer
+        viewer={viewing}
+        onClose={() => setViewing(null)}
+        renderFooter={(photo) => <Button title="Supprimer" icon="trash-outline" variant="danger" size="sm" onPress={() => confirmRemove(photo)} accessibilityLabel="Supprimer cette photo" />}
+      />
     </ScrollView>
   );
 }
@@ -307,8 +304,4 @@ const styles = themedStyles(() => ({
   print: { backgroundColor: "#FFFDF8", paddingTop: 6, paddingHorizontal: 6, paddingBottom: 14, borderRadius: 3, borderWidth: 1, borderColor: THEME.border, boxShadow: "0 1px 1px rgba(70, 48, 16, 0.06), 0 6px 14px -8px rgba(70, 48, 16, 0.24)" },
   tape: { position: "absolute", top: -9, left: "50%", width: 40, height: 15, marginLeft: -20, backgroundColor: "rgba(240, 181, 58, 0.6)", zIndex: 2 },
   photoButtons: { flexDirection: "row", gap: 10 },
-
-  viewer: { flex: 1, backgroundColor: "#000000EE", alignItems: "center", justifyContent: "center" },
-  viewerImage: { width: "100%", height: "80%" },
-  viewerBar: { position: "absolute", left: 16, right: 16, bottom: 24, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
 }));
