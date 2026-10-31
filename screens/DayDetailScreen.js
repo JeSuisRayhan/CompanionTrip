@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useContext, useRef } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking, Alert, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Linking, Alert, Platform, Image } from "react-native";
 import { SafeAreaView, SafeAreaInsetsContext } from "react-native-safe-area-context";
 import Icon from "../components/Icon";
 import { Swipeable } from "react-native-gesture-handler";
@@ -9,7 +9,8 @@ import { THEME, FONTS, space, layout, radius, type, themedStyles, paperEdge } fr
 import { TYPES } from "../lib/constants";
 import { scopedId } from "../lib/parkDay";
 import { splitTitlePlace } from "../lib/script";
-import { directionsUrl } from "../lib/map";
+import { directionsUrl, buildMapModel, stepPlaceName } from "../lib/map";
+import { usePlacePhoto } from "../lib/placePhotos";
 import { driverCard } from "../lib/driverCard";
 import { isPdfDoc } from "../lib/documents";
 import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal, deleteDay, deleteDayMessage, duplicateDay } from "../lib/trips";
@@ -31,6 +32,7 @@ import DayDoneStamp from "../components/DayDoneStamp";
 import WaitBadge from "../components/WaitBadge";
 import QueueTimesCredit from "../components/QueueTimesCredit";
 import LegSheet from "../components/LegSheet";
+import TileMap from "../components/TileMap";
 import { Txt, Button, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
 import { TripTopBar, TopButton, DayChip, StepDot, DotLine, Tag } from "../components/mix";
 
@@ -90,6 +92,8 @@ export default function DayDetailScreen({ route, navigation }) {
   const [journalOpen, setJournalOpen] = useState(false); // the note du soir
   const [dayDone, setDayDone] = useState(false); // "Journée faite" is showing
   const [legFor, setLegFor] = useState(null); // id of the step whose way (price of the trip to it) is being edited
+  const [photoIds, setPhotoIds] = useState({}); // steps showing a Wikipedia photo (for the credit under the day)
+  const onPhoto = useCallback((id, has) => setPhotoIds((m) => (!!m[id] === has ? m : { ...m, [id]: has })), []);
   const insets = useContext(SafeAreaInsetsContext);
 
   const refresh = useCallback(async () => {
@@ -163,7 +167,34 @@ export default function DayDetailScreen({ route, navigation }) {
     return a.time.localeCompare(b.time);
   });
   // how far each step is from the one before it (not on a park day: the park has its own walking times)
-  const legs = trip.tripType === "park" || day.dayType === "park" ? null : dayLegs(trip, sorted);
+  const isParkDay = trip.tripType === "park" || day.dayType === "park";
+  const legs = isParkDay ? null : dayLegs(trip, sorted);
+  // The day on a map: the steps with a position, numbered in the order of the day, the way between them.
+  // The same number sits on the step in the list.
+  const ideaOf = (a) => (a.ideaId ? (trip.ideas || []).find((i) => i.id === a.ideaId) || null : null);
+  const dayPins = [];
+  const pinOrder = new Map();
+  if (!isParkDay) {
+    const dayModel = buildMapModel(trip).days.find((d) => d.dayId === dayId);
+    sorted.forEach((a) => {
+      const pin = dayModel && dayModel.pins.find((p) => p.activityId === a.id);
+      if (!pin) return;
+      pinOrder.set(a.id, dayPins.length + 1);
+      dayPins.push({ ...pin, order: dayPins.length + 1 });
+    });
+  }
+  // What to look a photo up for: the place a step goes to (its idea's name when it comes from the notebook).
+  const city = (day.location || trip.defaultLocation || "").trim();
+  const photoQueryOf = (a) => {
+    if (isParkDay) return null;
+    const idea = ideaOf(a);
+    const name = idea && idea.name ? idea.name : stepPlaceName(a);
+    if (!name) return null;
+    const at = Number.isFinite(a.lat) && Number.isFinite(a.lng) ? a : idea && Number.isFinite(idea.lat) && Number.isFinite(idea.lng) ? idea : null;
+    return { name, city, ...(at ? { lat: at.lat, lng: at.lng } : {}) };
+  };
+  // Morning, afternoon, evening: the day in three parts once it has times (the steps without one come last).
+  const showParts = !isParkDay && sorted.length >= 2 && sorted.some((a) => a.time);
   // A shorter way between the steps that have no time, when there is one (offered under the list)
   const suggestion = proximityOrder(trip, day);
   const offer = suggestion && suggestion.changed ? suggestion : null;
@@ -325,6 +356,15 @@ export default function DayDetailScreen({ route, navigation }) {
             />
           ) : null}
 
+          {dayPins.length > 0 ? (
+            <DayMapCard
+              pins={dayPins}
+              fitKey={`${dayId}:${dayPins.map((p) => p.id).join(",")}`}
+              missing={sorted.filter((a) => a.type !== "transport" && !pinOrder.has(a.id)).length}
+              onOpen={() => navigation.navigate("TripMap", { tripId, dayId })}
+            />
+          ) : null}
+
           <View style={styles.titleBlock}>
             {date ? <Text style={type.subhead}>{formatFullDate(date)}</Text> : null}
             <Text style={type.display} numberOfLines={2} accessibilityRole="header">{day.title}</Text>
@@ -338,7 +378,7 @@ export default function DayDetailScreen({ route, navigation }) {
                 accessibilityLabel={location ? `Lieu du jour : ${location}. Modifier` : "Ajouter un lieu pour ce jour"}
                 style={styles.locationChip}
               />
-              {hasMapPin ? <Chip icon="map-outline" label="Carte" onPress={() => navigation.navigate("TripMap", { tripId, dayId })} accessibilityLabel="Voir le jour sur la carte" /> : null}
+              {hasMapPin && dayPins.length === 0 ? <Chip icon="map-outline" label="Carte" onPress={() => navigation.navigate("TripMap", { tripId, dayId })} accessibilityLabel="Voir le jour sur la carte" /> : null}
             </View>
           </View>
 
@@ -371,29 +411,36 @@ export default function DayDetailScreen({ route, navigation }) {
             <View style={styles.timeline}>
               {sorted.map((a, i) => {
                 const following = sorted[i + 1];
+                const part = showParts ? partOf(a.time) : null;
+                const newPart = !!part && (i === 0 || partOf(sorted[i - 1].time).key !== part.key);
                 return (
-                  <StepRow
-                    key={a.id}
-                    activity={a}
-                    trip={trip}
-                    idea={parkIdeaOf(a)}
-                    ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
-                    isCurrent={i === firstUndoneIndex}
-                    living={living}
-                    last={i === sorted.length - 1}
-                    home={home}
-                    rate={rate}
-                    sameCurrency={sameCurrency}
-                    nextLeg={legs && following && !following.done ? legs.get(following.id) || null : null}
-                    nextTime={following ? following.time : null}
-                    nextName={following ? splitTitlePlace(following.title).title : ""}
-                    onLeg={() => following && setLegFor(following.id)}
-                    onToggleDone={() => onToggleDone(a.id)}
-                    onBook={() => onBook(a)}
-                    onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
-                    onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
-                    onDeleteWithUndo={() => onDeleteWithUndo(a)}
-                  />
+                  <React.Fragment key={a.id}>
+                    {newPart ? <PartHeader part={part} first={i === 0} /> : null}
+                    <StepRow
+                      activity={a}
+                      trip={trip}
+                      idea={parkIdeaOf(a)}
+                      ride={live && parkIdeaOf(a) && parkIdeaOf(a).qtId != null ? live.get(parkIdeaOf(a).qtId) : null}
+                      isCurrent={i === firstUndoneIndex}
+                      living={living}
+                      last={i === sorted.length - 1}
+                      home={home}
+                      rate={rate}
+                      sameCurrency={sameCurrency}
+                      nextLeg={legs && following && !following.done ? legs.get(following.id) || null : null}
+                      nextTime={following ? following.time : null}
+                      nextName={following ? splitTitlePlace(following.title).title : ""}
+                      onLeg={() => following && setLegFor(following.id)}
+                      onToggleDone={() => onToggleDone(a.id)}
+                      onBook={() => onBook(a)}
+                      onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
+                      onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
+                      onDeleteWithUndo={() => onDeleteWithUndo(a)}
+                      order={pinOrder.get(a.id) || null}
+                      photoQuery={photoQueryOf(a)}
+                      onPhoto={onPhoto}
+                    />
+                  </React.Fragment>
                 );
               })}
             </View>
@@ -432,6 +479,7 @@ export default function DayDetailScreen({ route, navigation }) {
             </Group>
           ) : null}
           {live && sorted.length > 0 ? <QueueTimesCredit /> : null}
+          {sorted.some((a) => photoIds[a.id]) ? <Text style={[type.caption, styles.photoCredit]}>Photos des lieux : Wikipédia</Text> : null}
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: Math.max(insets ? insets.bottom : 0, 12) }]}>
@@ -547,9 +595,14 @@ const WAIT_NOTE = /^Attente estimée : (\d+) min$/;
 
 // One step of the day on the timeline: its hour, the node that ticks it, then its name with what matters under it (its
 // place, its note, its price, what is left to book) and the way to the next step. Swipe the body to delete it.
-function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, rate, sameCurrency, nextLeg, nextTime, nextName, onLeg, onToggleDone, onBook, onPress, onShowDriver, onDeleteWithUndo }) {
+function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, rate, sameCurrency, nextLeg, nextTime, nextName, onLeg, onToggleDone, onBook, onPress, onShowDriver, onDeleteWithUndo, order, photoQuery, onPhoto }) {
   const ink = useTripInk();
   const done = !!activity.done;
+  const photo = usePlacePhoto(photoQuery);
+  const hasPhoto = !!photo;
+  useEffect(() => {
+    if (onPhoto) onPhoto(activity.id, hasPhoto);
+  }, [activity.id, hasPhoto, onPhoto]);
   const land = idea ? idea.land : null;
   const split = activity.address ? { title: activity.title, place: null } : splitTitlePlace(activity.title);
   const place = land || activity.address || split.place;
@@ -591,13 +644,26 @@ function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, ra
       >
         <View style={styles.stepBody}>
           <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} accessibilityHint="Modifier l'étape" style={({ pressed }) => [{ gap: 6 }, pressed && { opacity: 0.7 }]}>
-            <Text style={[styles.ttl, done && styles.ttlDone]}>{name}</Text>
-            {place ? (
-              <View style={styles.metaLine}>
-                <Icon name="location-outline" size={14} color={THEME.inkFaint} style={{ marginTop: 3 }} />
-                <Text style={[type.subhead, styles.metaText]} numberOfLines={2}>{place}</Text>
+            <View style={styles.stepHead}>
+              {photo ? (
+                <View style={styles.photoWrap}>
+                  <Image source={{ uri: photo.uri }} style={[styles.photo, done && { opacity: 0.45 }]} accessibilityIgnoresInvertColors />
+                  {order ? <MapNumber n={order} style={styles.photoNumber} /> : null}
+                </View>
+              ) : null}
+              <View style={styles.stepHeadText}>
+                <View style={styles.nameRow}>
+                  {!photo && order ? <MapNumber n={order} /> : null}
+                  <Text style={[styles.ttl, styles.flexText, done && styles.ttlDone]}>{name}</Text>
+                </View>
+                {place ? (
+                  <View style={styles.metaLine}>
+                    <Icon name="location-outline" size={14} color={THEME.inkFaint} style={{ marginTop: 3 }} />
+                    <Text style={[type.subhead, styles.metaText]} numberOfLines={2}>{place}</Text>
+                  </View>
+                ) : null}
               </View>
-            ) : null}
+            </View>
             {hasTags ? (
               <View style={styles.meta}>
                 {note ? <Text style={[type.subhead, styles.metaText]} numberOfLines={2}>{note}</Text> : null}
@@ -639,6 +705,61 @@ function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, ra
           {nextLeg ? <LegNote leg={nextLeg} toName={nextName} arriveAt={nextTime} advise={living && !done} price={priceOf(nextLeg, rate, home, sameCurrency)} onPress={onLeg} /> : null}
         </View>
       </Swipeable>
+    </View>
+  );
+}
+
+// The number of a step on the map of the day, the same gold disc as its pin.
+function MapNumber({ n, style }) {
+  return (
+    <View style={[styles.mapNumber, style]} accessible accessibilityLabel={`Numéro ${n} sur la carte`}>
+      <Text style={styles.mapNumberText}>{n}</Text>
+    </View>
+  );
+}
+
+// Morning before noon, afternoon until six, evening after; a step without a time is "sans heure".
+const PARTS = [
+  { key: "matin", label: "Matin", icon: "sunny-outline", until: "12:00" },
+  { key: "aprem", label: "Après-midi", icon: "partly-sunny-outline", until: "18:00" },
+  { key: "soir", label: "Soir", icon: "moon-outline", until: "99:99" },
+];
+const NO_TIME = { key: "libre", label: "Sans heure", icon: "time-outline" };
+function partOf(time) {
+  if (!time) return NO_TIME;
+  return PARTS.find((p) => time < p.until) || PARTS[PARTS.length - 1];
+}
+
+// The title of a part of the day, on the line of the timeline.
+function PartHeader({ part, first }) {
+  const ink = useTripInk();
+  return (
+    <View style={styles.partRow} accessibilityRole="header">
+      <View style={styles.partTime} />
+      <View style={styles.nodeCol}>{!first ? <DotLine color={ink.color} style={styles.partLine} /> : null}</View>
+      <View style={styles.partLabel}>
+        <Icon name={part.icon} size={16} color={THEME.gold} />
+        <Text style={styles.partText}>{part.label.toUpperCase()}</Text>
+      </View>
+    </View>
+  );
+}
+
+// The map of the day at the top: a picture of it (it scrolls with the page); a touch opens the full map.
+function DayMapCard({ pins, fitKey, missing, onOpen }) {
+  const label = `Carte du jour, ${pins.length} étape${pins.length > 1 ? "s" : ""}${missing > 0 ? `, ${missing} sans position` : ""}. Ouvrir la carte`;
+  return (
+    <View style={styles.dayMapBlock}>
+      <Pressable onPress={onOpen} accessibilityRole="button" accessibilityLabel={label} style={({ pressed }) => [styles.dayMap, round("xl"), pressed && { opacity: 0.9 }]}>
+        <TileMap pins={pins} route={pins} fitKey={fitKey} fitPadding={30} interactive={false} style={StyleSheet.absoluteFill} />
+        <View style={styles.dayMapOpen} pointerEvents="none">
+          <Icon name="expand-outline" size={16} color={THEME.ink} />
+          <Text style={[type.caption, { color: THEME.ink }]}>Agrandir</Text>
+        </View>
+      </Pressable>
+      {missing > 0 ? (
+        <Text style={type.caption}>{`${missing} étape${missing > 1 ? "s ne sont" : " n'est"} pas sur la carte : touchez la carte pour ${missing > 1 ? "les" : "la"} localiser.`}</Text>
+      ) : null}
     </View>
   );
 }
@@ -1003,6 +1124,24 @@ const styles = themedStyles(() => ({
 
   timeline: { marginTop: space.xs },
   stepRow: { flexDirection: "row", gap: 10 },
+  stepHead: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  stepHeadText: { flex: 1, minWidth: 0, gap: 6 },
+  nameRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  flexText: { flexShrink: 1 },
+  photoWrap: { width: 68, height: 68 },
+  photo: { width: 68, height: 68, borderRadius: 12, backgroundColor: THEME.bgCardAlt },
+  photoNumber: { position: "absolute", top: 5, left: 5, borderWidth: 2, borderColor: THEME.bg },
+  mapNumber: { minWidth: 24, height: 24, paddingHorizontal: 5, borderRadius: 12, backgroundColor: THEME.goldFill, alignItems: "center", justifyContent: "center", marginTop: 0 },
+  mapNumberText: { fontFamily: FONTS.monoSemi, fontSize: 13, lineHeight: 16, color: THEME.onGold },
+  partRow: { flexDirection: "row", gap: 10, minHeight: 34 },
+  partTime: { width: 54 },
+  partLine: { top: 0, bottom: 0 },
+  partLabel: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, paddingBottom: 10 },
+  partText: { fontFamily: FONTS.bodySemi, fontSize: 12, lineHeight: 16, letterSpacing: 1.4, color: THEME.inkMuted },
+  dayMapBlock: { gap: space.sm, marginBottom: space.lg },
+  dayMap: { height: 210, overflow: "hidden", backgroundColor: THEME.surfaceSunk },
+  dayMapOpen: { position: "absolute", bottom: 10, right: 10, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: THEME.veil },
+  photoCredit: { marginTop: space.md, color: THEME.inkFaint },
   time: { width: 54, fontFamily: FONTS.monoMed, fontSize: 17, lineHeight: 34, letterSpacing: -0.35, textAlign: "right", color: THEME.ink },
   nodeCol: { width: 34, alignItems: "center" },
   swipe: { flex: 1, minWidth: 0 },

@@ -76,7 +76,8 @@ function spreadOf(ts) {
   return ts.length < 2 ? 0 : Math.hypot(ts[0].pageX - ts[1].pageX, ts[0].pageY - ts[1].pageY);
 }
 
-export default function TileMap({ pins, route, selectedId, onSelect, fitKey, style }) {
+// interactive={false}: a picture of the map (no drag, no buttons, pins not tappable), e.g. inside a scrolling page.
+export default function TileMap({ pins, route, selectedId, onSelect, fitKey, style, interactive = true, routeColor, fitPadding }) {
   const [size, setSize] = useState(null);
   const [view, setView] = useState(WORLD);
   const viewRef = useRef(WORLD);
@@ -102,9 +103,9 @@ export default function TileMap({ pins, route, selectedId, onSelect, fitKey, sty
   useEffect(() => {
     if (!size || framedFor.current === fitKey) return;
     framedFor.current = fitKey;
-    const next = fitBounds(pinsRef.current, size);
+    const next = fitBounds(pinsRef.current, size, fitPadding ? { padding: fitPadding } : undefined);
     if (next) commit(next);
-  }, [size, fitKey, commit]);
+  }, [size, fitKey, commit, fitPadding]);
 
   // Centre on a pin when it gets selected.
   const lastSelected = useRef(null);
@@ -178,7 +179,7 @@ export default function TileMap({ pins, route, selectedId, onSelect, fitKey, sty
   const numbered = !!route && route.length > 0;
 
   return (
-    <View style={[styles.wrap, style]} onLayout={onLayout} {...responder.panHandlers}>
+    <View style={[styles.wrap, style]} onLayout={onLayout} pointerEvents={interactive ? "auto" : "none"} {...(interactive ? responder.panHandlers : {})}>
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {tiles.map((t) => (
           <Tile key={t.key} tile={t} onGap={reportGap} />
@@ -191,7 +192,7 @@ export default function TileMap({ pins, route, selectedId, onSelect, fitKey, sty
       {line ? (
         <Svg width={size.width} height={size.height} style={StyleSheet.absoluteFill} pointerEvents="none">
           <Polyline points={line} fill="none" stroke={THEME.bg} strokeOpacity={0.55} strokeWidth={7} strokeLinejoin="round" strokeLinecap="round" />
-          <Polyline points={line} fill="none" stroke={THEME.gold} strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" />
+          <Polyline points={line} fill="none" stroke={routeColor || THEME.gold} strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round" />
         </Svg>
       ) : null}
 
@@ -199,24 +200,26 @@ export default function TileMap({ pins, route, selectedId, onSelect, fitKey, sty
         <Pin key={pin.id} pin={pin} x={x} y={y} numbered={numbered} selected={pin.id === selectedId} onPress={() => onSelect && onSelect(pin.id)} />
       ))}
 
-      <View style={styles.controls}>
-        <IconButton icon="add" label="Zoomer" filled size={22} disabled={view.zoom >= MAX_ZOOM - 0.01} style={styles.control} onPress={() => size && commit(zoomBy(viewRef.current, size, 1))} />
-        <IconButton icon="remove" label="Dézoomer" filled size={22} disabled={view.zoom <= MIN_ZOOM + 0.01} style={styles.control} onPress={() => size && commit(zoomBy(viewRef.current, size, -1))} />
-        <IconButton
-          icon="expand-outline"
-          label="Tout voir"
-          filled
-          size={20}
-          disabled={!pins.length}
-          style={styles.control}
-          onPress={() => {
-            const next = size && fitBounds(pins, size);
-            if (next) commit(next);
-          }}
-        />
-      </View>
+      {interactive ? (
+        <View style={styles.controls}>
+          <IconButton icon="add" label="Zoomer" filled size={22} disabled={view.zoom >= MAX_ZOOM - 0.01} style={styles.control} onPress={() => size && commit(zoomBy(viewRef.current, size, 1))} />
+          <IconButton icon="remove" label="Dézoomer" filled size={22} disabled={view.zoom <= MIN_ZOOM + 0.01} style={styles.control} onPress={() => size && commit(zoomBy(viewRef.current, size, -1))} />
+          <IconButton
+            icon="expand-outline"
+            label="Tout voir"
+            filled
+            size={20}
+            disabled={!pins.length}
+            style={styles.control}
+            onPress={() => {
+              const next = size && fitBounds(pins, size);
+              if (next) commit(next);
+            }}
+          />
+        </View>
+      ) : null}
 
-      {gapCount > 0 ? (
+      {gapCount > 0 && interactive ? (
         <View style={styles.gapNote} accessibilityLiveRegion="polite" pointerEvents="none">
           <Icon name="cloud-offline-outline" size={16} color={THEME.gold} />
           <Text style={styles.gapText}>Carte incomplète ici : pas de réseau, et cette zone n'a jamais été consultée.</Text>

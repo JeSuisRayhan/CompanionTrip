@@ -169,9 +169,9 @@ export function Tag({ icon, label, tone, mono, style, accessibilityLabel }) {
 
 // The dotted line from one node of a timeline to the next: drawn on its own (absolute) so it never makes the row taller.
 const DOT_COUNT = 40;
-export function DotLine({ color }) {
+export function DotLine({ color, style }) {
   return (
-    <View pointerEvents="none" style={styles.lineDots}>
+    <View pointerEvents="none" style={[styles.lineDots, style]}>
       {Array.from({ length: DOT_COUNT }).map((_, i) => (
         <View key={i} style={[styles.lineMark, { backgroundColor: color }]} />
       ))}
