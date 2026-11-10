@@ -13,7 +13,7 @@ import { Txt, Button, Badge, Group, Row, Field, EmptyState, ModalHeader, Progres
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many || one + "s"}`;
 const categoryOf = (id) => DEFAULT_IDEA_CATEGORIES.find((c) => c.id === id) || DEFAULT_IDEA_CATEGORIES[1];
 const toneOfCategory = (cat) => Object.keys(TONES).find((k) => TONES[k].fg === cat.color) || "neutral";
-const isVideoLink = (url) => sourceOf(url) === "tiktok" || sourceOf(url) === "youtube";
+const isVideoLink = (url) => ["tiktok", "youtube", "instagram"].includes(sourceOf(url));
 // What is copied, trimmed ("" when nothing is copied or the clipboard cannot be read).
 async function readClipboard() {
   const raw = await Clipboard.getStringAsync();
@@ -355,7 +355,7 @@ export default function ImportIdeasScreen({ route, navigation }) {
           <Group style={styles.help}>
             <Row icon="logo-tiktok" title="TikTok" subtitle="Le lien suffit : la légende et le lieu indiqué sur la vidéo sont lus." accessibilityLabel="TikTok : le lien suffit, la légende et le lieu indiqué sur la vidéo sont lus" />
             <Row icon="logo-youtube" tone="stamp" title="YouTube" subtitle="Le lien suffit : la description est lue, adresses comprises." accessibilityLabel="YouTube : le lien suffit, la description est lue, adresses comprises" />
-            <Row icon="logo-instagram" tone="pink" title="Instagram" subtitle="Le lien ne peut pas être lu : collez la description." accessibilityLabel="Instagram : le lien ne peut pas être lu, collez la description" />
+            <Row icon="logo-instagram" tone="pink" title="Instagram" subtitle="Le lien est lu quand Instagram le permet ; sinon, collez la description." accessibilityLabel="Instagram : le lien est lu quand Instagram le permet, sinon collez la description" />
           </Group>
           <Txt variant="caption" color="inkFaint" style={styles.note}>
             Si un lien ne peut pas être lu, collez plutôt sa description ou sa légende. Une adresse écrite à côté d'un nom (« Chez Paul, 12 rue des Martyrs, Paris ») sert à placer le lieu sur la carte. Une liste simple fonctionne aussi : un lieu par ligne.
