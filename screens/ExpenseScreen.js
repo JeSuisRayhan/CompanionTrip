@@ -6,6 +6,7 @@ import Icon from "../components/Icon";
 import { THEME, TONES, FONTS, space, layout, type, shadow, themedStyles } from "../lib/theme";
 import { getTrip, addExpense, updateExpense, removeExpense } from "../lib/trips";
 import { isoDate } from "../lib/dates";
+import DateField from "../components/DateField";
 import { EXPENSE_CATEGORIES, expenseCategory, formatMoney, currencySymbol, currencyName, moneyOf, effectiveEntry, keptFromTyped, retypeAmount, typedText } from "../lib/budget";
 import { tripInk, TripInkContext } from "../lib/tripInk";
 import { Button, Field } from "../components/ui";
@@ -38,6 +39,7 @@ export default function ExpenseScreen({ route, navigation }) {
   const [amount, setAmount] = useState("");
   const [label, setLabel] = useState("");
   const [category, setCategory] = useState("repas");
+  const [date, setDate] = useState(isoDate(new Date()));
   // the currency the amount is typed in ("local" | "home"): the way it was left last time, or the local one for a figure already known
   const [entry, chooseEntry] = useEntry(!!expenseId || !!(prefill && prefill.amount > 0));
   const [busy, setBusy] = useState(false);
@@ -51,6 +53,7 @@ export default function ExpenseScreen({ route, navigation }) {
       setAmount(typedText(e.amount));
       setLabel(e.label === "Dépense" ? "" : e.label);
       setCategory(expenseCategory(e));
+      if (e.date) setDate(e.date);
     } else if (prefill) {
       if (prefill.label) setLabel(prefill.label);
       if (prefill.category) setCategory(prefill.category);
@@ -89,8 +92,8 @@ export default function ExpenseScreen({ route, navigation }) {
     }
     setBusy(true);
     try {
-      if (expenseId) await updateExpense(trip.id, expenseId, { label, amount: keptAmount, category });
-      else await addExpense(trip.id, { label, amount: keptAmount, category, date: isoDate(new Date()), stepId: prefill && prefill.stepId });
+      if (expenseId) await updateExpense(trip.id, expenseId, { label, amount: keptAmount, category, date });
+      else await addExpense(trip.id, { label, amount: keptAmount, category, date, stepId: prefill && prefill.stepId });
       navigation.goBack();
     } catch (e) {
       setError("Échec de l'enregistrement.");
@@ -137,6 +140,8 @@ export default function ExpenseScreen({ route, navigation }) {
             {error ? <Text style={[type.caption, { color: THEME.stamp }]}>{error}</Text> : null}
 
             <Field label="Description · facultatif" value={label} onChangeText={setLabel} placeholder="Ex : ramen, taxi, souvenirs" style={{ marginBottom: 0 }} returnKeyType="done" />
+
+            <DateField label="Date de la dépense" value={date} onChange={(v) => setDate(v || isoDate(new Date()))} />
 
             <View style={styles.cats} accessibilityRole="radiogroup">
               {EXPENSE_CATEGORIES.map((c) => {

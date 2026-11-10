@@ -6,6 +6,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { THEME, space, layout, type, themedStyles } from "../lib/theme";
 import { BUDGET_TYPES } from "../lib/constants";
 import { getTrip, updateTripSettings } from "../lib/trips";
+import DateField from "../components/DateField";
 import { budgetEntryOf, budgetTypedOf, parseBudgetInput, retypeAmount } from "../lib/budget";
 import { reminderSettings, REMINDER_MINUTES } from "../lib/stepReminders";
 import { rateOfTheDay } from "../lib/rates";
@@ -34,6 +35,8 @@ export default function TripSettingsScreen({ route, navigation }) {
   const [defaultLocation, setDefaultLocation] = useState("");
   const [emergency, setEmergency] = useState({ bloodType: "", allergies: "", contactName: "", contactPhone: "", embassy: "", notes: "" });
   const [ink, setInk] = useState("teal"); // the colour of the trip
+  const [name, setName] = useState("");
+  const [startDate, setStartDate] = useState("");
   const [pickerFor, setPickerFor] = useState(null); // "local" | "home" | null
   const [saving, setSaving] = useState(false);
   const [remindersBusy, setRemindersBusy] = useState(false);
@@ -56,6 +59,8 @@ export default function TripSettingsScreen({ route, navigation }) {
         setRate(t.rate != null ? String(t.rate) : "1");
         setDefaultLocation(t.defaultLocation || "");
         setInk(inkNameOf(t));
+        setName(t.name || "");
+        setStartDate(t.startDate || "");
         setEmergency({
           bloodType: t.emergencyInfo?.bloodType || "",
           allergies: t.emergencyInfo?.allergies || "",
@@ -172,6 +177,8 @@ export default function TripSettingsScreen({ route, navigation }) {
         budgetTargets[key] = v && v.trim() ? parseFloat(v.replace(",", ".")) : null;
       }
       await updateTripSettings(tripId, {
+        name,
+        startDate: startDate || null,
         currency,
         homeCurrency,
         rate: !isNaN(parsedRate) ? parsedRate : 1,
@@ -223,6 +230,17 @@ export default function TripSettingsScreen({ route, navigation }) {
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
+        <Section title="Voyage">
+          <Field label="Nom du voyage" value={name} onChangeText={setName} placeholder="ex : Japon" style={styles.fieldTight} />
+          <DateField
+            label="Date de départ"
+            optional
+            value={startDate}
+            onChange={setStartDate}
+            hint="Changer la date décale tous les jours datés du même nombre de jours."
+          />
+        </Section>
+
         <Group>
           <Row
             icon="bed-outline"

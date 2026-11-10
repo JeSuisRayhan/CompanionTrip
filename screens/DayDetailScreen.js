@@ -13,7 +13,7 @@ import { directionsUrl, buildMapModel, stepPlaceName } from "../lib/map";
 import { usePlacePhoto } from "../lib/placePhotos";
 import { driverCard } from "../lib/driverCard";
 import { isPdfDoc } from "../lib/documents";
-import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal, deleteDay, deleteDayMessage, duplicateDay } from "../lib/trips";
+import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal, deleteDay, deleteDayMessage, duplicateDay, updateDayInfo, duplicateActivity, moveActivityToDay } from "../lib/trips";
 import { bookingOf, deadlineInfo } from "../lib/booking";
 import { resolveDayDate, formatFullDate, isoDate } from "../lib/dates";
 import { formatMoney, convertAmount, moneyOf } from "../lib/budget";
@@ -33,7 +33,9 @@ import WaitBadge from "../components/WaitBadge";
 import QueueTimesCredit from "../components/QueueTimesCredit";
 import LegSheet from "../components/LegSheet";
 import TileMap from "../components/TileMap";
-import { Txt, Button, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, round } from "../components/ui";
+import DayPickerModal from "../components/DayPickerModal";
+import DateField from "../components/DateField";
+import { Txt, Button, Chip, Badge, Surface, Field, Group, Row, Thumb, SectionTitle, ProgressBar, EmptyState, Sheet, ActionSheet, round } from "../components/ui";
 import { TripTopBar, TopButton, DayChip, StepDot, DotLine, Tag } from "../components/mix";
 
 
@@ -87,6 +89,9 @@ export default function DayDetailScreen({ route, navigation }) {
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [flightOpen, setFlightOpen] = useState(false);
+  const [stepMenu, setStepMenu] = useState(null); // the step whose menu is open (long press)
+  const [movePick, setMovePick] = useState(null); // the step being moved to another day
+  const [infoOpen, setInfoOpen] = useState(false); // rename the day / change its date
   const [toast, setToast] = useState({ visible: false, message: "", undoActivity: null, undoOrder: null });
   const [orderOpen, setOrderOpen] = useState(false); // the preview of "réordonner par proximité"
   const [journalOpen, setJournalOpen] = useState(false); // the note du soir
@@ -310,6 +315,18 @@ export default function DayDetailScreen({ route, navigation }) {
     }, 350);
   }
 
+  async function onDuplicateStep(a) {
+    await duplicateActivity(tripId, dayId, a.id);
+    refresh();
+  }
+
+  async function onMoveStep(a, toDayId) {
+    setMovePick(null);
+    await moveActivityToDay(tripId, dayId, a.id, toDayId);
+    await refresh();
+    setToast({ visible: true, message: `"${a.title}" déplacée`, undoActivity: null, undoOrder: null });
+  }
+
   function addStep() {
     navigation.navigate("ActivityEditor", { tripId, dayId, activity: null });
   }
@@ -436,6 +453,7 @@ export default function DayDetailScreen({ route, navigation }) {
                       onPress={() => navigation.navigate("ActivityEditor", { tripId, dayId, activity: a })}
                       onShowDriver={(card) => navigation.navigate("ShowDriver", card)}
                       onDeleteWithUndo={() => onDeleteWithUndo(a)}
+                      onLongPress={() => setStepMenu(a)}
                       order={pinOrder.get(a.id) || null}
                       photoQuery={photoQueryOf(a)}
                       onPhoto={onPhoto}
@@ -527,10 +545,46 @@ export default function DayDetailScreen({ route, navigation }) {
             <Row icon="happy-outline" title="Jour parc d'attractions" selected={day.dayType === "park"} right={day.dayType === "park" ? <Icon name="checkmark" size={20} color={THEME.teal} /> : null} onPress={() => chooseDayType("park")} />
           </Group>
           <Group style={styles.typeGroup}>
+            <Row icon="create-outline" title="Renommer ou changer la date" onPress={() => { setTypeMenuOpen(false); setTimeout(() => setInfoOpen(true), 350); }} />
             <Row icon="copy-outline" title="Dupliquer ce jour" subtitle="Une copie sans date, juste après" onPress={askDuplicateDay} />
             <Row icon="trash-outline" tone="stamp" title="Supprimer ce jour" onPress={askDeleteDay} />
           </Group>
         </Sheet>
+
+        <ActionSheet
+          visible={!!stepMenu}
+          onClose={() => setStepMenu(null)}
+          title={stepMenu ? stepMenu.title : ""}
+          actions={
+            stepMenu
+              ? [
+                  { icon: "swap-horizontal-outline", title: "Déplacer vers un autre jour", onPress: () => setMovePick(stepMenu) },
+                  { icon: "copy-outline", title: "Dupliquer l'étape", onPress: () => onDuplicateStep(stepMenu) },
+                  { icon: "trash-outline", tone: "stamp", title: "Supprimer", onPress: () => onDeleteWithUndo(stepMenu) },
+                ]
+              : []
+          }
+        />
+        <DayPickerModal
+          visible={!!movePick}
+          trip={trip}
+          title="Déplacer vers…"
+          currentDayId={dayId}
+          removeLabel=""
+          onPick={(id) => movePick && onMoveStep(movePick, id)}
+          onClose={() => setMovePick(null)}
+        />
+        <DayInfoSheet
+          visible={infoOpen}
+          title={day.title}
+          date={day.date || ""}
+          onClose={() => setInfoOpen(false)}
+          onSave={async (info) => {
+            setInfoOpen(false);
+            await updateDayInfo(tripId, dayId, info);
+            refresh();
+          }}
+        />
 
         <JournalSheet
           visible={journalOpen}
@@ -595,7 +649,7 @@ const WAIT_NOTE = /^Attente estimée : (\d+) min$/;
 
 // One step of the day on the timeline: its hour, the node that ticks it, then its name with what matters under it (its
 // place, its note, its price, what is left to book) and the way to the next step. Swipe the body to delete it.
-function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, rate, sameCurrency, nextLeg, nextTime, nextName, onLeg, onToggleDone, onBook, onPress, onShowDriver, onDeleteWithUndo, order, photoQuery, onPhoto }) {
+function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, rate, sameCurrency, nextLeg, nextTime, nextName, onLeg, onToggleDone, onBook, onPress, onShowDriver, onDeleteWithUndo, onLongPress, order, photoQuery, onPhoto }) {
   const ink = useTripInk();
   const done = !!activity.done;
   const photo = usePlacePhoto(photoQuery);
@@ -643,7 +697,7 @@ function StepRow({ activity, trip, idea, ride, isCurrent, living, last, home, ra
         overshootRight={false}
       >
         <View style={styles.stepBody}>
-          <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} accessibilityHint="Modifier l'étape" style={({ pressed }) => [{ gap: 6 }, pressed && { opacity: 0.7 }]}>
+          <Pressable onPress={onPress} onLongPress={onLongPress} accessibilityRole="button" accessibilityLabel={label} accessibilityHint="Modifier l'étape. Appui long : déplacer, dupliquer" style={({ pressed }) => [{ gap: 6 }, pressed && { opacity: 0.7 }]}>
             <View style={styles.stepHead}>
               {photo ? (
                 <View style={styles.photoWrap}>
@@ -929,6 +983,25 @@ function TicketsBlock({ docs, hasRoute, onScan, onGallery, onOpen, onEdit }) {
 
 // The route of a flight or train day, typed by hand.
 // The note of the evening: a few lines about the day. Saving an empty text removes the note.
+// Rename a day and give it another date (empty: the date follows the start of the trip).
+function DayInfoSheet({ visible, title, date, onClose, onSave }) {
+  const [t, setT] = useState(title);
+  const [d, setD] = useState(date);
+  useEffect(() => {
+    if (visible) {
+      setT(title);
+      setD(date);
+    }
+  }, [visible]);
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Ce jour">
+      <Field label="Nom du jour" value={t} onChangeText={setT} />
+      <DateField label="Date" optional value={d} onChange={setD} />
+      <Button title="Enregistrer" onPress={() => onSave({ title: t, date: d })} />
+    </Sheet>
+  );
+}
+
 function JournalSheet({ visible, title, initial, onClose, onSave }) {
   const [text, setText] = useState("");
   useEffect(() => {
