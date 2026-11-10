@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { View, ScrollView, Alert } from "react-native";
+import { View, ScrollView, Alert, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -9,7 +9,8 @@ import { getSetting, setSetting, removeSetting, loadTrips } from "../lib/storage
 import { lastBackupAt, backupLabel } from "../lib/backupReminder";
 import { requestNotificationPermission, getNotificationPermission } from "../lib/notifications";
 import { exportBackup, importBackupFromPicker } from "../lib/backup";
-import { hasPin, setPin, clearPin } from "../lib/pin";
+import { hasPin, setPin, clearPin, verifyPin, isValidPin, waitLabel, deviceUnlockEnabled, setDeviceUnlock, clearPinFails } from "../lib/pin";
+import { deviceAuthAvailable, authenticateWithDevice } from "../lib/deviceAuth";
 import { errorCount } from "../lib/errorLog";
 import { getTileCache } from "../lib/tileStore";
 import { formatBytes } from "../lib/tileCache";
@@ -29,8 +30,14 @@ export default function SettingsScreen({ navigation }) {
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupStatus, setBackupStatus] = useState("");
   const [pinEnabled, setPinEnabled] = useState(false);
-  const [pinInput, setPinInput] = useState("");
+  const [pinInput, setPinInput] = useState(""); // the new code
+  const [pinConfirm, setPinConfirm] = useState(""); // the new code, typed again
+  const [pinCurrent, setPinCurrent] = useState(""); // the code in use, asked before it is removed
   const [pinStatus, setPinStatus] = useState("");
+  const [pinFailed, setPinFailed] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
+  const [deviceAuth, setDeviceAuth] = useState(false); // the phone has a lock of its own to ask for
+  const [deviceOn, setDeviceOn] = useState(true); // and it may open the app
   const [errors, setErrors] = useState(0);
 
   const [tiles, setTiles] = useState(null); // { count, bytes } of the saved map tiles
@@ -66,6 +73,8 @@ export default function SettingsScreen({ navigation }) {
       setTripCount(trips.length);
       setLastBackup(await lastBackupAt());
       setPinEnabled(await hasPin());
+      setDeviceAuth(await deviceAuthAvailable());
+      setDeviceOn(await deviceUnlockEnabled());
     })();
   }, []);
 
@@ -92,21 +101,67 @@ export default function SettingsScreen({ navigation }) {
     setTripCount(trips.length);
   }
 
+  const pinNote = (text, failed = false) => {
+    setPinStatus(text);
+    setPinFailed(failed);
+  };
+
+  // The code is typed twice: a slip of the finger on a masked field would lock the person out for good.
   async function onSavePin() {
-    if (!/^\d{4}$/.test(pinInput)) {
-      setPinStatus("Le code doit contenir exactement 4 chiffres.");
-      return;
+    if (!isValidPin(pinInput)) return pinNote("Le code doit contenir exactement 4 chiffres.", true);
+    if (pinInput !== pinConfirm) return pinNote("Les deux codes ne sont pas identiques.", true);
+    setPinBusy(true);
+    try {
+      await setPin(pinInput);
+      setPinEnabled(true);
+      setPinInput("");
+      setPinConfirm("");
+      pinNote("Code activé.");
+    } catch (e) {
+      pinNote("Le code n'a pas pu être enregistré.", true);
+    } finally {
+      setPinBusy(false);
     }
-    await setPin(pinInput);
-    setPinEnabled(true);
-    setPinInput("");
-    setPinStatus("Code activé.");
   }
 
-  async function onDisablePin() {
+  async function removePin() {
     await clearPin();
     setPinEnabled(false);
-    setPinStatus("Code désactivé.");
+    setPinCurrent("");
+    pinNote("Code désactivé.");
+  }
+
+  // Removing the code asks for it first (or for the phone's own lock): a phone left unlocked on a table is not enough.
+  async function onDisablePin() {
+    if (!isValidPin(pinCurrent)) return pinNote("Saisissez le code actuel pour le désactiver.", true);
+    setPinBusy(true);
+    try {
+      const result = await verifyPin(pinCurrent);
+      if (result.ok) await removePin();
+      else {
+        setPinCurrent("");
+        pinNote(result.waitMs > 0 ? `Trop d'essais. Réessayez dans ${waitLabel(result.waitMs)}.` : "Code incorrect.", true);
+      }
+    } finally {
+      setPinBusy(false);
+    }
+  }
+
+  async function onDisableWithDevice() {
+    setPinBusy(true);
+    try {
+      if (await authenticateWithDevice("Désactiver le code de l'application")) {
+        await clearPinFails();
+        await removePin();
+      }
+    } finally {
+      setPinBusy(false);
+    }
+  }
+
+  async function toggleDeviceUnlock(on) {
+    setDeviceOn(on);
+    await setDeviceUnlock(on).catch(() => {});
   }
 
   async function onExportBackup() {
@@ -167,7 +222,6 @@ export default function SettingsScreen({ navigation }) {
 
   const notifGranted = notifPermission === "granted";
   // Status lines are plain strings set by the handlers; these pick out the failures.
-  const pinFailed = /^Le code doit/.test(pinStatus);
   const backupFailed = /^(Échec|Ce fichier)/.test(backupStatus);
 
   return (
@@ -222,23 +276,69 @@ export default function SettingsScreen({ navigation }) {
           <View style={styles.form}>
             <Txt variant="subhead">
               {pinEnabled
-                ? "Un code à 4 chiffres est demandé à chaque ouverture de l'app."
-                : "Demande un code à 4 chiffres à chaque ouverture de l'app. Le code reste uniquement sur cet appareil."}
+                ? "Le code est demandé à l'ouverture de l'application, et quand vous y revenez après plus de 2 minutes."
+                : "Demande un code à 4 chiffres à l'ouverture de l'application, et quand vous y revenez après plus de 2 minutes. Seule une empreinte du code est gardée sur cet appareil, pas le code."}
             </Txt>
             {pinEnabled ? (
-              <Button title="Désactiver le code" variant="secondary" full onPress={onDisablePin} />
+              <>
+                {deviceAuth ? (
+                  <Group>
+                    <Row
+                      icon="finger-print"
+                      tone={deviceOn ? "teal" : "neutral"}
+                      title="Verrouillage du téléphone"
+                      subtitle="L'empreinte, le visage ou le code du téléphone ouvrent aussi l'application. Utile si le code est oublié."
+                      subtitleLines={4}
+                      right={
+                        <Switch
+                          value={deviceOn}
+                          onValueChange={toggleDeviceUnlock}
+                          accessibilityLabel="Ouvrir aussi avec le verrouillage du téléphone"
+                          trackColor={{ false: THEME.bgRaised, true: THEME.teal }}
+                          thumbColor={THEME.ink}
+                          ios_backgroundColor={THEME.bgRaised}
+                        />
+                      }
+                    />
+                  </Group>
+                ) : (
+                  <Txt variant="caption" color="inkFaint">
+                    Un code oublié ne peut pas être retrouvé : gardez une sauvegarde de vos voyages.
+                  </Txt>
+                )}
+                <Field
+                  value={pinCurrent}
+                  onChangeText={(t) => setPinCurrent(t.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="Code actuel"
+                  keyboardType="number-pad"
+                  secureTextEntry
+                  accessibilityLabel="Code actuel, pour le désactiver"
+                  style={styles.fieldTight}
+                />
+                <Button title="Désactiver le code" variant="secondary" full disabled={pinBusy} onPress={onDisablePin} />
+                {deviceAuth && deviceOn ? <Button title="Désactiver avec le verrouillage du téléphone" icon="finger-print" variant="ghost" full disabled={pinBusy} onPress={onDisableWithDevice} /> : null}
+              </>
             ) : (
               <>
                 <Field
                   value={pinInput}
                   onChangeText={(t) => setPinInput(t.replace(/\D/g, "").slice(0, 4))}
-                  placeholder="4 chiffres"
+                  placeholder="Nouveau code, 4 chiffres"
                   keyboardType="number-pad"
                   secureTextEntry
-                  accessibilityLabel="Code à 4 chiffres"
+                  accessibilityLabel="Nouveau code à 4 chiffres"
                   style={styles.fieldTight}
                 />
-                <Button title="Activer le code" variant="secondary" full onPress={onSavePin} />
+                <Field
+                  value={pinConfirm}
+                  onChangeText={(t) => setPinConfirm(t.replace(/\D/g, "").slice(0, 4))}
+                  placeholder="Le même code, une seconde fois"
+                  keyboardType="number-pad"
+                  secureTextEntry
+                  accessibilityLabel="Confirmer le code à 4 chiffres"
+                  style={styles.fieldTight}
+                />
+                <Button title="Activer le code" variant="secondary" full disabled={pinBusy} onPress={onSavePin} />
               </>
             )}
             {pinStatus ? <StatusNote text={pinStatus} failed={pinFailed} /> : null}

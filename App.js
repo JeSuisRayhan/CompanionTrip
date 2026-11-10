@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useSyncExternalStore } from "react"
 import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
-import { View, AppState, Linking } from "react-native";
+import { View, AppState, Linking, Modal } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
@@ -17,7 +17,7 @@ import { loadEntryPref } from "./lib/entryPref";
 import { installErrorHandlers } from "./lib/errorLog";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PaperGrain from "./components/PaperGrain";
-import { hasPin } from "./lib/pin";
+import { hasPin, migratePin } from "./lib/pin";
 import { onTripsSaved, removeSetting } from "./lib/storage";
 import { scheduleStepReminderSync } from "./lib/notifications";
 import { targetFromResponse } from "./lib/stepReminders";
@@ -94,9 +94,14 @@ export default function App() {
   );
 }
 
+// Back in the app after this long away, the lock code is asked again.
+const RELOCK_AFTER_MS = 2 * 60 * 1000;
+
 function AppContent({ onReady }) {
   const [checking, setChecking] = useState(true);
   const [locked, setLocked] = useState(false);
+  const [opened, setOpened] = useState(false); // the screens have been shown once (no code, or the code was given)
+  const leftAt = useRef(null); // when the app went to the background
   // A new palette rebuilds the navigator (fresh colours everywhere) and puts
   // the person back on the screen they were on.
   const themeVersion = useSyncExternalStore(subscribeTheme, getThemeVersion);
@@ -118,10 +123,29 @@ function AppContent({ onReady }) {
       await Promise.all([loadPalette(), loadEntryPref()]);
       removeSetting("anthropicApiKey").catch(() => {}); // the app no longer uses an AI: a key saved by an older version is erased
       syncParkAlertTask(); // registers or removes the background check to match the trips' settings
+      await migratePin(); // a code kept in clear by an older version becomes a fingerprint
       const pinSet = await hasPin();
       setLocked(pinSet);
+      setOpened(!pinSet);
       setChecking(false);
     })();
+  }, []);
+
+  // The lock comes back when the app was left for a while (a quick trip to the camera or to the maps app does not ask).
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") {
+        if (leftAt.current == null) leftAt.current = Date.now();
+        return;
+      }
+      const away = leftAt.current == null ? 0 : Date.now() - leftAt.current;
+      leftAt.current = null;
+      if (away < RELOCK_AFTER_MS) return;
+      hasPin()
+        .then((set) => set && setLocked(true))
+        .catch(() => {});
+    });
+    return () => sub.remove();
   }, []);
 
   // Reminders before each step: planned again whenever the trips change and whenever the app comes back to the
@@ -183,8 +207,16 @@ function AppContent({ onReady }) {
 
   if (!ready) return null; // the splash overlay is on screen meanwhile
 
-  if (locked) {
-    return <LockScreen onUnlock={() => setLocked(false)} />;
+  // Until the code is given the first time, nothing else is drawn.
+  if (locked && !opened) {
+    return (
+      <LockScreen
+        onUnlock={() => {
+          setLocked(false);
+          setOpened(true);
+        }}
+      />
+    );
   }
 
   return (
@@ -268,6 +300,11 @@ function AppContent({ onReady }) {
         </NavigationContainer>
       </ErrorBoundary>
       <PaperGrain />
+      {/* Locked again after a while away: the lock covers everything (a sheet left open too), and what was being done
+          is still there once the code is given. The back button does not close it. */}
+      <Modal visible={locked} animationType="fade" onRequestClose={() => {}} statusBarTranslucent>
+        {locked ? <LockScreen onUnlock={() => setLocked(false)} /> : null}
+      </Modal>
     </GestureHandlerRootView>
   );
 }
