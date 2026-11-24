@@ -13,6 +13,7 @@ import { directionsUrl, buildMapModel, stepPlaceName } from "../lib/map";
 import { usePlacePhoto } from "../lib/placePhotos";
 import { driverCard } from "../lib/driverCard";
 import { isPdfDoc } from "../lib/documents";
+import { openInOrganicMaps, ORGANIC_MAPS_STORE } from "../lib/kml";
 import { getTrip, toggleActivityDone, editActivity, setDayLocation, addActivity, deleteActivity, setDayType, setActivityOrder, setDayJournal, deleteDay, deleteDayMessage, duplicateDay, updateDayInfo, duplicateActivity, moveActivityToDay } from "../lib/trips";
 import { bookingOf, deadlineInfo } from "../lib/booking";
 import { resolveDayDate, formatFullDate, isoDate } from "../lib/dates";
@@ -210,6 +211,16 @@ export default function DayDetailScreen({ route, navigation }) {
   const doneCount = day.activities.filter((a) => a.done).length;
   // "Next step" is only marked on a day being lived: today, or already started
   const firstUndoneIndex = date === isoDate(new Date()) || doneCount > 0 ? sorted.findIndex((a) => !a.done) : -1;
+  // The place Organic Maps opens on: the step to do now (or the first one not done), else the first place of the day.
+  const currentPin = (() => {
+    const from = firstUndoneIndex >= 0 ? firstUndoneIndex : 0;
+    const ahead = sorted.slice(from).concat(sorted.slice(0, from)).filter((a) => !a.done);
+    for (const a of ahead) {
+      const pin = dayPins.find((p) => p.activityId === a.id);
+      if (pin) return pin;
+    }
+    return dayPins[0] || null;
+  })();
   const location = (day.location || "").trim();
   // A park day of a normal trip has its own park and attractions: the park screens open it through a view of the trip.
   const isParkTrip = trip.tripType === "park";
@@ -379,6 +390,7 @@ export default function DayDetailScreen({ route, navigation }) {
               fitKey={`${dayId}:${dayPins.map((p) => p.id).join(",")}`}
               missing={sorted.filter((a) => a.type !== "transport" && !pinOrder.has(a.id)).length}
               onOpen={() => navigation.navigate("TripMap", { tripId, dayId })}
+              organic={currentPin}
             />
           ) : null}
 
@@ -800,7 +812,14 @@ function PartHeader({ part, first }) {
 }
 
 // The map of the day at the top: a picture of it (it scrolls with the page); a touch opens the full map.
-function DayMapCard({ pins, fitKey, missing, onOpen }) {
+function DayMapCard({ pins, fitKey, missing, onOpen, organic }) {
+  async function openOrganic() {
+    if ((await openInOrganicMaps(organic)) === "ok") return;
+    Alert.alert("Organic Maps n'est pas installée", "C'est une application de cartes gratuite qui marche sans connexion.", [
+      { text: "Annuler", style: "cancel" },
+      { text: "L'installer", onPress: () => Linking.openURL(ORGANIC_MAPS_STORE).catch(() => {}) },
+    ]);
+  }
   const label = `Carte du jour, ${pins.length} étape${pins.length > 1 ? "s" : ""}${missing > 0 ? `, ${missing} sans position` : ""}. Ouvrir la carte`;
   return (
     <View style={styles.dayMapBlock}>
@@ -811,6 +830,18 @@ function DayMapCard({ pins, fitKey, missing, onOpen }) {
           <Text style={[type.caption, { color: THEME.ink }]}>Agrandir</Text>
         </View>
       </Pressable>
+      {organic ? (
+        <Pressable
+          onPress={openOrganic}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={`Ouvrir ${organic.name} dans Organic Maps`}
+          style={({ pressed }) => [styles.dayMapOrganic, pressed && { opacity: 0.7 }]}
+        >
+          <Icon name="navigate-outline" size={16} color={THEME.ink} />
+          <Text style={[type.caption, { color: THEME.ink }]}>Organic Maps</Text>
+        </Pressable>
+      ) : null}
       {missing > 0 ? (
         <Text style={type.caption}>{`${missing} étape${missing > 1 ? "s ne sont" : " n'est"} pas sur la carte : touchez la carte pour ${missing > 1 ? "les" : "la"} localiser.`}</Text>
       ) : null}
@@ -1213,6 +1244,7 @@ const styles = themedStyles(() => ({
   partText: { fontFamily: FONTS.bodySemi, fontSize: 12, lineHeight: 16, letterSpacing: 1.4, color: THEME.inkMuted },
   dayMapBlock: { gap: space.sm, marginBottom: space.lg },
   dayMap: { height: 210, overflow: "hidden", backgroundColor: THEME.surfaceSunk },
+  dayMapOrganic: { position: "absolute", top: 10, left: 10, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: THEME.veil },
   dayMapOpen: { position: "absolute", bottom: 10, right: 10, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: THEME.veil },
   photoCredit: { marginTop: space.md, color: THEME.inkFaint },
   time: { width: 54, fontFamily: FONTS.monoMed, fontSize: 17, lineHeight: 34, letterSpacing: -0.35, textAlign: "right", color: THEME.ink },

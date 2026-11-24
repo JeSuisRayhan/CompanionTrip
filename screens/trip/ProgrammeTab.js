@@ -10,6 +10,7 @@ import { placementIndex, sortIdeas, getIdeaCategory, ideaAddressLine, formatIdea
 import { detectCountry } from "../../lib/countries";
 import { shareTripAsText, shareTripAsICS } from "../../lib/share";
 import { exportTripFile } from "../../lib/backup";
+import { shareTripAsKML } from "../../lib/kml";
 import { useTripInk } from "../../lib/tripInk";
 import { dayState } from "../../lib/dayState";
 import { Group, Row, Thumb, Button, Field, EmptyState, Sheet, ActionSheet, Stamp } from "../../components/ui";
@@ -91,6 +92,15 @@ export default function ProgrammeTab({ trip, navigation, onChange, onOpenTab, on
       const dateLabel = date ? formatDateLabel(date) : "";
       return day.title.toLowerCase().includes(q) || dateLabel.toLowerCase().includes(q) || day.activities.some((a) => a.title.toLowerCase().includes(q));
     });
+
+  async function exportPlaces() {
+    try {
+      const count = await shareTripAsKML(trip);
+      if (!count) Alert.alert("Aucun lieu à exporter", "Aucune étape ni idée n'a encore de position sur la carte.");
+    } catch (e) {
+      Alert.alert("Export impossible", "Le fichier n'a pas pu être créé. Réessayez.");
+    }
+  }
 
   async function sendTripFile(withDocuments) {
     try {
@@ -267,6 +277,7 @@ export default function ProgrammeTab({ trip, navigation, onChange, onOpenTab, on
           { icon: "images-outline", title: "Bilan et souvenirs", subtitle: "Ce qui a été fait, le budget, les photos", onPress: () => navigation.navigate("TripRecap", { tripId: trip.id }) },
           { icon: "share-outline", title: "Partager", subtitle: "En texte, ou en fichier à importer", onPress: shareTrip },
           { icon: "download-outline", title: "Exporter vers un calendrier", subtitle: "Fichier .ics", onPress: () => shareTripAsICS(trip) },
+          hasMap && { icon: "navigate-outline", title: "Exporter les lieux", subtitle: "Pour Google My Maps ou Organic Maps (.kml)", onPress: exportPlaces },
           hasMap && { icon: "map-outline", title: "Voir sur la carte", onPress: () => navigation.navigate("TripMap", { tripId: trip.id }) },
         ]}
       />
